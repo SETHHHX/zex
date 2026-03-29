@@ -3543,6 +3543,8 @@ local parriedBalls = {}
   local MiscTab = main:create_tab("Misc ", "rbxassetid://89270463071386")
   local AITab = main:create_tab("AI Play ", "rbxassetid://89270463071386")
   local AutoFarmTab = main:create_tab("Auto Farm ", "rbxassetid://89270463071386")
+
+  --[[
   local lobbyAutoParryModule = MainTab:create_module({
       title = "Lobby AP",
       flag = "lobbyAutoParryModule",
@@ -3638,6 +3640,7 @@ local parriedBalls = {}
           end
       end
   })
+
   lobbyAutoParryModule:create_dropdown({
       title = "Parry Type",
       flag = "LobbyParryType",
@@ -3648,7 +3651,7 @@ local parriedBalls = {}
           LobbyParryType = v
       end
   })
-
+]]
 
 
 
@@ -3911,6 +3914,185 @@ local parriedBalls = {}
           SelectedParryType = v
       end
   })
+-- ==================== MACRO PARRY (SPAM REMOTE) ====================
+local macroParryModule = MainTab:create_module({
+    title = "Macro Parry",
+    flag = "macroParryModule",
+    description = "Better when clashing",
+    section = "left",
+    callback = function(state)
+
+        local CoreGui = game:GetService("CoreGui")
+        local UserInputService = game:GetService("UserInputService")
+        local RunService = game:GetService("RunService")
+
+        -- 🔥 LIMPIAR TODO SIEMPRE (anti duplicados)
+        local oldUI = CoreGui:FindFirstChild("MacroHUD")
+        if oldUI then
+            oldUI:Destroy()
+        end
+
+        if Connections["MacroParrySpam"] then
+            Connections["MacroParrySpam"]:Disconnect()
+            Connections["MacroParrySpam"] = nil
+        end
+
+        if Connections["MacroKeybind"] then
+            Connections["MacroKeybind"]:Disconnect()
+            Connections["MacroKeybind"] = nil
+        end
+
+        -- ❌ Si apagado, solo limpiar
+        if not state then return end
+
+        -- ================= UI =================
+        local MacroUI = Instance.new("ScreenGui")
+        MacroUI.Name = "MacroHUD"
+        MacroUI.ResetOnSpawn = false
+        MacroUI.Parent = CoreGui
+
+        -- FRAME
+        local Frame = Instance.new("Frame")
+        Frame.Size = UDim2.new(0, 210, 0, 70)
+        Frame.Position = UDim2.new(0.5, -105, 0.1, 0)
+        Frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        Frame.BackgroundTransparency = 0.35
+        Frame.BorderSizePixel = 0
+        Frame.Active = true
+        Frame.Draggable = true
+        Frame.Parent = MacroUI
+
+        Instance.new("UICorner", Frame).CornerRadius = UDim.new(0,12)
+        Instance.new("UIStroke", Frame).Color = Color3.fromRGB(80,80,80)
+
+        -- TITLE
+        local Title = Instance.new("TextLabel")
+        Title.Size = UDim2.new(1, -30, 0.55, 0)
+        Title.Position = UDim2.new(0, 10, 0, 0)
+        Title.BackgroundTransparency = 1
+        Title.Text = "MACRO (OFF)"
+        Title.TextColor3 = Color3.fromRGB(255,80,80)
+        Title.Font = Enum.Font.GothamBold
+        Title.TextSize = 18
+        Title.TextXAlignment = Enum.TextXAlignment.Left
+        Title.Parent = Frame
+
+        -- MINIMIZE
+        local MinBtn = Instance.new("TextButton")
+        MinBtn.Size = UDim2.new(0, 22, 0, 22)
+        MinBtn.Position = UDim2.new(1, -26, 0, 4)
+        MinBtn.Text = "-"
+        MinBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+        MinBtn.TextColor3 = Color3.fromRGB(200,200,200)
+        MinBtn.Parent = Frame
+        Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(1,0)
+
+        -- KEYBIND
+        local KeybindLabel = Instance.new("TextButton")
+        KeybindLabel.Size = UDim2.new(1, -20, 0.4, 0)
+        KeybindLabel.Position = UDim2.new(0, 10, 0.55, 0)
+        KeybindLabel.BackgroundTransparency = 0.5
+        KeybindLabel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        KeybindLabel.Text = "Keybind: F"
+        KeybindLabel.TextColor3 = Color3.fromRGB(220,220,220)
+        KeybindLabel.Font = Enum.Font.Gotham
+        KeybindLabel.TextSize = 14
+        KeybindLabel.Parent = Frame
+        Instance.new("UICorner", KeybindLabel).CornerRadius = UDim.new(0,8)
+
+        -- BOTON MACRO (abrir)
+        local OpenBtn = Instance.new("TextButton")
+        OpenBtn.Size = UDim2.new(0, 70, 0, 35)
+        OpenBtn.Position = UDim2.new(0.5, -35, 0.15, 0)
+        OpenBtn.BackgroundColor3 = Color3.fromRGB(80,0,0)
+        OpenBtn.Text = "MACRO"
+        OpenBtn.TextColor3 = Color3.new(1,1,1)
+        OpenBtn.Font = Enum.Font.GothamBold
+        OpenBtn.Visible = false
+        OpenBtn.Active = true
+        OpenBtn.Draggable = true
+        OpenBtn.Parent = MacroUI
+        Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0,10)
+
+        -- VARIABLES
+        local MacroEnabled = false
+        local SelectedKey = Enum.KeyCode.F
+
+        local function UpdateUI()
+            if MacroEnabled then
+                Title.Text = "MACRO (ON)"
+                Title.TextColor3 = Color3.fromRGB(80,255,80)
+                OpenBtn.BackgroundColor3 = Color3.fromRGB(0,80,0)
+            else
+                Title.Text = "MACRO (OFF)"
+                Title.TextColor3 = Color3.fromRGB(255,80,80)
+                OpenBtn.BackgroundColor3 = Color3.fromRGB(80,0,0)
+            end
+            KeybindLabel.Text = "Keybind: " .. SelectedKey.Name
+        end
+
+        -- TOGGLE CLICK
+        Frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                MacroEnabled = not MacroEnabled
+                UpdateUI()
+            end
+        end)
+
+        -- MINIMIZE
+        MinBtn.MouseButton1Click:Connect(function()
+            Frame.Visible = false
+            OpenBtn.Visible = true
+        end)
+
+        -- REOPEN
+        OpenBtn.MouseButton1Click:Connect(function()
+            Frame.Visible = true
+            OpenBtn.Visible = false
+        end)
+
+        -- KEYBIND CHANGE
+        KeybindLabel.MouseButton1Click:Connect(function()
+            KeybindLabel.Text = "Press key..."
+            local conn
+            conn = UserInputService.InputBegan:Connect(function(input, gp)
+                if gp then return end
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    SelectedKey = input.KeyCode
+                    conn:Disconnect()
+                    UpdateUI()
+                end
+            end)
+        end)
+
+        -- KEY GLOBAL
+        Connections["MacroKeybind"] = UserInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if input.KeyCode == SelectedKey then
+                MacroEnabled = not MacroEnabled
+                UpdateUI()
+            end
+        end)
+
+        -- ================= SPAM (TU LOGICA) =================
+        Connections["MacroParrySpam"] = RunService.Heartbeat:Connect(function()
+            if not MacroEnabled then return end
+
+            for remote, originalArgs in pairs(ParryRemotes) do
+                local modifiedArgs = {originalArgs[1], originalArgs[2], 0, CFrame.new(), {}, {}, false}
+
+                if remote:IsA("RemoteEvent") then
+                    remote:FireServer(unpack(modifiedArgs))
+                elseif remote:IsA("RemoteFunction") then
+                    remote:InvokeServer(unpack(modifiedArgs))
+                end
+            end
+        end)
+
+        UpdateUI()
+    end
+})
+
   autoParryModule:create_divider({})
   autoParryModule:create_checkbox({
       title = "Randomized Parry Accuracy",
@@ -3930,6 +4112,8 @@ local parriedBalls = {}
           Speed_Divisor_Multiplier = 0.7 + ((v - 1) / 99) * 0.35
       end
   })
+
+  
   
   autoParryModule:create_divider({})
 
