@@ -3536,124 +3536,11 @@ local function Optimize(state)
     end
 end
 
-
-
 local parriedBalls = {}
   local MainTab = main:create_tab("Main ", "rbxassetid://89270463071386")
   local MiscTab = main:create_tab("Misc ", "rbxassetid://89270463071386")
   local AITab = main:create_tab("AI Play ", "rbxassetid://89270463071386")
   local AutoFarmTab = main:create_tab("Auto Farm ", "rbxassetid://89270463071386")
-
-  --[[
-  local lobbyAutoParryModule = MainTab:create_module({
-      title = "Lobby AP",
-      flag = "lobbyAutoParryModule",
-      description = "Auto parry for the lobby game",
-      section = "right",
-      callback = function(v)
-          local LastLobbyParry = 0
-          if v then
-              for _, ball in pairs(AutoParry.GetLobbyBalls()) do
-                  Connections["lobby_parried_" .. tostring(ball)] = ball:GetAttributeChangedSignal('target'):Connect(function()
-                      parriedBalls[ball] = false
-                  end)
-              end
-              Connections["lobby_ball_added"] = Workspace.TrainingBalls.ChildAdded:Connect(function(newBall)
-                  if newBall:IsA("BasePart") and newBall:GetAttribute("realBall") then
-                      Connections["lobby_parried_" .. tostring(newBall)] = newBall:GetAttributeChangedSignal('target'):Connect(function()
-                          parriedBalls[newBall] = false
-                      end)
-                  end
-              end)
-              Connections["lobby_ball_removed"] = Workspace.TrainingBalls.ChildRemoved:Connect(function(removedBall)
-                  local key = "lobby_parried_" .. tostring(removedBall)
-                  if Connections[key] then
-                      Connections[key]:Disconnect()
-                      Connections[key] = nil
-                  end
-                  parriedBalls[removedBall] = nil
-              end)
-              Connections["lobbyAutoParry"] = RunService.PreSimulation:Connect(function()
-                  local balls = AutoParry.GetLobbyBalls()
-                  for _, ball in pairs(balls) do
-                      if not ball then
-                          ContextActionService:UnbindAction('BlockPlayerMovement')
-                          repeat RunService.Heartbeat:Wait() balls = AutoParry.GetLobbyBalls() until balls
-                          return
-                      end
-                      local zoomies = ball:FindFirstChild("zoomies")
-                      if not zoomies then
-                          ContextActionService:UnbindAction('BlockPlayerMovement')
-                          return
-                      end
-                      ball:GetAttributeChangedSignal('target'):Once(function() Parried = false end)
-                      if Parried then continue end
-                      local ballTarget = ball:GetAttribute('target')
-                      local oneTarget = oneBall:GetAttribute('target')
-                      local velocity = zoomies.VectorVelocity
-                      local distance = (LocalPlayer.Character.PrimaryPart.Position - ball.Position).Magnitude
-                      local speed = velocity.Magnitude
-                      local averagePing = GetAveragePing()
-                      local useAbility = false
-                      local cappedSpeedDifference = math.min(math.max(speed - 9.5, 0), 820)
-                      local speedDivisorBase = 2.4 + cappedSpeedDifference * 0.002
-                      local adjustedPing = averagePing / 10
-                      if HighPingCompensation and averagePing > 150 then
-                          adjustedPing = adjustedPing * 1.5
-                      end
-                      local speedDivisor = speedDivisorBase * Speed_Divisor_Multiplier
-                      local parryAccuracy = adjustedPing + math.max(speed / speedDivisor, 9.5)
-                      if ballTarget == tostring(LocalPlayer) then
-                          local minParryDelay = 0.15 + (averagePing / 1000)
-                          local Elapsed_Parry_Time = os.clock()
-                          local timeView = (Elapsed_Parry_Time - LastLobbyParry)
-                          if timeView < minParryDelay then continue end
-                          if distance <= parryAccuracy then
-                              if LobbyParryType == "Remote" then
-                                  if Is_Supported_Test and next(ParryRemotes) then
-                                      AutoParry.Parry(SelectedParryType)
-                                  else
-                                      SimulateParry()
-                                  end
-                              else
-                                  SimulateParry()
-                              end
-                              parriedBalls[ball] = true
-                              task.delay(1, function()
-                                  parriedBalls[ball] = false
-                              end)
-                              LastLobbyParry = Elapsed_Parry_Time
-                          end
-                      end
-                  end
-              end)
-          elseif Connections["lobbyAutoParry"] then
-              Connections["lobbyAutoParry"]:Disconnect()
-              Connections["lobbyAutoParry"] = nil
-              for key, conn in pairs(Connections) do
-                  if key:find("lobby_parried_") or key == "lobby_ball_added" or key == "lobby_ball_removed" then
-                      conn:Disconnect()
-                      Connections[key] = nil
-                  end
-              end
-              parriedBalls = {}
-          end
-      end
-  })
-
-  lobbyAutoParryModule:create_dropdown({
-      title = "Parry Type",
-      flag = "LobbyParryType",
-      options = Is_Supported_Test and {"Remote", "Keypress"} or {"Keypress"},
-      multi_dropdown = false,
-      maximum_options = 999,
-      callback = function(v)
-          LobbyParryType = v
-      end
-  })
-]]
-
-
 
    local autoParryModule = MainTab:create_module({
       title = "Auto Parry",
@@ -3904,16 +3791,7 @@ local parriedBalls = {}
           AutoParryType = v
       end
   })
-  autoParryModule:create_dropdown({
-      title = "Curve Type",
-      flag = "ParryDirection",
-      options = {"Backwards", "Camera", "High", "Left", "Random", "Right", "Straight"},
-      multi_dropdown = false,
-      maximum_options = 999,
-      callback = function(v)
-          SelectedParryType = v
-      end
-  })
+
 -- ==================== MACRO PARRY (SPAM REMOTE) ====================
 local macroParryModule = MainTab:create_module({
     title = "Macro Parry",
@@ -4074,20 +3952,48 @@ local macroParryModule = MainTab:create_module({
             end
         end)
 
-        -- ================= SPAM (TU LOGICA) =================
-        Connections["MacroParrySpam"] = RunService.Heartbeat:Connect(function()
-            if not MacroEnabled then return end
-
-            for remote, originalArgs in pairs(ParryRemotes) do
-                local modifiedArgs = {originalArgs[1], originalArgs[2], 0, CFrame.new(), {}, {}, false}
-
-                if remote:IsA("RemoteEvent") then
-                    remote:FireServer(unpack(modifiedArgs))
-                elseif remote:IsA("RemoteFunction") then
-                    remote:InvokeServer(unpack(modifiedArgs))
+        -- ================= SPAM (usando camara actual, no CFrame vacio) =================
+-- ================= SPAM "EXTREME" (BYPASS FPS) =================
+local function StartSpam()
+    task.spawn(function()
+        while true do
+            -- Si la macro se apaga o el módulo se destruye, salimos del bucle
+            if not MacroEnabled then 
+                task.wait(0.1) -- Pausa ligera para no quemar recursos si está OFF
+            else
+                -- Obtenemos data
+                local parryData = AutoParry.Parry_Data("Camera")
+                
+                if parryData then
+                    for remote, originalArgs in pairs(ParryRemotes) do
+                        -- Disparo masivo sin esperar al siguiente frame
+                        task.spawn(function()
+                            remote:FireServer(
+                                originalArgs[1], 
+                                originalArgs[2], 
+                                0, 
+                                parryData[2], 
+                                parryData[3], 
+                                parryData[4]
+                            )
+                        end)
+                    end
                 end
+                -- task.wait() vacío es la espera mínima posible (~0.03s)
+                -- Si quieres el máximo absoluto, quita el task.wait(), 
+                -- pero Roblox podría crashear por desbordamiento de memoria.
+                task.wait() 
             end
-        end)
+            
+            -- Limpieza si la conexión se cierra
+            if not Connections["MacroParrySpam"] then break end
+        end
+    end)
+end
+
+-- Iniciamos el hilo una sola vez
+Connections["MacroParrySpam"] = true 
+StartSpam()
 
         UpdateUI()
     end
@@ -4113,8 +4019,6 @@ local macroParryModule = MainTab:create_module({
       end
   })
 
-  
-  
   autoParryModule:create_divider({})
 
   autoParryModule:create_checkbox({
@@ -4167,358 +4071,6 @@ local macroParryModule = MainTab:create_module({
               PostParryVelocityHistory = {}
               PostParryScheduled = {}
               BallSenderTracking = {}
-          end
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "Singularity Detection",
-      flag = "SingularityDetection",
-      callback = function(v)
-          Singularity_Detection = v
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "Infinity Detection",
-      flag = "InfinityDetection",
-      callback = function(v)
-          Infinity_Detection = v
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "Cooldown Protection",
-      flag = "CooldownProtection",
-      callback = function(v)
-          CooldownProtection = v
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "High Ping Protection",
-      flag = "HighPingProtection",
-      callback = function(v)
-          HighPingProtection = v
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "Death Slash Detection",
-      flag = "DeathSlashDetection",
-      callback = function(v)
-          Death_Slash_Detection = v
-      end
-  })
-  autoParryModule:create_checkbox({
-      title = "Anti Phantom",
-      flag = "AntiPhantom",
-      callback = function(v)
-          AntiPhantomEnabled = v
-          if v then
-              SetupAntiPhantom()
-          else
-              if Connections["anti_phantom"] then
-                  Connections["anti_phantom"]:Disconnect()
-                  Connections["anti_phantom"] = nil
-              end
-          end
-      end
-  })
-  local isTriggerbotEnabled = false
-  local triggerParriedBalls = {}
-  local triggerbotModule = MainTab:create_module({
-      title = "Triggerbot",
-      flag = "triggerbot",
-      description = "Parries instantly when targeted",
-      section = "right",
-      callback = function(v)
-          isTriggerbotEnabled = v
-          if v then
-              if Library._config._flags["TriggerAutoPostParry"] then
-                  Connections["triggerbot_postParry_deathMonitor"] = Alive.ChildRemoved:Connect(function(removedCharacter)
-                      if not Library._config._flags["TriggerAutoPostParry"] then return end
-                      if not PostParryTarget or PostParryTarget == "" then return end
-                      if removedCharacter.Name ~= PostParryTarget then return end
-                      if PostParryScheduled[removedCharacter.Name] then return end
-                      local hadHighSpeed = false
-                      for ball, speeds in pairs(PostParryVelocityHistory) do
-                          for _, speed in ipairs(speeds) do
-                              if speed >= 800 then
-                                  hadHighSpeed = true
-                                  break
-                              end
-                          end
-                          if hadHighSpeed then break end
-                      end
-                      if hadHighSpeed then
-                          PostParryScheduled[removedCharacter.Name] = true
-                          local randomDelay = (math.random(150, 180) / 1000)
-                          task.delay(randomDelay, function()
-                              SimulateParry()
-                              PostParryScheduled[removedCharacter.Name] = nil
-                          end)
-                      end
-                      PostParryTarget = nil
-                      PostParryVelocityHistory = {}
-                  end)
-              end
-              Connections["triggerbot_monitor"] = RunService.PreSimulation:Connect(function()
-                  if not isTriggerbotEnabled then return end
-                  local ball = AutoParry.GetBall()
-                  if not ball then return end
-                  local ballTarget = ball:GetAttribute('target')
-                  local zoomies = ball:FindFirstChild('zoomies')
-                  if zoomies and Library._config._flags["TriggerAutoPostParry"] then
-                      local velocity = zoomies.VectorVelocity
-                      local speed = velocity.Magnitude
-                      if not PostParryVelocityHistory[ball] then PostParryVelocityHistory[ball] = {} end
-                      table.insert(PostParryVelocityHistory[ball], speed)
-                      if #PostParryVelocityHistory[ball] > 15 then table.remove(PostParryVelocityHistory[ball], 1) end
-                      if ballTarget and ballTarget ~= "" and ballTarget ~= tostring(LocalPlayer) then
-                          PostParryTarget = ballTarget
-                      end
-                  end
-                  if ballTarget ~= tostring(LocalPlayer) then 
-                      triggerParriedBalls[ball] = nil
-                      return 
-                  end
-                  if triggerParriedBalls[ball] then return end
-                  local hotbar = LocalPlayer:FindFirstChild('PlayerGui') and LocalPlayer.PlayerGui:FindFirstChild('Hotbar')
-                  local character = LocalPlayer.Character
-                  if not character or not character.PrimaryPart then return end
-                  local abilities = character:FindFirstChild('Abilities')
-                  local durationUI = hotbar and hotbar:FindFirstChild('Ability') and hotbar.Ability:FindFirstChild('Duration') and hotbar.Ability.Duration.Visible
-                  local infinityAbility = abilities and abilities:FindFirstChild('Infinity')
-                  local infinity = infinityAbility and infinityAbility.Enabled
-                  local usingInfinity = durationUI and infinity and Infinity_Ball
-                  if TriggerInfinity_Detection and usingInfinity then return end
-                  local singularityCape = character.PrimaryPart:FindFirstChild('SingularityCape')
-                  if TriggerSingularity_Detection and singularityCape then return end
-                  if TriggerDeathSlash_Detection and DeathSlashDetection then return end
-                  if not zoomies then return end
-                  local velocity = zoomies.VectorVelocity
-                  local speed = velocity.Magnitude
-                  local pingedValued = game:GetService('Stats').Network.ServerStatsItem['Data Ping']:GetValue()
-                  local time = pingedValued / 2000
-                  local playerVel = character.PrimaryPart.Velocity
-                  local Ball_Position = ball.Position
-                  local Ball_Future_Position = Ball_Position + velocity * time
-                  local Player_Future_Position = character.PrimaryPart.Position + playerVel * time
-                  local distance = (Player_Future_Position - Ball_Future_Position).Magnitude
-                  local cappedSpeedDifference = math.min(math.max(speed - 9.5, 0), 820)
-                  local speedDivisorBase = 2.4 + cappedSpeedDifference * 0.002
-                  local adjustedPing = pingedValued / 10
-                  if HighPingCompensation and pingedValued > 150 then
-                      adjustedPing = adjustedPing * 1.5
-                  end
-                  local speedDivisor = speedDivisorBase * Speed_Divisor_Multiplier
-                  local parryAccuracy = adjustedPing + math.max(speed / speedDivisor, 9.5)
-                  if distance > parryAccuracy then return end
-                  AutoParry.ParryAnim(false)
-                  local averagePing = GetAveragePing()
-                  local useAbility = false
-                  local abilityCD = hotbar and hotbar:FindFirstChild('Ability') and hotbar.Ability.UIGradient
-                  if TriggerHighPingProtection and averagePing > 130 then
-                      if abilityCD and abilityCD.Offset.Y == 0.5 and (abilities["Raging Deflection"].Enabled or abilities["Rapture"].Enabled) then
-                          useAbility = true
-                          Use_Ability:Fire()
-                      end
-                  end
-                  if not useAbility then
-                      if TriggerbotType == "Remote" then
-                          if Is_Supported_Test and next(ParryRemotes) then
-                              AutoParry.PerformRemoteParry(SelectedTriggerParryType)
-                          else
-                              SimulateParry()
-                              Parries += 1
-                              task.delay(0.5, function() if Parries > 0 then Parries -= 1 end end)
-                          end
-                      else
-                          if TriggerbotType == "Keypress" and KeypressAutoCurve then
-                              KeypressAPC(SelectedTriggerParryType)
-                          else
-                              SimulateParry()
-                          end
-                          Parries += 1
-                          task.delay(0.5, function() if Parries > 0 then Parries -= 1 end end)
-                      end
-                  end
-                  triggerParriedBalls[ball] = true
-              end)
-              local prevUsingInfinityTB = nil
-              Connections["triggerbot_infinity_watch"] = RunService.PreSimulation:Connect(function()
-                  if not isTriggerbotEnabled then return end
-                  local hotbarW = LocalPlayer:FindFirstChild('PlayerGui') and LocalPlayer.PlayerGui:FindFirstChild('Hotbar')
-                  local characterW = LocalPlayer.Character
-                  local abilitiesW = characterW and characterW:FindFirstChild('Abilities')
-                  local durationUIW = hotbarW and hotbarW:FindFirstChild('Ability') and hotbarW.Ability:FindFirstChild('Duration') and hotbarW.Ability.Duration.Visible
-                  local infinityAbilityW = abilitiesW and abilitiesW:FindFirstChild('Infinity')
-                  local infinityW = infinityAbilityW and infinityAbilityW.Enabled
-                  local usingInfinityW = durationUIW and infinityW and Infinity_Ball
-                  if prevUsingInfinityTB == nil then
-                      prevUsingInfinityTB = usingInfinityW
-                      return
-                  end
-                  if TriggerInfinity_Detection and prevUsingInfinityTB and not usingInfinityW then
-                      local targetedBall
-                      for _, b in pairs(AutoParry.GetBalls()) do
-                          if b:GetAttribute('target') == tostring(LocalPlayer) then
-                              targetedBall = b
-                              break
-                          end
-                      end
-                      if targetedBall then
-                          local singularityCapeW = LocalPlayer.Character.PrimaryPart:FindFirstChild('SingularityCape')
-                          if TriggerSingularity_Detection and singularityCapeW then
-                              prevUsingInfinityTB = usingInfinityW
-                              return
-                          end
-                          if TriggerDeathSlash_Detection and DeathSlashDetection and durationUIW then
-                              prevUsingInfinityTB = usingInfinityW
-                              return
-                          end
-                          AutoParry.ParryAnim(false)
-                          local averagePing = GetAveragePing()
-                          local useAbility = false
-                          local abilityCDW = hotbarW and hotbarW:FindFirstChild('Ability') and hotbarW.Ability.UIGradient
-                          if TriggerHighPingProtection and averagePing > 130 then
-                              if abilityCDW and abilityCDW.Offset.Y == 0.5 and (abilitiesW["Raging Deflection"].Enabled or abilitiesW["Rapture"].Enabled) then
-                                  useAbility = true
-                                  Use_Ability:Fire()
-                              end
-                          end
-                          if not useAbility then
-                              if TriggerbotType == "Remote" then
-                                  if Is_Supported_Test then
-                                      AutoParry.PerformRemoteParry(SelectedTriggerParryType)
-                                      AutoParry.PerformRemoteParry(SelectedTriggerParryType)
-                                  else
-                                      SimulateParry()
-                                      SimulateParry()
-                                      Parries += 2
-                                      task.delay(0.5, function() if Parries > 0 then Parries -= 2 end end)
-                                  end
-                              else
-                                  SimulateParry()
-                                  SimulateParry()
-                                  Parries += 2
-                                  task.delay(0.5, function() if Parries > 0 then Parries -= 2 end end)
-                              end
-                          end
-                      end
-                  end
-                  prevUsingInfinityTB = usingInfinityW
-              end)
-          else
-              for key, connection in pairs(Connections) do
-                  if key:match("^triggerbot_") then
-                      connection:Disconnect()
-                      Connections[key] = nil
-                  end
-              end
-              PostParryTarget = nil
-              PostParryVelocityHistory = {}
-              PostParryScheduled = {}
-          end
-      end
-  })
-  triggerbotModule:create_dropdown({
-      title = "Parry Type",
-      flag = "TriggerbotType",
-      options = Is_Supported_Test and {"Remote", "Keypress"} or {"Keypress"},
-      multi_dropdown = false,
-      maximum_options = 999,
-      callback = function(v)
-          TriggerbotType = v
-      end
-  })
-  triggerbotModule:create_dropdown({
-      title = "Curve Type",
-      flag = "TriggerParryDirection",
-      options = {"Backwards", "Camera", "High", "Left", "Random", "Right", "Straight"},
-      multi_dropdown = false,
-      maximum_options = 999,
-      callback = function(v)
-          SelectedTriggerParryType = v
-      end
-  })
-  triggerbotModule:create_divider({})
-  triggerbotModule:create_checkbox({
-      title = "High Ping Protection",
-      flag = "TriggerHighPingProtection",
-      callback = function(v)
-          TriggerHighPingProtection = v
-      end
-  })
-  triggerbotModule:create_checkbox({
-      title = "Auto Pre-Click",
-      flag = "TriggerAutoPostParry",
-      callback = function(v)
-          if v then
-              if isTriggerbotEnabled then
-                  Connections["triggerbot_postParry_deathMonitor"] = Alive.ChildRemoved:Connect(function(removedCharacter)
-                      if not Library._config._flags["TriggerAutoPostParry"] then return end
-                      if not PostParryTarget or PostParryTarget == "" then return end
-                      if removedCharacter.Name ~= PostParryTarget then return end
-                      if PostParryScheduled[removedCharacter.Name] then return end
-                      local hadHighSpeed = false
-                      for ball, speeds in pairs(PostParryVelocityHistory) do
-                          for _, speed in ipairs(speeds) do
-                              if speed >= 800 then
-                                  hadHighSpeed = true
-                                  break
-                              end
-                          end
-                          if hadHighSpeed then break end
-                      end
-                      if hadHighSpeed then
-                          PostParryScheduled[removedCharacter.Name] = true
-                          local randomDelay = (math.random(130, 160) / 1000)
-                          task.delay(randomDelay, function()
-                              SimulateParry()
-                              PostParryScheduled[removedCharacter.Name] = nil
-                          end)
-                      end
-                      PostParryTarget = nil
-                      PostParryVelocityHistory = {}
-                  end)
-              end
-              Connections["triggerbot_postParry_continuousCheck"] = RunService.Heartbeat:Connect(function()
-                  if not Library._config._flags["TriggerAutoPostParry"] then return end
-                  if not PostParryTarget or PostParryTarget == "" then return end
-                  if PostParryScheduled[PostParryTarget] then return end
-                  local targetChar = Alive:FindFirstChild(PostParryTarget)
-                  if not targetChar then
-                      local hadHighSpeed = false
-                      for ball, speeds in pairs(PostParryVelocityHistory) do
-                          for _, speed in ipairs(speeds) do
-                              if speed >= 800 then
-                                  hadHighSpeed = true
-                                  break
-                              end
-                          end
-                          if hadHighSpeed then break end
-                      end
-                      if hadHighSpeed then
-                          PostParryScheduled[PostParryTarget] = true
-                          local randomDelay = (math.random(120, 140) / 1000)
-                          task.delay(randomDelay, function()
-                              SimulateParry()
-                              PostParryScheduled[PostParryTarget] = nil
-                          end)
-                      end
-                      PostParryTarget = nil
-                      PostParryVelocityHistory = {}
-                  end
-              end)
-          else
-              if Connections["triggerbot_postParry_deathMonitor"] then
-                  Connections["triggerbot_postParry_deathMonitor"]:Disconnect()
-                  Connections["triggerbot_postParry_deathMonitor"] = nil
-              end
-              if Connections["triggerbot_postParry_continuousCheck"] then
-                  Connections["triggerbot_postParry_continuousCheck"]:Disconnect()
-                  Connections["triggerbot_postParry_continuousCheck"] = nil
-              end
-              PostParryTarget = nil
-              PostParryVelocityHistory = {}
-              PostParryScheduled = {}
           end
       end
   })
@@ -4867,6 +4419,8 @@ local ballModule = MiscTab:create_module({
     section = "left",
     callback = function(v) end
 })
+
+
 
 ballModule:create_checkbox({
     title = "Ball Speed Stats",
