@@ -1,14 +1,17 @@
 -- =============================================
---     MACRO SPAM F v4.4 — By Zaza
---     MAX SPEED: interval precalculado,
---     sin for-loop en hot path, límite 2000
+--     MACRO SPAM F v4.6 — By Zaza
+--     + Low Graphics CARTOON (color solido)
+--     + Toggle visual corregido
+--     + Scroll en panel
+--     + FPS Unlock toggle (persistente entre mapas)
 -- =============================================
 
-local Players            = game:GetService("Players")
-local UserInputService   = game:GetService("UserInputService")
-local VirtualInputManager= game:GetService("VirtualInputManager")
-local RunService         = game:GetService("RunService")
-local TweenService       = game:GetService("TweenService")
+local Players             = game:GetService("Players")
+local UserInputService    = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService          = game:GetService("RunService")
+local TweenService        = game:GetService("TweenService")
+local Lighting            = game:GetService("Lighting")
 
 if game:GetService("CoreGui"):FindFirstChild("FSpamMacro") then
     game:GetService("CoreGui"):FindFirstChild("FSpamMacro"):Destroy()
@@ -22,37 +25,209 @@ local spamConnection    = nil
 local panelVisible      = true
 local everythingVisible = true
 local overlayIsOn       = true
+local lowGraphicsOn     = false
+local fpsUnlockOn       = false
 local accumulator       = 0
-local cachedInterval    = 1 / keysPerSecond  -- precalculado, solo cambia al editar KPS
+local cachedInterval    = 1 / keysPerSecond
 
 local currentKeybind = Enum.KeyCode.RightShift
 local hideKeybind    = Enum.KeyCode.RightControl
 local spamKey        = Enum.KeyCode.F
 
+-- ============ FPS UNLOCK (PERSISTENTE ENTRE MAPAS) ============
+local fpsConnection = nil  -- conexion que re-aplica el fps cap en cada mapa
+
+local function applyFPSUnlock()
+    if setfpscap then
+        setfpscap(999)
+    end
+end
+
+local function restoreFPSCap()
+    if setfpscap then
+        setfpscap(60)
+    end
+end
+
+-- Escucha cambios de mapa: cuando workspace.CurrentCamera cambia
+-- o cuando se carga un nivel nuevo, Roblox resetea internamente el fps cap.
+-- Usamos workspace:GetPropertyChangedSignal para detectar el cambio de mapa.
+local function startFPSPersist()
+    -- Desconecta si ya habia una conexion activa
+    if fpsConnection then fpsConnection:Disconnect(); fpsConnection = nil end
+
+    -- Aplica inmediatamente
+    applyFPSUnlock()
+
+    -- Re-aplica cada vez que el workspace recibe una propiedad nueva
+    -- (señal mas confiable de carga de mapa nuevo)
+    fpsConnection = workspace:GetPropertyChangedSignal("StreamingEnabled"):Connect(function()
+        if fpsUnlockOn then applyFPSUnlock() end
+    end)
+
+    -- Adicionalmente: re-aplica con RunService en el primer frame de cada
+    -- nuevo mapa. Detectamos cambio de mapa via Players.LocalPlayer respawn
+    -- o via un loop liviano que verifica si el cap fue reseteado.
+    -- La forma mas robusta es un loop de Heartbeat que re-aplica periodicamente.
+    -- Solo corre mientras fpsUnlockOn = true, coste minimo.
+end
+
+local function stopFPSPersist()
+    if fpsConnection then fpsConnection:Disconnect(); fpsConnection = nil end
+    restoreFPSCap()
+end
+
+-- Loop liviano que mantiene el FPS desbloqueado aunque el juego lo resetee.
+-- Se ejecuta cada ~2 segundos para no gastar recursos.
+local fpsLoopConnection = nil
+
+local function startFPSLoop()
+    if fpsLoopConnection then return end  -- ya corre
+    local timer = 0
+    fpsLoopConnection = RunService.Heartbeat:Connect(function(dt)
+        if not fpsUnlockOn then return end
+        timer = timer + dt
+        if timer >= 2 then  -- cada 2 segundos re-aplica
+            timer = 0
+            applyFPSUnlock()
+        end
+    end)
+end
+
+local function stopFPSLoop()
+    if fpsLoopConnection then fpsLoopConnection:Disconnect(); fpsLoopConnection = nil end
+end
+
+-- Tambien re-aplica cuando el LocalPlayer hace respawn (suele coincidir con carga de mapa)
+local player = Players.LocalPlayer
+if player then
+    player.CharacterAdded:Connect(function()
+        if fpsUnlockOn then
+            task.wait(0.5)  -- espera que el mapa termine de cargar
+            applyFPSUnlock()
+        end
+    end)
+end
+
+-- ============ LOW GRAPHICS — MODO CARTOON ============
+local savedParts     = {}
+local savedLighting  = {}
+local savedEffects   = {}
+
+local function applyCartoonMode()
+    savedLighting = {
+        GlobalShadows  = Lighting.GlobalShadows,
+        Brightness     = Lighting.Brightness,
+        ShadowSoftness = Lighting.ShadowSoftness,
+        Ambient        = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+    }
+    Lighting.GlobalShadows  = false
+    Lighting.Brightness     = 2
+    Lighting.ShadowSoftness = 0
+    Lighting.Ambient        = Color3.fromRGB(178,178,178)
+    Lighting.OutdoorAmbient = Color3.fromRGB(178,178,178)
+
+    savedEffects = {}
+    for _, child in ipairs(Lighting:GetChildren()) do
+        if child:IsA("BlurEffect") or child:IsA("ColorCorrectionEffect")
+        or child:IsA("SunRaysEffect") or child:IsA("BloomEffect")
+        or child:IsA("DepthOfFieldEffect") then
+            savedEffects[child] = child.Enabled
+            child.Enabled = false
+        end
+    end
+
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+
+    savedParts = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj:IsA("Terrain") then
+            savedParts[obj] = {
+                color       = obj.Color,
+                material    = obj.Material,
+                castShadow  = obj.CastShadow,
+            }
+            obj.Material   = Enum.Material.SmoothPlastic
+            obj.CastShadow = false
+        end
+        if obj:IsA("Decal") or obj:IsA("Texture") then
+            savedParts[obj] = { transparency = obj.Transparency }
+            obj.Transparency = 1
+        end
+        if obj:IsA("MeshPart") or obj:IsA("SpecialMesh") then
+            if not savedParts[obj] then savedParts[obj] = {} end
+            if obj:IsA("MeshPart") then
+                savedParts[obj].textureID = obj.TextureID
+                obj.TextureID = ""
+            elseif obj:IsA("SpecialMesh") then
+                savedParts[obj].textureID = obj.TextureId
+                obj.TextureId = ""
+            end
+        end
+    end
+end
+
+local function restoreCartoonMode()
+    if savedLighting.GlobalShadows ~= nil then
+        Lighting.GlobalShadows  = savedLighting.GlobalShadows
+        Lighting.Brightness     = savedLighting.Brightness
+        Lighting.ShadowSoftness = savedLighting.ShadowSoftness
+        Lighting.Ambient        = savedLighting.Ambient
+        Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+    end
+
+    for effect, wasEnabled in pairs(savedEffects) do
+        if effect and effect.Parent then
+            effect.Enabled = wasEnabled
+        end
+    end
+
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+
+    for obj, data in pairs(savedParts) do
+        if obj and obj.Parent then
+            if obj:IsA("BasePart") and not obj:IsA("Terrain") then
+                obj.Color      = data.color
+                obj.Material   = data.material
+                obj.CastShadow = data.castShadow
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = data.transparency
+            elseif obj:IsA("MeshPart") then
+                obj.TextureID = data.textureID or ""
+            elseif obj:IsA("SpecialMesh") then
+                obj.TextureId = data.textureID or ""
+            end
+        end
+    end
+    savedParts = {}
+end
+
 -- ============ COLORES ============
 local C = {
-    bg          = Color3.fromRGB(15,  14,  26),
-    bgDeep      = Color3.fromRGB(10,   8,  20),
-    bgHeader    = Color3.fromRGB(20,  16,  40),
-    bgRow       = Color3.fromRGB(12,  10,  24),
-    accent      = Color3.fromRGB(120, 80, 220),
-    accentDim   = Color3.fromRGB( 60, 40, 110),
-    accentBorder= Color3.fromRGB( 80, 55, 160),
-    textMain    = Color3.fromRGB(200,185,255),
-    textMuted   = Color3.fromRGB(110,100,150),
-    textHint    = Color3.fromRGB( 70, 60,110),
-    green       = Color3.fromRGB( 55,195, 90),
-    greenDim    = Color3.fromRGB( 20, 80, 35),
-    greenBorder = Color3.fromRGB( 40,130, 60),
-    white       = Color3.fromRGB(255,255,255),
+    bg           = Color3.fromRGB(15,  14,  26),
+    bgDeep       = Color3.fromRGB(10,   8,  20),
+    bgHeader     = Color3.fromRGB(20,  16,  40),
+    bgRow        = Color3.fromRGB(12,  10,  24),
+    accent       = Color3.fromRGB(120, 80, 220),
+    accentDim    = Color3.fromRGB( 60, 40, 110),
+    accentBorder = Color3.fromRGB( 80, 55, 160),
+    textMain     = Color3.fromRGB(200,185,255),
+    textMuted    = Color3.fromRGB(110,100,150),
+    textHint     = Color3.fromRGB( 70, 60,110),
+    green        = Color3.fromRGB( 55,195, 90),
+    greenDim     = Color3.fromRGB( 20, 80, 35),
+    greenBorder  = Color3.fromRGB( 40,130, 60),
+    amber        = Color3.fromRGB(220,160, 40),
+    amberDim     = Color3.fromRGB( 80, 55, 10),
+    amberBorder  = Color3.fromRGB(140,100, 20),
+    cyan         = Color3.fromRGB( 40,200,220),
+    cyanDim      = Color3.fromRGB( 10, 70, 80),
+    cyanBorder   = Color3.fromRGB( 20,130,150),
+    white        = Color3.fromRGB(255,255,255),
 }
 
--- ============ SPAM LOOP — MAX SPEED ============
--- cachedInterval se actualiza solo cuando cambia keysPerSecond,
--- evitando la división en cada frame.
--- Los eventos se envían directo sin for-loop extra cuando ticks == 1
--- (caso más común a velocidades razonables).
--- Para ticks > 1 (frames lentos/lag spike) sí itera, pero es raro.
+-- ============ SPAM LOOP ============
 local function updateInterval()
     cachedInterval = 1 / keysPerSecond
 end
@@ -63,10 +238,9 @@ local function startSpam()
     spamConnection = RunService.Heartbeat:Connect(function(dt)
         if not macroEnabled then return end
         accumulator = accumulator + dt
-        if accumulator < cachedInterval then return end  -- fast-path: nada que hacer
+        if accumulator < cachedInterval then return end
         local ticks = math.floor(accumulator / cachedInterval)
         accumulator = accumulator - ticks * cachedInterval
-        -- hot path sin overhead de task.spawn para ticks bajos
         if ticks == 1 then
             VirtualInputManager:SendKeyEvent(true,  spamKey, false, game)
             VirtualInputManager:SendKeyEvent(false, spamKey, false, game)
@@ -88,10 +262,10 @@ end
 
 -- ============ GUI ============
 local gui = Instance.new("ScreenGui")
-gui.Name            = "FSpamMacro"
-gui.ResetOnSpawn    = false
-gui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-gui.Parent          = game:GetService("CoreGui")
+gui.Name           = "FSpamMacro"
+gui.ResetOnSpawn   = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent         = game:GetService("CoreGui")
 
 local function makeCorner(parent, radius)
     local c = Instance.new("UICorner", parent)
@@ -100,10 +274,41 @@ local function makeCorner(parent, radius)
 end
 local function makeStroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke", parent)
-    s.Color         = color         or C.accentBorder
-    s.Thickness     = thickness     or 1
-    s.Transparency  = transparency  or 0.55
+    s.Color        = color        or C.accentBorder
+    s.Thickness    = thickness    or 1
+    s.Transparency = transparency or 0.55
     return s
+end
+
+local function makeSwitch(parent, xOffset, yPos, isOn, onColor, onBorder)
+    local track = Instance.new("Frame")
+    track.Size                   = UDim2.new(0, 42, 0, 22)
+    track.Position               = UDim2.new(1, xOffset, 0, yPos)
+    track.BackgroundColor3       = isOn and onColor or C.accentDim
+    track.BackgroundTransparency = 0.3
+    track.BorderSizePixel        = 0
+    track.ZIndex                 = 12
+    track.Parent                 = parent
+    makeCorner(track, 11)
+    local stroke = makeStroke(track, isOn and onBorder or C.accentDim, 1, 0.45)
+
+    local thumb = Instance.new("Frame")
+    thumb.Size             = UDim2.new(0, 16, 0, 16)
+    thumb.Position         = isOn and UDim2.new(0, 23, 0, 3) or UDim2.new(0, 3, 0, 3)
+    thumb.BackgroundColor3 = C.white
+    thumb.BorderSizePixel  = 0
+    thumb.ZIndex           = 13
+    thumb.Parent           = track
+    makeCorner(thumb, 99)
+
+    local btn = Instance.new("TextButton")
+    btn.Size               = UDim2.new(1, 0, 1, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text               = ""
+    btn.ZIndex             = 14
+    btn.Parent             = track
+
+    return track, thumb, stroke, btn
 end
 
 local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -155,13 +360,14 @@ overlayKeybindLbl.ZIndex             = 51
 overlayKeybindLbl.Parent             = overlay
 
 -- ============ PANEL ============
-local PANEL_W        = 340
-local PANEL_H_OPEN   = 356
-local PANEL_H_CLOSED = 46
+local PANEL_W         = 340
+local PANEL_H_VISIBLE = 410
+local PANEL_H_CLOSED  = 46
+local HEADER_H        = 46
 
 local frame = Instance.new("Frame")
 frame.Name                  = "MainPanel"
-frame.Size                  = UDim2.new(0, PANEL_W, 0, PANEL_H_OPEN)
+frame.Size                  = UDim2.new(0, PANEL_W, 0, PANEL_H_VISIBLE)
 frame.Position              = UDim2.new(0.5, -(PANEL_W/2), 0.28, 0)
 frame.BackgroundColor3      = C.bg
 frame.BorderSizePixel       = 0
@@ -174,18 +380,18 @@ makeStroke(frame, C.accentBorder, 1, 0.6)
 local grad = Instance.new("UIGradient")
 grad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 18, 42)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 8,  20)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10,  8, 20)),
 })
 grad.Rotation = 140
 grad.Parent   = frame
 
 -- HEADER
 local header = Instance.new("Frame")
-header.Size                   = UDim2.new(1, 0, 0, PANEL_H_CLOSED)
+header.Size                   = UDim2.new(1, 0, 0, HEADER_H)
 header.BackgroundColor3       = C.bgHeader
 header.BackgroundTransparency = 0.0
 header.BorderSizePixel        = 0
-header.ZIndex                 = 15
+header.ZIndex                 = 20
 header.Parent                 = frame
 
 local headerSep = Instance.new("Frame")
@@ -194,7 +400,7 @@ headerSep.Position               = UDim2.new(0, 0, 1, -1)
 headerSep.BackgroundColor3       = C.accentBorder
 headerSep.BackgroundTransparency = 0.55
 headerSep.BorderSizePixel        = 0
-headerSep.ZIndex                 = 16
+headerSep.ZIndex                 = 21
 headerSep.Parent                 = header
 
 local headerDot = Instance.new("Frame")
@@ -202,7 +408,7 @@ headerDot.Size             = UDim2.new(0, 8, 0, 8)
 headerDot.Position         = UDim2.new(0, 12, 0.5, -4)
 headerDot.BackgroundColor3 = C.accent
 headerDot.BorderSizePixel  = 0
-headerDot.ZIndex           = 16
+headerDot.ZIndex           = 21
 headerDot.Parent           = header
 makeCorner(headerDot, 99)
 
@@ -215,7 +421,7 @@ titleLabel.TextColor3         = C.textMain
 titleLabel.Font               = Enum.Font.GothamBold
 titleLabel.TextSize           = 13
 titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
-titleLabel.ZIndex             = 16
+titleLabel.ZIndex             = 21
 titleLabel.Parent             = header
 
 local statusBadge = Instance.new("TextLabel")
@@ -227,7 +433,7 @@ statusBadge.Text                   = "OFF"
 statusBadge.TextColor3             = C.accent
 statusBadge.Font                   = Enum.Font.GothamBold
 statusBadge.TextSize               = 11
-statusBadge.ZIndex                 = 16
+statusBadge.ZIndex                 = 21
 statusBadge.Parent                 = header
 makeCorner(statusBadge, 5)
 
@@ -240,241 +446,181 @@ hideBtn.Text                   = "Hide ▲"
 hideBtn.TextColor3             = C.textMuted
 hideBtn.Font                   = Enum.Font.Gotham
 hideBtn.TextSize               = 11
-hideBtn.ZIndex                 = 16
+hideBtn.ZIndex                 = 21
 hideBtn.Parent                 = header
 makeCorner(hideBtn, 6)
 makeStroke(hideBtn, C.accentDim, 1, 0.5)
 
--- TOGGLE MACRO
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size                   = UDim2.new(1, -28, 0, 38)
-toggleBtn.Position               = UDim2.new(0, 14, 0, 56)
-toggleBtn.BackgroundColor3       = C.accentDim
-toggleBtn.BackgroundTransparency = 0.55
-toggleBtn.Text                   = "● MACRO DISABLED"
-toggleBtn.TextColor3             = C.accent
-toggleBtn.Font                   = Enum.Font.GothamBold
-toggleBtn.TextSize               = 13
-toggleBtn.ZIndex                 = 12
-toggleBtn.Parent                 = frame
-makeCorner(toggleBtn, 9)
-local toggleStroke = makeStroke(toggleBtn, C.accentBorder, 1, 0.45)
+-- ============ SCROLL ============
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size                   = UDim2.new(1, 0, 1, -HEADER_H)
+scrollFrame.Position               = UDim2.new(0, 0, 0, HEADER_H)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel        = 0
+scrollFrame.ScrollBarThickness     = 3
+scrollFrame.ScrollBarImageColor3   = C.accentBorder
+scrollFrame.ScrollingDirection     = Enum.ScrollingDirection.Y
+scrollFrame.ElasticBehavior        = Enum.ElasticBehavior.Never
+scrollFrame.ZIndex                 = 11
+scrollFrame.Parent                 = frame
+
+local body = Instance.new("Frame")
+body.Name                   = "Body"
+body.BackgroundTransparency = 1
+body.BorderSizePixel        = 0
+body.ZIndex                 = 12
+body.Parent                 = scrollFrame
+
+-- ============ BODY HELPERS ============
+local function bCorner(p, r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8); return c end
+local function bStroke(p, col, th, tr) local s=Instance.new("UIStroke",p); s.Color=col or C.accentBorder; s.Thickness=th or 1; s.Transparency=tr or 0.55; return s end
 
 local function makeSectionLabel(text, y)
     local l = Instance.new("TextLabel")
-    l.Size               = UDim2.new(1, -28, 0, 14)
-    l.Position           = UDim2.new(0, 14, 0, y)
-    l.BackgroundTransparency = 1
-    l.Text               = text
-    l.TextColor3         = C.textHint
-    l.Font               = Enum.Font.GothamSemibold
-    l.TextSize           = 10
-    l.TextXAlignment     = Enum.TextXAlignment.Left
-    l.ZIndex             = 12
-    l.Parent             = frame
+    l.Size = UDim2.new(1,-28,0,14); l.Position = UDim2.new(0,14,0,y)
+    l.BackgroundTransparency=1; l.Text=text; l.TextColor3=C.textHint
+    l.Font=Enum.Font.GothamSemibold; l.TextSize=10
+    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=12; l.Parent=body
     return l
 end
 
 local function makeKeybindRow(labelText, yPos, displayText)
     local lbl = Instance.new("TextLabel")
-    lbl.Size             = UDim2.new(0, 110, 0, 30)
-    lbl.Position         = UDim2.new(0, 14, 0, yPos)
-    lbl.BackgroundTransparency = 1
-    lbl.Text             = labelText
-    lbl.TextColor3       = C.textMuted
-    lbl.Font             = Enum.Font.Gotham
-    lbl.TextSize         = 12
-    lbl.TextXAlignment   = Enum.TextXAlignment.Left
-    lbl.ZIndex           = 12
-    lbl.Parent           = frame
+    lbl.Size=UDim2.new(0,110,0,30); lbl.Position=UDim2.new(0,14,0,yPos)
+    lbl.BackgroundTransparency=1; lbl.Text=labelText; lbl.TextColor3=C.textMuted
+    lbl.Font=Enum.Font.Gotham; lbl.TextSize=12
+    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=12; lbl.Parent=body
 
     local display = Instance.new("TextButton")
-    display.Size         = UDim2.new(0, 100, 0, 28)
-    display.Position     = UDim2.new(0, 128, 0, yPos + 1)
-    display.BackgroundColor3 = C.bgDeep
-    display.BackgroundTransparency = 0.2
-    display.Text         = displayText
-    display.TextColor3   = C.textMain
-    display.Font         = Enum.Font.GothamSemibold
-    display.TextSize     = 11
-    display.ZIndex       = 12
-    display.Parent       = frame
-    makeCorner(display, 7)
-    makeStroke(display, C.accentBorder, 1, 0.6)
+    display.Size=UDim2.new(0,100,0,28); display.Position=UDim2.new(0,128,0,yPos+1)
+    display.BackgroundColor3=C.bgDeep; display.BackgroundTransparency=0.2
+    display.Text=displayText; display.TextColor3=C.textMain
+    display.Font=Enum.Font.GothamSemibold; display.TextSize=11; display.ZIndex=12; display.Parent=body
+    bCorner(display,7); bStroke(display,C.accentBorder,1,0.6)
 
     local btn = Instance.new("TextButton")
-    btn.Size             = UDim2.new(0, 82, 0, 28)
-    btn.Position         = UDim2.new(1, -96, 0, yPos + 1)
-    btn.BackgroundColor3 = C.bgRow
-    btn.BackgroundTransparency = 0.0
-    btn.Text             = "Change"
-    btn.TextColor3       = C.textMuted
-    btn.Font             = Enum.Font.GothamSemibold
-    btn.TextSize         = 11
-    btn.ZIndex           = 12
-    btn.Parent           = frame
-    makeCorner(btn, 7)
-    makeStroke(btn, C.accentDim, 1, 0.5)
-
+    btn.Size=UDim2.new(0,82,0,28); btn.Position=UDim2.new(1,-96,0,yPos+1)
+    btn.BackgroundColor3=C.bgRow; btn.BackgroundTransparency=0.0
+    btn.Text="Change"; btn.TextColor3=C.textMuted
+    btn.Font=Enum.Font.GothamSemibold; btn.TextSize=11; btn.ZIndex=12; btn.Parent=body
+    bCorner(btn,7); bStroke(btn,C.accentDim,1,0.5)
     return display, btn
 end
 
-makeSectionLabel("KEYBINDS", 104)
-local keybindDisplay, bindBtn    = makeKeybindRow("Toggle macro:",  122, currentKeybind.Name)
-local hideDisplay,    hideBndBtn = makeKeybindRow("Hide panel:",    156, hideKeybind.Name)
-local spamDisplay,    spamBndBtn = makeKeybindRow("Spam key:",      190, spamKey.Name)
+local function makeToggleRowLabel(text, y)
+    local l = Instance.new("TextLabel")
+    l.Size=UDim2.new(0,200,0,30); l.Position=UDim2.new(0,14,0,y)
+    l.BackgroundTransparency=1; l.Text=text; l.TextColor3=C.textMuted
+    l.Font=Enum.Font.Gotham; l.TextSize=12
+    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=12; l.Parent=body
+end
 
--- VELOCIDAD — límite subido a 2000
-makeSectionLabel("SPEED", 232)
+local function makeSep(y)
+    local s=Instance.new("Frame"); s.Size=UDim2.new(1,-28,0,1); s.Position=UDim2.new(0,14,0,y)
+    s.BackgroundColor3=C.accentDim; s.BackgroundTransparency=0.7
+    s.BorderSizePixel=0; s.ZIndex=12; s.Parent=body
+end
+
+-- ============ BODY CONTENT ============
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size=UDim2.new(1,-28,0,38); toggleBtn.Position=UDim2.new(0,14,0,10)
+toggleBtn.BackgroundColor3=C.accentDim; toggleBtn.BackgroundTransparency=0.55
+toggleBtn.Text="● MACRO DISABLED"; toggleBtn.TextColor3=C.accent
+toggleBtn.Font=Enum.Font.GothamBold; toggleBtn.TextSize=13; toggleBtn.ZIndex=12; toggleBtn.Parent=body
+bCorner(toggleBtn,9)
+local toggleStroke = bStroke(toggleBtn,C.accentBorder,1,0.45)
+
+makeSectionLabel("KEYBINDS", 58)
+local keybindDisplay, bindBtn    = makeKeybindRow("Toggle macro:", 76,  currentKeybind.Name)
+local hideDisplay,    hideBndBtn = makeKeybindRow("Hide panel:",   110, hideKeybind.Name)
+local spamDisplay,    spamBndBtn = makeKeybindRow("Spam key:",     144, spamKey.Name)
+
+makeSectionLabel("SPEED", 186)
 
 local cpsLbl = Instance.new("TextLabel")
-cpsLbl.Size              = UDim2.new(0, 140, 0, 28)
-cpsLbl.Position          = UDim2.new(0, 14, 0, 249)
-cpsLbl.BackgroundTransparency = 1
-cpsLbl.Text              = "Keys per second"
-cpsLbl.TextColor3        = C.textMuted
-cpsLbl.Font              = Enum.Font.Gotham
-cpsLbl.TextSize          = 12
-cpsLbl.TextXAlignment    = Enum.TextXAlignment.Left
-cpsLbl.ZIndex            = 12
-cpsLbl.Parent            = frame
+cpsLbl.Size=UDim2.new(0,140,0,28); cpsLbl.Position=UDim2.new(0,14,0,203)
+cpsLbl.BackgroundTransparency=1; cpsLbl.Text="Keys per second"; cpsLbl.TextColor3=C.textMuted
+cpsLbl.Font=Enum.Font.Gotham; cpsLbl.TextSize=12
+cpsLbl.TextXAlignment=Enum.TextXAlignment.Left; cpsLbl.ZIndex=12; cpsLbl.Parent=body
 
 local cpsBox = Instance.new("TextBox")
-cpsBox.Size              = UDim2.new(0, 100, 0, 28)
-cpsBox.Position          = UDim2.new(1, -114, 0, 249)
-cpsBox.BackgroundColor3  = C.bgDeep
-cpsBox.BackgroundTransparency = 0.2
-cpsBox.Text              = tostring(keysPerSecond)
-cpsBox.TextColor3        = C.white
-cpsBox.Font              = Enum.Font.GothamSemibold
-cpsBox.TextSize          = 14
-cpsBox.ZIndex            = 12
-cpsBox.Parent            = frame
-makeCorner(cpsBox, 7)
-makeStroke(cpsBox, C.accentBorder, 1, 0.55)
+cpsBox.Size=UDim2.new(0,100,0,28); cpsBox.Position=UDim2.new(1,-114,0,203)
+cpsBox.BackgroundColor3=C.bgDeep; cpsBox.BackgroundTransparency=0.2
+cpsBox.Text=tostring(keysPerSecond); cpsBox.TextColor3=C.white
+cpsBox.Font=Enum.Font.GothamSemibold; cpsBox.TextSize=14; cpsBox.ZIndex=12; cpsBox.Parent=body
+bCorner(cpsBox,7); bStroke(cpsBox,C.accentBorder,1,0.55)
 
--- Presets actualizados: MAX ahora es 2000
 local presets = {{"100",100},{"300",300},{"500",500},{"MAX",2000}}
 for i, p in ipairs(presets) do
     local pb = Instance.new("TextButton")
-    pb.Size              = UDim2.new(0, 66, 0, 22)
-    pb.Position          = UDim2.new(0, 14 + (i-1)*72, 0, 284)
-    pb.BackgroundColor3  = C.bgRow
-    pb.BackgroundTransparency = 0.0
-    pb.Text              = p[1]
-    pb.TextColor3        = C.textMuted
-    pb.Font              = Enum.Font.GothamSemibold
-    pb.TextSize          = 11
-    pb.ZIndex            = 12
-    pb.Parent            = frame
-    makeCorner(pb, 5)
-    makeStroke(pb, C.accentDim, 1, 0.55)
+    pb.Size=UDim2.new(0,66,0,22); pb.Position=UDim2.new(0,14+(i-1)*72,0,238)
+    pb.BackgroundColor3=C.bgRow; pb.BackgroundTransparency=0.0
+    pb.Text=p[1]; pb.TextColor3=C.textMuted
+    pb.Font=Enum.Font.GothamSemibold; pb.TextSize=11; pb.ZIndex=12; pb.Parent=body
+    bCorner(pb,5); bStroke(pb,C.accentDim,1,0.55)
     local val = p[2]
     pb.MouseButton1Click:Connect(function()
-        keysPerSecond = val
-        cpsBox.Text   = tostring(val)
-        updateInterval()  -- recalcula el intervalo cacheado
+        keysPerSecond=val; cpsBox.Text=tostring(val)
+        updateInterval()
         if macroEnabled then stopSpam(); startSpam() end
     end)
 end
 
-local sep = Instance.new("Frame")
-sep.Size             = UDim2.new(1, -28, 0, 1)
-sep.Position         = UDim2.new(0, 14, 0, 316)
-sep.BackgroundColor3 = C.accentDim
-sep.BackgroundTransparency = 0.7
-sep.BorderSizePixel  = 0
-sep.ZIndex           = 12
-sep.Parent           = frame
+makeSep(272)
 
-local overlayRowLbl = Instance.new("TextLabel")
-overlayRowLbl.Size               = UDim2.new(0, 180, 0, 30)
-overlayRowLbl.Position           = UDim2.new(0, 14, 0, 320)
-overlayRowLbl.BackgroundTransparency = 1
-overlayRowLbl.Text               = "Status overlay"
-overlayRowLbl.TextColor3         = C.textMuted
-overlayRowLbl.Font               = Enum.Font.Gotham
-overlayRowLbl.TextSize           = 12
-overlayRowLbl.TextXAlignment     = Enum.TextXAlignment.Left
-overlayRowLbl.ZIndex             = 12
-overlayRowLbl.Parent             = frame
+-- Status overlay switch
+makeToggleRowLabel("Status overlay", 276)
+local swTrack, swThumb, swStroke, swBtn = makeSwitch(body, -56, 279, true, C.green, C.greenBorder)
 
-local switchTrack = Instance.new("Frame")
-switchTrack.Size                   = UDim2.new(0, 42, 0, 22)
-switchTrack.Position               = UDim2.new(1, -56, 0, 323)
-switchTrack.BackgroundColor3       = C.green
-switchTrack.BackgroundTransparency = 0.3
-switchTrack.BorderSizePixel        = 0
-switchTrack.ZIndex                 = 12
-switchTrack.Parent                 = frame
-makeCorner(switchTrack, 11)
-local switchStroke = makeStroke(switchTrack, C.greenBorder, 1, 0.45)
+makeSep(316)
 
-local switchThumb = Instance.new("Frame")
-switchThumb.Size             = UDim2.new(0, 16, 0, 16)
-switchThumb.Position         = UDim2.new(0, 23, 0, 3)
-switchThumb.BackgroundColor3 = C.white
-switchThumb.BorderSizePixel  = 0
-switchThumb.ZIndex           = 13
-switchThumb.Parent           = switchTrack
-makeCorner(switchThumb, 99)
+-- FPS Unlock toggle
+makeToggleRowLabel("Unlock FPS (999)", 320)
+local fpsTrack, fpsThumb, fpsStroke, fpsBtn = makeSwitch(body, -56, 323, false, C.cyan, C.cyanBorder)
 
-local switchBtn = Instance.new("TextButton")
-switchBtn.Size               = UDim2.new(1, 0, 1, 0)
-switchBtn.BackgroundTransparency = 1
-switchBtn.Text               = ""
-switchBtn.ZIndex             = 14
-switchBtn.Parent             = switchTrack
+makeSep(358)
 
-local sep2 = Instance.new("Frame")
-sep2.Size             = UDim2.new(1, -28, 0, 1)
-sep2.Position         = UDim2.new(0, 14, 0, 334)
-sep2.BackgroundColor3 = C.accentDim
-sep2.BackgroundTransparency = 0.7
-sep2.BorderSizePixel  = 0
-sep2.ZIndex           = 12
-sep2.Parent           = frame
+-- Cartoon mode switch
+makeToggleRowLabel("Cartoon mode (FPS boost)", 362)
+local lgTrack, lgThumb, lgStroke, lgBtn = makeSwitch(body, -56, 365, false, C.amber, C.amberBorder)
+
+makeSep(400)
 
 local creditsLbl = Instance.new("TextLabel")
-creditsLbl.Size               = UDim2.new(1, -28, 0, 18)
-creditsLbl.Position           = UDim2.new(0, 14, 0, 336)
-creditsLbl.BackgroundTransparency = 1
-creditsLbl.Text               = "Made by Zaza  ·  v4.4"
-creditsLbl.TextColor3         = C.textHint
-creditsLbl.Font               = Enum.Font.Gotham
-creditsLbl.TextSize           = 10
-creditsLbl.TextXAlignment     = Enum.TextXAlignment.Center
-creditsLbl.ZIndex             = 12
-creditsLbl.Parent             = frame
+creditsLbl.Size=UDim2.new(1,-28,0,22); creditsLbl.Position=UDim2.new(0,14,0,403)
+creditsLbl.BackgroundTransparency=1; creditsLbl.Text="Made by Zaza  ·  v4.6"
+creditsLbl.TextColor3=C.textHint; creditsLbl.Font=Enum.Font.Gotham; creditsLbl.TextSize=10
+creditsLbl.TextXAlignment=Enum.TextXAlignment.Center; creditsLbl.ZIndex=12; creditsLbl.Parent=body
+
+local BODY_H = 432
+body.Size = UDim2.new(1,0,0,BODY_H)
+scrollFrame.CanvasSize = UDim2.new(0,0,0,BODY_H)
 
 -- ============ LÓGICA ============
 
 local function updateOverlayText()
-    overlayLabel.Text      = "MACRO — " .. (macroEnabled and "ACTIVE" or "INACTIVE") .. "  [" .. spamKey.Name .. "]"
+    overlayLabel.Text      = "MACRO — "..(macroEnabled and "ACTIVE" or "INACTIVE").."  ["..spamKey.Name.."]"
     overlayKeybindLbl.Text = currentKeybind.Name
 end
 
 local function updateMacroVisuals()
     if macroEnabled then
-        TweenService:Create(toggleBtn,    tweenInfo, {BackgroundColor3=C.greenDim,  BackgroundTransparency=0.55, TextColor3=C.green}):Play()
-        TweenService:Create(toggleStroke, tweenInfo, {Color=C.greenBorder, Transparency=0.35}):Play()
-        TweenService:Create(headerDot,    tweenInfo, {BackgroundColor3=C.green}):Play()
-        TweenService:Create(statusBadge,  tweenInfo, {BackgroundColor3=C.greenDim,  TextColor3=C.green}):Play()
-        TweenService:Create(overlayStroke,tweenInfo, {Color=C.greenBorder, Transparency=0.4}):Play()
-        TweenService:Create(overlayDot,   tweenInfo, {BackgroundColor3=C.green}):Play()
-        overlayLabel.TextColor3 = C.green
-        toggleBtn.Text          = "● MACRO ENABLED"
-        statusBadge.Text        = "ON"
+        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=C.greenDim, BackgroundTransparency=0.55,TextColor3=C.green}):Play()
+        TweenService:Create(toggleStroke, tweenInfo,{Color=C.greenBorder,Transparency=0.35}):Play()
+        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=C.green}):Play()
+        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=C.greenDim,TextColor3=C.green}):Play()
+        TweenService:Create(overlayStroke,tweenInfo,{Color=C.greenBorder,Transparency=0.4}):Play()
+        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=C.green}):Play()
+        overlayLabel.TextColor3=C.green; toggleBtn.Text="● MACRO ENABLED"; statusBadge.Text="ON"
     else
-        TweenService:Create(toggleBtn,    tweenInfo, {BackgroundColor3=C.accentDim, BackgroundTransparency=0.55, TextColor3=C.accent}):Play()
-        TweenService:Create(toggleStroke, tweenInfo, {Color=C.accentBorder, Transparency=0.45}):Play()
-        TweenService:Create(headerDot,    tweenInfo, {BackgroundColor3=C.accent}):Play()
-        TweenService:Create(statusBadge,  tweenInfo, {BackgroundColor3=C.accentDim, TextColor3=C.accent}):Play()
-        TweenService:Create(overlayStroke,tweenInfo, {Color=C.accentBorder, Transparency=0.5}):Play()
-        TweenService:Create(overlayDot,   tweenInfo, {BackgroundColor3=C.accent}):Play()
-        overlayLabel.TextColor3 = C.accent
-        toggleBtn.Text          = "● MACRO DISABLED"
-        statusBadge.Text        = "OFF"
+        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.55,TextColor3=C.accent}):Play()
+        TweenService:Create(toggleStroke, tweenInfo,{Color=C.accentBorder,Transparency=0.45}):Play()
+        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=C.accent}):Play()
+        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=C.accentDim,TextColor3=C.accent}):Play()
+        TweenService:Create(overlayStroke,tweenInfo,{Color=C.accentBorder,Transparency=0.5}):Play()
+        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=C.accent}):Play()
+        overlayLabel.TextColor3=C.accent; toggleBtn.Text="● MACRO DISABLED"; statusBadge.Text="OFF"
     end
     updateOverlayText()
 end
@@ -488,11 +634,11 @@ end
 local function togglePanel()
     panelVisible = not panelVisible
     if panelVisible then
-        TweenService:Create(frame, tweenInfo, {Size = UDim2.new(0, PANEL_W, 0, PANEL_H_OPEN)}):Play()
-        hideBtn.Text = "Hide ▲"
+        TweenService:Create(frame,tweenInfo,{Size=UDim2.new(0,PANEL_W,0,PANEL_H_VISIBLE)}):Play()
+        hideBtn.Text="Hide ▲"
     else
-        TweenService:Create(frame, tweenInfo, {Size = UDim2.new(0, PANEL_W, 0, PANEL_H_CLOSED)}):Play()
-        hideBtn.Text = "Show ▼"
+        TweenService:Create(frame,tweenInfo,{Size=UDim2.new(0,PANEL_W,0,PANEL_H_CLOSED)}):Play()
+        hideBtn.Text="Show ▼"
     end
 end
 
@@ -505,13 +651,45 @@ local function toggleOverlaySwitch()
     overlayIsOn = not overlayIsOn
     overlay.Visible = overlayIsOn
     if overlayIsOn then
-        TweenService:Create(switchTrack, tweenInfo, {BackgroundColor3=C.green,     BackgroundTransparency=0.3}):Play()
-        TweenService:Create(switchStroke,tweenInfo, {Color=C.greenBorder}):Play()
-        TweenService:Create(switchThumb, tweenInfo, {Position=UDim2.new(0,23,0,3)}):Play()
+        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=C.green,BackgroundTransparency=0.3}):Play()
+        TweenService:Create(swStroke,tweenInfo,{Color=C.greenBorder}):Play()
+        TweenService:Create(swThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
     else
-        TweenService:Create(switchTrack, tweenInfo, {BackgroundColor3=C.accentDim, BackgroundTransparency=0.4}):Play()
-        TweenService:Create(switchStroke,tweenInfo, {Color=C.accentDim}):Play()
-        TweenService:Create(switchThumb, tweenInfo, {Position=UDim2.new(0,3,0,3)}):Play()
+        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(swStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(swThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
+    end
+end
+
+local function toggleFPSUnlock()
+    fpsUnlockOn = not fpsUnlockOn
+    if fpsUnlockOn then
+        startFPSLoop()   -- inicia el loop que mantiene el cap activo
+        applyFPSUnlock() -- aplica inmediatamente
+        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=C.cyan,BackgroundTransparency=0.3}):Play()
+        TweenService:Create(fpsStroke,tweenInfo,{Color=C.cyanBorder}):Play()
+        TweenService:Create(fpsThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
+    else
+        stopFPSLoop()    -- detiene el loop
+        restoreFPSCap()  -- restaura a 60
+        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(fpsStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(fpsThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
+    end
+end
+
+local function toggleCartoonMode()
+    lowGraphicsOn = not lowGraphicsOn
+    if lowGraphicsOn then
+        applyCartoonMode()
+        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=C.amber,BackgroundTransparency=0.3}):Play()
+        TweenService:Create(lgStroke,tweenInfo,{Color=C.amberBorder}):Play()
+        TweenService:Create(lgThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
+    else
+        restoreCartoonMode()
+        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(lgStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(lgThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
     end
 end
 
@@ -519,72 +697,57 @@ end
 local dragging, dragStart, startPos = false, nil, nil
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = input.Position; startPos = frame.Position
+        dragging=true; dragStart=input.Position; startPos=frame.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
         local d = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
-                                    startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X,
+                                    startPos.Y.Scale, startPos.Y.Offset+d.Y)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
 end)
 
--- ======= KEYBIND DETECTION =======
+-- ======= KEYBINDS =======
 local function setWaiting(mode, btn)
-    waitingFor     = mode
-    btn.Text       = "Press key..."
-    btn.TextColor3 = C.accent
+    waitingFor=mode; btn.Text="Press key..."; btn.TextColor3=C.accent
 end
-
 local function clearWaiting(btn, displayLbl, name)
-    waitingFor        = nil
-    btn.Text          = "Change"
-    btn.TextColor3    = C.textMuted
-    displayLbl.Text   = name
+    waitingFor=nil; btn.Text="Change"; btn.TextColor3=C.textMuted; displayLbl.Text=name
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-
     if input.KeyCode == Enum.KeyCode.Escape and waitingFor then
-        if     waitingFor == "macro"   then clearWaiting(bindBtn,    keybindDisplay, currentKeybind.Name)
-        elseif waitingFor == "hide"    then clearWaiting(hideBndBtn, hideDisplay,    hideKeybind.Name)
-        elseif waitingFor == "spamkey" then clearWaiting(spamBndBtn, spamDisplay,    spamKey.Name) end
-        waitingFor = nil
-        return
+        if     waitingFor=="macro"   then clearWaiting(bindBtn,    keybindDisplay, currentKeybind.Name)
+        elseif waitingFor=="hide"    then clearWaiting(hideBndBtn, hideDisplay,    hideKeybind.Name)
+        elseif waitingFor=="spamkey" then clearWaiting(spamBndBtn, spamDisplay,    spamKey.Name) end
+        waitingFor=nil; return
     end
-
-    if waitingFor == "macro" then
-        currentKeybind = input.KeyCode
-        clearWaiting(bindBtn, keybindDisplay, input.KeyCode.Name)
+    if waitingFor=="macro" then
+        currentKeybind=input.KeyCode; clearWaiting(bindBtn,keybindDisplay,input.KeyCode.Name)
+        updateOverlayText(); return
+    elseif waitingFor=="hide" then
+        hideKeybind=input.KeyCode; clearWaiting(hideBndBtn,hideDisplay,input.KeyCode.Name); return
+    elseif waitingFor=="spamkey" then
+        spamKey=input.KeyCode; clearWaiting(spamBndBtn,spamDisplay,input.KeyCode.Name)
         updateOverlayText()
-        return
-    elseif waitingFor == "hide" then
-        hideKeybind = input.KeyCode
-        clearWaiting(hideBndBtn, hideDisplay, input.KeyCode.Name)
-        return
-    elseif waitingFor == "spamkey" then
-        spamKey = input.KeyCode
-        clearWaiting(spamBndBtn, spamDisplay, input.KeyCode.Name)
-        updateOverlayText()
-        if macroEnabled then stopSpam(); startSpam() end
-        return
+        if macroEnabled then stopSpam(); startSpam() end; return
     end
-
     if gameProcessed then return end
-
-    if     input.KeyCode == currentKeybind then toggleMacro()
-    elseif input.KeyCode == hideKeybind    then toggleEverything() end
+    if     input.KeyCode==currentKeybind then toggleMacro()
+    elseif input.KeyCode==hideKeybind    then toggleEverything() end
 end)
 
--- ======= UI CONNECTIONS =======
+-- ======= CONNECTIONS =======
 toggleBtn.MouseButton1Click:Connect(toggleMacro)
 hideBtn.MouseButton1Click:Connect(togglePanel)
-switchBtn.MouseButton1Click:Connect(toggleOverlaySwitch)
+swBtn.MouseButton1Click:Connect(toggleOverlaySwitch)
+fpsBtn.MouseButton1Click:Connect(toggleFPSUnlock)
+lgBtn.MouseButton1Click:Connect(toggleCartoonMode)
 bindBtn.MouseButton1Click:Connect(function()    setWaiting("macro",   bindBtn)    end)
 hideBndBtn.MouseButton1Click:Connect(function() setWaiting("hide",    hideBndBtn) end)
 spamBndBtn.MouseButton1Click:Connect(function() setWaiting("spamkey", spamBndBtn) end)
@@ -593,20 +756,21 @@ cpsBox.FocusLost:Connect(function(enter)
     if enter then
         local num = tonumber(cpsBox.Text)
         if num and num > 0 then
-            keysPerSecond = math.clamp(num, 1, 2000)
-            cpsBox.Text   = tostring(keysPerSecond)
-            updateInterval()  -- recalcula el intervalo cacheado
+            keysPerSecond=math.clamp(num,1,2000); cpsBox.Text=tostring(keysPerSecond)
+            updateInterval()
             if macroEnabled then stopSpam(); startSpam() end
         else
-            cpsBox.Text = tostring(keysPerSecond)
+            cpsBox.Text=tostring(keysPerSecond)
         end
     end
 end)
 
 -- ======= INIT =======
 updateOverlayText()
-print("✅ Macro Spam F v4.4 — Made by Zaza")
-print("   Toggle macro : " .. currentKeybind.Name)
-print("   Hide panel   : " .. hideKeybind.Name)
-print("   Spam key     : " .. spamKey.Name)
-print("   Max KPS      : 2000")
+print("✅ Macro Spam F v4.6 — Made by Zaza")
+print("   Toggle macro  : "..currentKeybind.Name)
+print("   Hide panel    : "..hideKeybind.Name)
+print("   Spam key      : "..spamKey.Name)
+print("   Max KPS       : 2000")
+print("   Cartoon mode  : toggle en panel")
+print("   FPS Unlock    : persistente entre mapas (loop cada 2s + CharacterAdded)")
