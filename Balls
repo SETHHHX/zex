@@ -1,10 +1,11 @@
 -- =============================================
---     MACRO SPAM F v4.7 — By Zaza
---     + FPS fix (no ráfagas, 1 press por frame)
+--     MACRO SPAM F v4.8 — By Zaza
+--     + Loop nativo (task.spawn, sin Heartbeat overhead)
+--     + Arranque instantáneo (sin acumulador)
+--     + FPS fix mantenido
 --     + Modo Toggle / Hold
 --     + Low Graphics CARTOON
---     + Scroll en panel
---     + FPS Unlock (persistente entre mapas)
+--     + FPS Unlock persistente
 -- =============================================
 
 local Players             = game:GetService("Players")
@@ -19,23 +20,57 @@ if game:GetService("CoreGui"):FindFirstChild("FSpamMacro") then
 end
 
 -- ============ VARIABLES ============
-local macroEnabled  = false
-local macroMode     = "toggle"  -- "toggle" o "hold"
-local holdActive    = false
-local keysPerSecond = 100
-local waitingFor    = nil
-local spamConnection = nil
-local panelVisible  = true
+local macroEnabled   = false
+local macroMode      = "toggle"
+local holdActive     = false
+local keysPerSecond  = 100
+local waitingFor     = nil
+local spamRunning    = false   -- flag para el loop nativo
+local panelVisible   = true
 local everythingVisible = true
-local overlayIsOn   = true
-local lowGraphicsOn = false
-local fpsUnlockOn   = false
-local accumulator   = 0
-local cachedInterval = 1 / keysPerSecond
+local overlayIsOn    = true
+local lowGraphicsOn  = false
+local fpsUnlockOn    = false
 
 local currentKeybind = Enum.KeyCode.RightShift
 local hideKeybind    = Enum.KeyCode.RightControl
 local spamKey        = Enum.KeyCode.F
+
+-- Pre-cache de argumentos para SendKeyEvent (evita lookup en cada iteración)
+local VIM = VirtualInputManager
+local _game = game
+
+-- ============ SPAM LOOP NATIVO ============
+-- task.spawn crea un hilo Lua real, sin depender del scheduler de Heartbeat.
+-- task.wait(n) dentro del hilo es más preciso que acumular dt en Heartbeat
+-- para intervalos cortos (< 1 frame).
+
+local function startSpam()
+    if spamRunning then return end
+    spamRunning = true
+    task.spawn(function()
+        while spamRunning and macroEnabled do
+            VIM:SendKeyEvent(true,  spamKey, false, _game)
+            VIM:SendKeyEvent(false, spamKey, false, _game)
+            -- task.wait sin argumento = yield hasta el próximo paso del scheduler
+            -- (~1/1000s en executors modernos), más rápido que Heartbeat (~1/60s).
+            -- Para KPS ≤ scheduler_rate usamos el sleep exacto; para KPS altos
+            -- simplemente no esperamos (máximo throughput).
+            local interval = 1 / keysPerSecond
+            if interval > 0.001 then
+                task.wait(interval)
+            else
+                task.wait()  -- yield mínimo, máximo speed
+            end
+        end
+        spamRunning = false
+    end)
+end
+
+local function stopSpam()
+    spamRunning = false
+    macroEnabled = false
+end
 
 -- ============ FPS UNLOCK ============
 local fpsLoopConnection = nil
@@ -53,7 +88,7 @@ local function startFPSLoop()
     local timer = 0
     fpsLoopConnection = RunService.Heartbeat:Connect(function(dt)
         if not fpsUnlockOn then return end
-        timer = timer + dt
+        timer += dt
         if timer >= 2 then timer = 0; applyFPSUnlock() end
     end)
 end
@@ -172,30 +207,6 @@ local C = {
     cyanBorder   = Color3.fromRGB( 20,130,150),
     white        = Color3.fromRGB(255,255,255),
 }
-
--- ============ SPAM LOOP (FIX: 1 press por frame, sin ráfagas) ============
-local function updateInterval()
-    cachedInterval = 1 / keysPerSecond
-end
-
-local function startSpam()
-    if spamConnection then spamConnection:Disconnect(); spamConnection = nil end
-    accumulator = 0
-    spamConnection = RunService.Heartbeat:Connect(function(dt)
-        if not macroEnabled then return end
-        accumulator = accumulator + dt
-        if accumulator >= cachedInterval then
-            accumulator = accumulator % cachedInterval  -- descarta acumulado, nunca ráfagas
-            VirtualInputManager:SendKeyEvent(true,  spamKey, false, game)
-            VirtualInputManager:SendKeyEvent(false, spamKey, false, game)
-        end
-    end)
-end
-
-local function stopSpam()
-    if spamConnection then spamConnection:Disconnect(); spamConnection = nil end
-    accumulator = 0
-end
 
 -- ============ GUI ============
 local gui = Instance.new("ScreenGui")
@@ -459,7 +470,6 @@ end
 
 -- ============ BODY CONTENT ============
 
--- Toggle button principal
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size=UDim2.new(1,-28,0,38); toggleBtn.Position=UDim2.new(0,14,0,10)
 toggleBtn.BackgroundColor3=C.accentDim; toggleBtn.BackgroundTransparency=0.55
@@ -468,13 +478,11 @@ toggleBtn.Font=Enum.Font.GothamBold; toggleBtn.TextSize=13; toggleBtn.ZIndex=12;
 bCorner(toggleBtn,9)
 local toggleStroke = bStroke(toggleBtn,C.accentBorder,1,0.45)
 
--- KEYBINDS
 makeSectionLabel("KEYBINDS", 58)
 local keybindDisplay, bindBtn    = makeKeybindRow("Toggle macro:", 76,  currentKeybind.Name)
 local hideDisplay,    hideBndBtn = makeKeybindRow("Hide panel:",   110, hideKeybind.Name)
 local spamDisplay,    spamBndBtn = makeKeybindRow("Spam key:",     144, spamKey.Name)
 
--- SPEED
 makeSectionLabel("SPEED", 186)
 
 local cpsLbl = Instance.new("TextLabel")
@@ -501,8 +509,6 @@ for i, p in ipairs(presets) do
     local val = p[2]
     pb.MouseButton1Click:Connect(function()
         keysPerSecond=val; cpsBox.Text=tostring(val)
-        updateInterval()
-        if macroEnabled then stopSpam(); startSpam() end
     end)
 end
 
@@ -529,28 +535,24 @@ local modeHoldStroke = bStroke(modeHoldBtn,C.accentDim,1,0.6)
 
 makeSep(336)
 
--- STATUS OVERLAY SWITCH
 makeToggleRowLabel("Status overlay", 340)
 local swTrack, swThumb, swStroke, swBtn = makeSwitch(body, -56, 343, true, C.green, C.greenBorder)
 
 makeSep(380)
 
--- FPS UNLOCK SWITCH
 makeToggleRowLabel("Unlock FPS (999)", 384)
 local fpsTrack, fpsThumb, fpsStroke, fpsBtn = makeSwitch(body, -56, 387, false, C.cyan, C.cyanBorder)
 
 makeSep(420)
 
--- CARTOON MODE SWITCH
 makeToggleRowLabel("Cartoon mode (FPS boost)", 424)
 local lgTrack, lgThumb, lgStroke, lgBtn = makeSwitch(body, -56, 427, false, C.amber, C.amberBorder)
 
 makeSep(460)
 
--- CREDITS
 local creditsLbl = Instance.new("TextLabel")
 creditsLbl.Size=UDim2.new(1,-28,0,22); creditsLbl.Position=UDim2.new(0,14,0,463)
-creditsLbl.BackgroundTransparency=1; creditsLbl.Text="Made by Zaza  ·  v4.7"
+creditsLbl.BackgroundTransparency=1; creditsLbl.Text="Made by Zaza  ·  v4.8"
 creditsLbl.TextColor3=C.textHint; creditsLbl.Font=Enum.Font.Gotham; creditsLbl.TextSize=10
 creditsLbl.TextXAlignment=Enum.TextXAlignment.Center; creditsLbl.ZIndex=12; creditsLbl.Parent=body
 
@@ -586,10 +588,21 @@ local function updateMacroVisuals()
     updateOverlayText()
 end
 
-local function toggleMacro()
-    macroEnabled = not macroEnabled
+local function enableMacro()
+    if spamRunning then return end
+    macroEnabled = true
     updateMacroVisuals()
-    if macroEnabled then startSpam() else stopSpam() end
+    startSpam()
+end
+
+local function disableMacro()
+    macroEnabled = false
+    spamRunning  = false
+    updateMacroVisuals()
+end
+
+local function toggleMacro()
+    if macroEnabled then disableMacro() else enableMacro() end
 end
 
 local function togglePanel()
@@ -655,11 +668,8 @@ end
 -- ============ MODO TOGGLE / HOLD ============
 local function setMacroMode(mode)
     macroMode = mode
-    -- si cambia a toggle mientras hold estaba activo, apaga el macro
-    if mode == "toggle" and macroEnabled and not holdActive then
-        macroEnabled = false
-        updateMacroVisuals()
-        stopSpam()
+    if mode == "toggle" and macroEnabled then
+        disableMacro()
     end
     if mode == "toggle" then
         TweenService:Create(modeToggleBtn,tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.2}):Play()
@@ -724,8 +734,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         hideKeybind=input.KeyCode; clearWaiting(hideBndBtn,hideDisplay,input.KeyCode.Name); return
     elseif waitingFor=="spamkey" then
         spamKey=input.KeyCode; clearWaiting(spamBndBtn,spamDisplay,input.KeyCode.Name)
-        updateOverlayText()
-        if macroEnabled then stopSpam(); startSpam() end; return
+        updateOverlayText(); return
     end
 
     if gameProcessed then return end
@@ -735,11 +744,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             toggleMacro()
         elseif macroMode == "hold" then
             holdActive = true
-            if not macroEnabled then
-                macroEnabled = true
-                updateMacroVisuals()
-                startSpam()
-            end
+            enableMacro()
         end
     elseif input.KeyCode == hideKeybind then
         toggleEverything()
@@ -750,11 +755,7 @@ UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if input.KeyCode == currentKeybind and macroMode == "hold" then
         holdActive = false
-        if macroEnabled then
-            macroEnabled = false
-            updateMacroVisuals()
-            stopSpam()
-        end
+        disableMacro()
     end
     if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
 end)
@@ -773,9 +774,8 @@ cpsBox.FocusLost:Connect(function(enter)
     if enter then
         local num = tonumber(cpsBox.Text)
         if num and num > 0 then
-            keysPerSecond=math.clamp(num,1,2000); cpsBox.Text=tostring(keysPerSecond)
-            updateInterval()
-            if macroEnabled then stopSpam(); startSpam() end
+            keysPerSecond=math.clamp(num,1,2000)
+            cpsBox.Text=tostring(keysPerSecond)
         else
             cpsBox.Text=tostring(keysPerSecond)
         end
@@ -784,10 +784,10 @@ end)
 
 -- ======= INIT =======
 updateOverlayText()
-print("✅ Macro Spam F v4.7 — Made by Zaza")
+print("✅ Macro Spam F v4.8 — Made by Zaza")
 print("   Toggle macro  : "..currentKeybind.Name)
 print("   Hide panel    : "..hideKeybind.Name)
 print("   Spam key      : "..spamKey.Name)
 print("   Max KPS       : 2000")
-print("   FPS fix       : 1 press por frame, sin ráfagas")
-print("   Modo          : Toggle / Hold seleccionable en panel")
+print("   Loop          : task.spawn nativo, sin Heartbeat overhead")
+print("   Modo          : Toggle / Hold")
