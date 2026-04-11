@@ -1,11 +1,14 @@
 -- =============================================
---     MACRO SPAM F v4.8 — By Zaza
---     + Loop nativo (task.spawn, sin Heartbeat overhead)
---     + Arranque instantáneo (sin acumulador)
---     + FPS fix mantenido
---     + Modo Toggle / Hold
+--     MACRO SPAM F v6.0 — By Zaza
+--     + Multi-tab UI (Macro / Themes)
+--     + 8 Themes including animated ones
+--     + KPS / CPS toggles well positioned
+--     + Redesigned UI, cleaner and nicer
+--     + Anti-lag: optimized loop with cumulative timing
+--     + Max 2000 KPS and 2000 CPS
+--     + Toggle / Hold mode
 --     + Low Graphics CARTOON
---     + FPS Unlock persistente
+--     + Persistent FPS Unlock
 -- =============================================
 
 local Players             = game:GetService("Players")
@@ -20,56 +23,100 @@ if game:GetService("CoreGui"):FindFirstChild("FSpamMacro") then
 end
 
 -- ============ VARIABLES ============
-local macroEnabled   = false
-local macroMode      = "toggle"
-local holdActive     = false
-local keysPerSecond  = 100
-local waitingFor     = nil
-local spamRunning    = false   -- flag para el loop nativo
-local panelVisible   = true
+local macroEnabled      = false
+local macroMode         = "toggle"
+local holdActive        = false
+local waitingFor        = nil
+local panelVisible      = true
 local everythingVisible = true
-local overlayIsOn    = true
-local lowGraphicsOn  = false
-local fpsUnlockOn    = false
+local overlayIsOn       = true
+local lowGraphicsOn     = false
+local fpsUnlockOn       = false
+local activeTab         = "macro" -- "macro" or "themes"
 
-local currentKeybind = Enum.KeyCode.RightShift
-local hideKeybind    = Enum.KeyCode.RightControl
-local spamKey        = Enum.KeyCode.F
+-- KPS
+local kpsEnabled      = true
+local keysPerSecond   = 100
+local kpsRunning      = false
+local spamKey         = Enum.KeyCode.F
 
--- Pre-cache de argumentos para SendKeyEvent (evita lookup en cada iteración)
-local VIM = VirtualInputManager
+-- CPS
+local cpsEnabled      = false
+local clicksPerSecond = 10
+local cpsRunning      = false
+local cpsButton       = "LMB"
+
+local currentKeybind  = Enum.KeyCode.RightShift
+local hideKeybind     = Enum.KeyCode.RightControl
+
+local VIM   = VirtualInputManager
 local _game = game
 
--- ============ SPAM LOOP NATIVO ============
--- task.spawn crea un hilo Lua real, sin depender del scheduler de Heartbeat.
--- task.wait(n) dentro del hilo es más preciso que acumular dt en Heartbeat
--- para intervalos cortos (< 1 frame).
+-- ============ KPS LOOP (anti-lag: cumulative timing) ============
+local kpsHeartbeat = nil
 
-local function startSpam()
-    if spamRunning then return end
-    spamRunning = true
-    task.spawn(function()
-        while spamRunning and macroEnabled do
+local function startKPS()
+    if kpsRunning or not kpsEnabled then return end
+    kpsRunning = true
+    local acc = 0
+    kpsHeartbeat = RunService.Heartbeat:Connect(function(dt)
+        if not kpsRunning or not macroEnabled or not kpsEnabled then
+            kpsRunning = false
+            kpsHeartbeat:Disconnect()
+            kpsHeartbeat = nil
+            return
+        end
+        acc += dt
+        local interval = 1 / keysPerSecond
+        local fired = 0
+        while acc >= interval and fired < 8 do
             VIM:SendKeyEvent(true,  spamKey, false, _game)
             VIM:SendKeyEvent(false, spamKey, false, _game)
-            -- task.wait sin argumento = yield hasta el próximo paso del scheduler
-            -- (~1/1000s en executors modernos), más rápido que Heartbeat (~1/60s).
-            -- Para KPS ≤ scheduler_rate usamos el sleep exacto; para KPS altos
-            -- simplemente no esperamos (máximo throughput).
-            local interval = 1 / keysPerSecond
-            if interval > 0.001 then
-                task.wait(interval)
-            else
-                task.wait()  -- yield mínimo, máximo speed
-            end
+            acc -= interval
+            fired += 1
         end
-        spamRunning = false
+        if acc > interval * 8 then acc = 0 end
     end)
 end
 
-local function stopSpam()
-    spamRunning = false
-    macroEnabled = false
+local function stopKPS()
+    kpsRunning = false
+end
+
+-- ============ CPS LOOP ============
+local cpsHeartbeat = nil
+
+local function startCPS()
+    if cpsRunning or not cpsEnabled then return end
+    cpsRunning = true
+    local acc = 0
+    cpsHeartbeat = RunService.Heartbeat:Connect(function(dt)
+        if not cpsRunning or not macroEnabled or not cpsEnabled then
+            cpsRunning = false
+            cpsHeartbeat:Disconnect()
+            cpsHeartbeat = nil
+            return
+        end
+        acc += dt
+        local interval = 1 / clicksPerSecond
+        local fired = 0
+        while acc >= interval and fired < 8 do
+            if cpsButton == "LMB" then
+                VIM:SendMouseButtonEvent(0, 0, 0, true,  _game, 1)
+                VIM:SendMouseButtonEvent(0, 0, 0, false, _game, 1)
+            else
+                VIM:SendMouseButtonEvent(0, 0, 1, true,  _game, 1)
+                VIM:SendMouseButtonEvent(0, 0, 1, false, _game, 1)
+            end
+            acc -= interval
+            fired += 1
+        end
+        if acc > interval * 8 then acc = 0 end
+    end)
+end
+
+local function stopCPS()
+    cpsRunning = false
 end
 
 -- ============ FPS UNLOCK ============
@@ -78,11 +125,9 @@ local fpsLoopConnection = nil
 local function applyFPSUnlock()
     if setfpscap then setfpscap(999) end
 end
-
 local function restoreFPSCap()
     if setfpscap then setfpscap(60) end
 end
-
 local function startFPSLoop()
     if fpsLoopConnection then return end
     local timer = 0
@@ -92,7 +137,6 @@ local function startFPSLoop()
         if timer >= 2 then timer = 0; applyFPSUnlock() end
     end)
 end
-
 local function stopFPSLoop()
     if fpsLoopConnection then fpsLoopConnection:Disconnect(); fpsLoopConnection = nil end
 end
@@ -111,493 +155,1602 @@ local savedEffects  = {}
 
 local function applyCartoonMode()
     savedLighting = {
-        GlobalShadows  = Lighting.GlobalShadows,
-        Brightness     = Lighting.Brightness,
-        ShadowSoftness = Lighting.ShadowSoftness,
-        Ambient        = Lighting.Ambient,
-        OutdoorAmbient = Lighting.OutdoorAmbient,
+        GlobalShadows=Lighting.GlobalShadows, Brightness=Lighting.Brightness,
+        ShadowSoftness=Lighting.ShadowSoftness, Ambient=Lighting.Ambient,
+        OutdoorAmbient=Lighting.OutdoorAmbient,
     }
-    Lighting.GlobalShadows  = false
-    Lighting.Brightness     = 2
-    Lighting.ShadowSoftness = 0
-    Lighting.Ambient        = Color3.fromRGB(178,178,178)
-    Lighting.OutdoorAmbient = Color3.fromRGB(178,178,178)
-
-    savedEffects = {}
-    for _, child in ipairs(Lighting:GetChildren()) do
+    Lighting.GlobalShadows=false; Lighting.Brightness=2; Lighting.ShadowSoftness=0
+    Lighting.Ambient=Color3.fromRGB(178,178,178); Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178)
+    savedEffects={}
+    for _,child in ipairs(Lighting:GetChildren()) do
         if child:IsA("BlurEffect") or child:IsA("ColorCorrectionEffect")
         or child:IsA("SunRaysEffect") or child:IsA("BloomEffect")
         or child:IsA("DepthOfFieldEffect") then
-            savedEffects[child] = child.Enabled
-            child.Enabled = false
+            savedEffects[child]=child.Enabled; child.Enabled=false
         end
     end
-
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    savedParts = {}
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
+    settings().Rendering.QualityLevel=Enum.QualityLevel.Level01
+    savedParts={}
+    for _,obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("BasePart") and not obj:IsA("Terrain") then
-            savedParts[obj] = { color=obj.Color, material=obj.Material, castShadow=obj.CastShadow }
-            obj.Material   = Enum.Material.SmoothPlastic
-            obj.CastShadow = false
+            savedParts[obj]={color=obj.Color,material=obj.Material,castShadow=obj.CastShadow}
+            obj.Material=Enum.Material.SmoothPlastic; obj.CastShadow=false
         end
         if obj:IsA("Decal") or obj:IsA("Texture") then
-            savedParts[obj] = { transparency=obj.Transparency }
-            obj.Transparency = 1
+            savedParts[obj]={transparency=obj.Transparency}; obj.Transparency=1
         end
         if obj:IsA("MeshPart") then
             if not savedParts[obj] then savedParts[obj]={} end
-            savedParts[obj].textureID = obj.TextureID; obj.TextureID = ""
+            savedParts[obj].textureID=obj.TextureID; obj.TextureID=""
         elseif obj:IsA("SpecialMesh") then
             if not savedParts[obj] then savedParts[obj]={} end
-            savedParts[obj].textureID = obj.TextureId; obj.TextureId = ""
+            savedParts[obj].textureID=obj.TextureId; obj.TextureId=""
         end
     end
 end
 
 local function restoreCartoonMode()
-    if savedLighting.GlobalShadows ~= nil then
-        Lighting.GlobalShadows  = savedLighting.GlobalShadows
-        Lighting.Brightness     = savedLighting.Brightness
-        Lighting.ShadowSoftness = savedLighting.ShadowSoftness
-        Lighting.Ambient        = savedLighting.Ambient
-        Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
+    if savedLighting.GlobalShadows~=nil then
+        Lighting.GlobalShadows=savedLighting.GlobalShadows; Lighting.Brightness=savedLighting.Brightness
+        Lighting.ShadowSoftness=savedLighting.ShadowSoftness; Lighting.Ambient=savedLighting.Ambient
+        Lighting.OutdoorAmbient=savedLighting.OutdoorAmbient
     end
-    for effect, wasEnabled in pairs(savedEffects) do
-        if effect and effect.Parent then effect.Enabled = wasEnabled end
+    for effect,wasEnabled in pairs(savedEffects) do
+        if effect and effect.Parent then effect.Enabled=wasEnabled end
     end
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
-    for obj, data in pairs(savedParts) do
+    settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic
+    for obj,data in pairs(savedParts) do
         if obj and obj.Parent then
             if obj:IsA("BasePart") and not obj:IsA("Terrain") then
                 obj.Color=data.color; obj.Material=data.material; obj.CastShadow=data.castShadow
             elseif obj:IsA("Decal") or obj:IsA("Texture") then
                 obj.Transparency=data.transparency
-            elseif obj:IsA("MeshPart") then
-                obj.TextureID=data.textureID or ""
-            elseif obj:IsA("SpecialMesh") then
-                obj.TextureId=data.textureID or ""
+            elseif obj:IsA("MeshPart") then obj.TextureID=data.textureID or ""
+            elseif obj:IsA("SpecialMesh") then obj.TextureId=data.textureID or ""
             end
         end
     end
-    savedParts = {}
+    savedParts={}
 end
 
--- ============ COLORES ============
-local C = {
-    bg           = Color3.fromRGB(15,  14,  26),
-    bgDeep       = Color3.fromRGB(10,   8,  20),
-    bgHeader     = Color3.fromRGB(20,  16,  40),
-    bgRow        = Color3.fromRGB(12,  10,  24),
-    accent       = Color3.fromRGB(120, 80, 220),
-    accentDim    = Color3.fromRGB( 60, 40, 110),
-    accentBorder = Color3.fromRGB( 80, 55, 160),
-    textMain     = Color3.fromRGB(200,185,255),
-    textMuted    = Color3.fromRGB(110,100,150),
-    textHint     = Color3.fromRGB( 70, 60,110),
-    green        = Color3.fromRGB( 55,195, 90),
-    greenDim     = Color3.fromRGB( 20, 80, 35),
-    greenBorder  = Color3.fromRGB( 40,130, 60),
-    amber        = Color3.fromRGB(220,160, 40),
-    amberDim     = Color3.fromRGB( 80, 55, 10),
-    amberBorder  = Color3.fromRGB(140,100, 20),
-    cyan         = Color3.fromRGB( 40,200,220),
-    cyanDim      = Color3.fromRGB( 10, 70, 80),
-    cyanBorder   = Color3.fromRGB( 20,130,150),
-    white        = Color3.fromRGB(255,255,255),
+-- ============================================================
+--   THEME SYSTEM
+-- ============================================================
+
+-- Each theme defines: bg, bgDeep, bgHeader, bgCard, bgRow, bgInput,
+-- accent, accentDim, accentBorder, accentGlow,
+-- textMain, textSub, textMuted, textHint,
+-- green, greenDim, greenBorder,
+-- cyan, cyanDim, cyanBorder,
+-- amber, amberDim, amberBorder,
+-- red, redDim, redBorder, white
+-- + animated: bool (has animated bg frames)
+-- + animFrames: list of Color3 pairs {top, bottom} for gradient cycle
+
+local THEMES = {
+    -- ── 1. VOID VIOLET (default) ───────────────────────────
+    {
+        id = "void_violet",
+        name = "Void Violet",
+        icon = "✦",
+        animated = false,
+        bg           = Color3.fromRGB(11,  10,  20),
+        bgDeep       = Color3.fromRGB( 7,   6,  14),
+        bgHeader     = Color3.fromRGB(15,  12,  30),
+        bgCard       = Color3.fromRGB(16,  14,  28),
+        bgRow        = Color3.fromRGB( 9,   8,  18),
+        bgInput      = Color3.fromRGB(12,  10,  22),
+        accent       = Color3.fromRGB(140,  90, 255),
+        accentDim    = Color3.fromRGB( 40,  28,  80),
+        accentBorder = Color3.fromRGB( 80,  55, 160),
+        accentGlow   = Color3.fromRGB(100,  60, 200),
+        textMain     = Color3.fromRGB(220, 210, 255),
+        textSub      = Color3.fromRGB(150, 135, 195),
+        textMuted    = Color3.fromRGB( 90,  80, 130),
+        textHint     = Color3.fromRGB( 55,  48,  88),
+        green        = Color3.fromRGB( 60, 220, 110),
+        greenDim     = Color3.fromRGB( 15,  65,  35),
+        greenBorder  = Color3.fromRGB( 35, 130,  65),
+        cyan         = Color3.fromRGB( 50, 210, 230),
+        cyanDim      = Color3.fromRGB(  8,  60,  70),
+        cyanBorder   = Color3.fromRGB( 20, 130, 150),
+        amber        = Color3.fromRGB(235, 170,  45),
+        amberDim     = Color3.fromRGB( 70,  48,   8),
+        amberBorder  = Color3.fromRGB(140, 100,  20),
+        red          = Color3.fromRGB(235,  75,  75),
+        redDim       = Color3.fromRGB( 75,  20,  20),
+        redBorder    = Color3.fromRGB(145,  45,  45),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 2. MIDNIGHT ROSE ───────────────────────────────────
+    {
+        id = "midnight_rose",
+        name = "Midnight Rose",
+        icon = "✿",
+        animated = false,
+        bg           = Color3.fromRGB(14,   8,  14),
+        bgDeep       = Color3.fromRGB( 9,   5,   9),
+        bgHeader     = Color3.fromRGB(20,  10,  20),
+        bgCard       = Color3.fromRGB(18,  10,  18),
+        bgRow        = Color3.fromRGB(10,   6,  10),
+        bgInput      = Color3.fromRGB(14,   8,  14),
+        accent       = Color3.fromRGB(255,  80, 160),
+        accentDim    = Color3.fromRGB( 80,  20,  50),
+        accentBorder = Color3.fromRGB(160,  45,  90),
+        accentGlow   = Color3.fromRGB(200,  55, 120),
+        textMain     = Color3.fromRGB(255, 210, 235),
+        textSub      = Color3.fromRGB(195, 150, 175),
+        textMuted    = Color3.fromRGB(130,  85, 110),
+        textHint     = Color3.fromRGB( 75,  45,  60),
+        green        = Color3.fromRGB( 60, 220, 110),
+        greenDim     = Color3.fromRGB( 15,  65,  35),
+        greenBorder  = Color3.fromRGB( 35, 130,  65),
+        cyan         = Color3.fromRGB(255, 120, 200),
+        cyanDim      = Color3.fromRGB( 80,  25,  55),
+        cyanBorder   = Color3.fromRGB(160,  50,  95),
+        amber        = Color3.fromRGB(255, 180,  80),
+        amberDim     = Color3.fromRGB( 80,  50,  15),
+        amberBorder  = Color3.fromRGB(155,  95,  30),
+        red          = Color3.fromRGB(255,  60,  90),
+        redDim       = Color3.fromRGB( 80,  15,  25),
+        redBorder    = Color3.fromRGB(160,  35,  55),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 3. ARCTIC ICE ──────────────────────────────────────
+    {
+        id = "arctic_ice",
+        name = "Arctic Ice",
+        icon = "❄",
+        animated = false,
+        bg           = Color3.fromRGB( 8,  14,  22),
+        bgDeep       = Color3.fromRGB( 5,   9,  15),
+        bgHeader     = Color3.fromRGB(10,  18,  30),
+        bgCard       = Color3.fromRGB(10,  16,  26),
+        bgRow        = Color3.fromRGB( 6,  11,  18),
+        bgInput      = Color3.fromRGB( 8,  14,  22),
+        accent       = Color3.fromRGB( 80, 200, 255),
+        accentDim    = Color3.fromRGB( 12,  50,  75),
+        accentBorder = Color3.fromRGB( 35, 110, 160),
+        accentGlow   = Color3.fromRGB( 50, 155, 210),
+        textMain     = Color3.fromRGB(200, 235, 255),
+        textSub      = Color3.fromRGB(135, 180, 215),
+        textMuted    = Color3.fromRGB( 70, 115, 155),
+        textHint     = Color3.fromRGB( 35,  65,  95),
+        green        = Color3.fromRGB( 80, 230, 150),
+        greenDim     = Color3.fromRGB( 12,  65,  40),
+        greenBorder  = Color3.fromRGB( 30, 130,  80),
+        cyan         = Color3.fromRGB(120, 220, 255),
+        cyanDim      = Color3.fromRGB( 15,  60,  80),
+        cyanBorder   = Color3.fromRGB( 40, 130, 170),
+        amber        = Color3.fromRGB(255, 200,  80),
+        amberDim     = Color3.fromRGB( 70,  52,  12),
+        amberBorder  = Color3.fromRGB(145, 105,  30),
+        red          = Color3.fromRGB(255,  90,  90),
+        redDim       = Color3.fromRGB( 75,  20,  20),
+        redBorder    = Color3.fromRGB(150,  45,  45),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 4. EMBER FORGE ─────────────────────────────────────
+    {
+        id = "ember_forge",
+        name = "Ember Forge",
+        icon = "🔥",
+        animated = false,
+        bg           = Color3.fromRGB(18,   8,   4),
+        bgDeep       = Color3.fromRGB(11,   5,   2),
+        bgHeader     = Color3.fromRGB(25,  10,   5),
+        bgCard       = Color3.fromRGB(22,   9,   4),
+        bgRow        = Color3.fromRGB(13,   6,   3),
+        bgInput      = Color3.fromRGB(18,   8,   4),
+        accent       = Color3.fromRGB(255, 130,  40),
+        accentDim    = Color3.fromRGB( 80,  35,   8),
+        accentBorder = Color3.fromRGB(155,  65,  18),
+        accentGlow   = Color3.fromRGB(200,  90,  25),
+        textMain     = Color3.fromRGB(255, 230, 200),
+        textSub      = Color3.fromRGB(195, 160, 125),
+        textMuted    = Color3.fromRGB(130,  95,  65),
+        textHint     = Color3.fromRGB( 75,  48,  28),
+        green        = Color3.fromRGB(180, 230,  80),
+        greenDim     = Color3.fromRGB( 45,  65,  10),
+        greenBorder  = Color3.fromRGB( 95, 130,  25),
+        cyan         = Color3.fromRGB(255, 200,  80),
+        cyanDim      = Color3.fromRGB( 75,  55,  10),
+        cyanBorder   = Color3.fromRGB(150, 105,  25),
+        amber        = Color3.fromRGB(255, 220,  60),
+        amberDim     = Color3.fromRGB( 80,  60,   8),
+        amberBorder  = Color3.fromRGB(155, 115,  20),
+        red          = Color3.fromRGB(255,  70,  50),
+        redDim       = Color3.fromRGB( 80,  18,  12),
+        redBorder    = Color3.fromRGB(155,  40,  28),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 5. TOXIC LIME ──────────────────────────────────────
+    {
+        id = "toxic_lime",
+        name = "Toxic Lime",
+        icon = "☢",
+        animated = false,
+        bg           = Color3.fromRGB( 6,  14,   6),
+        bgDeep       = Color3.fromRGB( 4,   9,   4),
+        bgHeader     = Color3.fromRGB( 8,  20,   8),
+        bgCard       = Color3.fromRGB( 8,  18,   8),
+        bgRow        = Color3.fromRGB( 5,  11,   5),
+        bgInput      = Color3.fromRGB( 6,  14,   6),
+        accent       = Color3.fromRGB(130, 255,  60),
+        accentDim    = Color3.fromRGB( 28,  70,  10),
+        accentBorder = Color3.fromRGB( 60, 140,  25),
+        accentGlow   = Color3.fromRGB( 90, 195,  40),
+        textMain     = Color3.fromRGB(210, 255, 200),
+        textSub      = Color3.fromRGB(145, 195, 130),
+        textMuted    = Color3.fromRGB( 80, 120,  65),
+        textHint     = Color3.fromRGB( 40,  65,  30),
+        green        = Color3.fromRGB(130, 255,  60),
+        greenDim     = Color3.fromRGB( 28,  70,  10),
+        greenBorder  = Color3.fromRGB( 60, 140,  25),
+        cyan         = Color3.fromRGB(100, 255, 180),
+        cyanDim      = Color3.fromRGB( 15,  70,  45),
+        cyanBorder   = Color3.fromRGB( 35, 140,  85),
+        amber        = Color3.fromRGB(220, 255,  60),
+        amberDim     = Color3.fromRGB( 60,  70,  10),
+        amberBorder  = Color3.fromRGB(120, 140,  22),
+        red          = Color3.fromRGB(220,  80,  60),
+        redDim       = Color3.fromRGB( 65,  20,  12),
+        redBorder    = Color3.fromRGB(130,  40,  25),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 6. AURORA (ANIMATED) ───────────────────────────────
+    {
+        id = "aurora",
+        name = "Aurora",
+        icon = "🌌",
+        animated = true,
+        -- Gradient cycles through these top/bottom color pairs
+        animFrames = {
+            {Color3.fromRGB(10, 15, 35),  Color3.fromRGB(5, 30, 20)},
+            {Color3.fromRGB(8,  20, 40),  Color3.fromRGB(15, 35, 15)},
+            {Color3.fromRGB(12, 10, 45),  Color3.fromRGB(5,  40, 30)},
+            {Color3.fromRGB(18,  8, 38),  Color3.fromRGB(8,  30, 40)},
+            {Color3.fromRGB(10, 15, 35),  Color3.fromRGB(5, 30, 20)},
+        },
+        bg           = Color3.fromRGB(10,  14,  30),
+        bgDeep       = Color3.fromRGB( 6,   9,  20),
+        bgHeader     = Color3.fromRGB(12,  18,  38),
+        bgCard       = Color3.fromRGB(12,  16,  35),
+        bgRow        = Color3.fromRGB( 7,  11,  22),
+        bgInput      = Color3.fromRGB(10,  14,  30),
+        accent       = Color3.fromRGB( 80, 255, 180),
+        accentDim    = Color3.fromRGB( 12,  70,  48),
+        accentBorder = Color3.fromRGB( 30, 140,  90),
+        accentGlow   = Color3.fromRGB( 50, 195, 130),
+        textMain     = Color3.fromRGB(200, 255, 235),
+        textSub      = Color3.fromRGB(140, 195, 175),
+        textMuted    = Color3.fromRGB( 75, 120, 105),
+        textHint     = Color3.fromRGB( 38,  65,  55),
+        green        = Color3.fromRGB( 80, 255, 180),
+        greenDim     = Color3.fromRGB( 12,  70,  48),
+        greenBorder  = Color3.fromRGB( 30, 140,  90),
+        cyan         = Color3.fromRGB(100, 200, 255),
+        cyanDim      = Color3.fromRGB( 12,  55,  75),
+        cyanBorder   = Color3.fromRGB( 28, 110, 155),
+        amber        = Color3.fromRGB(255, 210,  90),
+        amberDim     = Color3.fromRGB( 70,  55,  12),
+        amberBorder  = Color3.fromRGB(140, 110,  28),
+        red          = Color3.fromRGB(255,  90, 120),
+        redDim       = Color3.fromRGB( 75,  20,  30),
+        redBorder    = Color3.fromRGB(150,  40,  60),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 7. NEON CITY (ANIMATED) ────────────────────────────
+    {
+        id = "neon_city",
+        name = "Neon City",
+        icon = "🌃",
+        animated = true,
+        animFrames = {
+            {Color3.fromRGB(8,   5,  20), Color3.fromRGB(20,  5, 12)},
+            {Color3.fromRGB(5,   8,  22), Color3.fromRGB(18,  8, 18)},
+            {Color3.fromRGB(10,  5,  18), Color3.fromRGB(22,  5, 10)},
+            {Color3.fromRGB(6,   8,  25), Color3.fromRGB(15, 10, 20)},
+            {Color3.fromRGB(8,   5,  20), Color3.fromRGB(20,  5, 12)},
+        },
+        bg           = Color3.fromRGB( 8,   5,  18),
+        bgDeep       = Color3.fromRGB( 5,   3,  12),
+        bgHeader     = Color3.fromRGB(12,   7,  24),
+        bgCard       = Color3.fromRGB(10,   6,  22),
+        bgRow        = Color3.fromRGB( 6,   4,  14),
+        bgInput      = Color3.fromRGB( 8,   5,  18),
+        accent       = Color3.fromRGB(255,  50, 180),
+        accentDim    = Color3.fromRGB( 80,  12,  55),
+        accentBorder = Color3.fromRGB(155,  25,  90),
+        accentGlow   = Color3.fromRGB(200,  35, 130),
+        textMain     = Color3.fromRGB(255, 200, 240),
+        textSub      = Color3.fromRGB(190, 140, 185),
+        textMuted    = Color3.fromRGB(120,  80, 120),
+        textHint     = Color3.fromRGB( 65,  38,  65),
+        green        = Color3.fromRGB( 50, 255, 150),
+        greenDim     = Color3.fromRGB( 10,  70,  40),
+        greenBorder  = Color3.fromRGB( 25, 135,  75),
+        cyan         = Color3.fromRGB( 50, 200, 255),
+        cyanDim      = Color3.fromRGB(  8,  55,  75),
+        cyanBorder   = Color3.fromRGB( 20, 110, 155),
+        amber        = Color3.fromRGB(255, 220,  50),
+        amberDim     = Color3.fromRGB( 78,  62,   8),
+        amberBorder  = Color3.fromRGB(150, 120,  18),
+        red          = Color3.fromRGB(255,  60,  80),
+        redDim       = Color3.fromRGB( 80,  15,  22),
+        redBorder    = Color3.fromRGB(155,  30,  45),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
+
+    -- ── 8. GALAXY PULSE (ANIMATED) ─────────────────────────
+    {
+        id = "galaxy_pulse",
+        name = "Galaxy Pulse",
+        icon = "💫",
+        animated = true,
+        animFrames = {
+            {Color3.fromRGB(12,  5,  25), Color3.fromRGB( 5, 10, 30)},
+            {Color3.fromRGB( 8, 10,  30), Color3.fromRGB(15,  5, 22)},
+            {Color3.fromRGB(15,  5,  20), Color3.fromRGB( 8, 12, 35)},
+            {Color3.fromRGB( 6, 12,  35), Color3.fromRGB(14,  6, 25)},
+            {Color3.fromRGB(12,  5,  25), Color3.fromRGB( 5, 10, 30)},
+        },
+        bg           = Color3.fromRGB(10,   6,  22),
+        bgDeep       = Color3.fromRGB( 6,   4,  14),
+        bgHeader     = Color3.fromRGB(14,   8,  30),
+        bgCard       = Color3.fromRGB(12,   7,  26),
+        bgRow        = Color3.fromRGB( 8,   5,  16),
+        bgInput      = Color3.fromRGB(10,   6,  22),
+        accent       = Color3.fromRGB(180, 100, 255),
+        accentDim    = Color3.fromRGB( 48,  22,  80),
+        accentBorder = Color3.fromRGB( 95,  48, 155),
+        accentGlow   = Color3.fromRGB(130,  65, 200),
+        textMain     = Color3.fromRGB(225, 215, 255),
+        textSub      = Color3.fromRGB(160, 145, 205),
+        textMuted    = Color3.fromRGB( 95,  82, 135),
+        textHint     = Color3.fromRGB( 52,  44,  80),
+        green        = Color3.fromRGB(100, 255, 200),
+        greenDim     = Color3.fromRGB( 18,  70,  52),
+        greenBorder  = Color3.fromRGB( 40, 138, 100),
+        cyan         = Color3.fromRGB(120, 180, 255),
+        cyanDim      = Color3.fromRGB( 18,  45,  80),
+        cyanBorder   = Color3.fromRGB( 40,  95, 160),
+        amber        = Color3.fromRGB(255, 195,  80),
+        amberDim     = Color3.fromRGB( 72,  52,  12),
+        amberBorder  = Color3.fromRGB(140, 100,  25),
+        red          = Color3.fromRGB(255,  80, 110),
+        redDim       = Color3.fromRGB( 78,  18,  28),
+        redBorder    = Color3.fromRGB(150,  38,  55),
+        white        = Color3.fromRGB(255, 255, 255),
+    },
 }
 
--- ============ GUI ============
-local gui = Instance.new("ScreenGui")
-gui.Name           = "FSpamMacro"
-gui.ResetOnSpawn   = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent         = game:GetService("CoreGui")
+-- Active theme (starts with Void Violet)
+local currentThemeIndex = 1
+local C = {} -- will be populated from theme
 
-local function makeCorner(parent, radius)
-    local c = Instance.new("UICorner", parent)
-    c.CornerRadius = UDim.new(0, radius or 8)
+local function applyThemeToC(t)
+    for k, v in pairs(t) do
+        if typeof(v) == "Color3" then
+            C[k] = v
+        end
+    end
+end
+applyThemeToC(THEMES[1])
+
+-- ============================================================
+--   GUI SETUP
+-- ============================================================
+
+local tweenInfo = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local tweenFast = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local tweenSlow = TweenInfo.new(3.0,  Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+
+local gui = Instance.new("ScreenGui")
+gui.Name="FSpamMacro"; gui.ResetOnSpawn=false
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.Parent=game:GetService("CoreGui")
+
+-- ============ HELPERS ============
+local function mk(class, props, parent)
+    local i=Instance.new(class)
+    for k,v in pairs(props) do i[k]=v end
+    if parent then i.Parent=parent end
+    return i
+end
+
+local function corner(p, r)
+    local c=Instance.new("UICorner",p)
+    c.CornerRadius=UDim.new(0, r or 8)
     return c
 end
-local function makeStroke(parent, color, thickness, transparency)
-    local s = Instance.new("UIStroke", parent)
-    s.Color        = color        or C.accentBorder
-    s.Thickness    = thickness    or 1
-    s.Transparency = transparency or 0.55
+
+local function stroke(p, col, th, tr)
+    local s=Instance.new("UIStroke",p)
+    s.Color=col or C.accentBorder
+    s.Thickness=th or 1
+    s.Transparency=tr or 0.5
     return s
 end
 
-local function makeSwitch(parent, xOffset, yPos, isOn, onColor, onBorder)
-    local track = Instance.new("Frame")
-    track.Size                   = UDim2.new(0, 42, 0, 22)
-    track.Position               = UDim2.new(1, xOffset, 0, yPos)
-    track.BackgroundColor3       = isOn and onColor or C.accentDim
-    track.BackgroundTransparency = 0.3
-    track.BorderSizePixel        = 0
-    track.ZIndex                 = 12
-    track.Parent                 = parent
-    makeCorner(track, 11)
-    local stroke = makeStroke(track, isOn and onBorder or C.accentDim, 1, 0.45)
+-- ============ OVERLAY (top bar) ============
+local overlay = mk("Frame", {
+    Name="Overlay",
+    Size=UDim2.new(0, 270, 0, 28),
+    Position=UDim2.new(0.5, -135, 0, 6),
+    BackgroundColor3=C.bgDeep,
+    BackgroundTransparency=0.05,
+    BorderSizePixel=0,
+    ZIndex=50,
+    Parent=gui
+})
+corner(overlay, 7)
+local overlayStroke = stroke(overlay, C.accentBorder, 1, 0.45)
 
-    local thumb = Instance.new("Frame")
-    thumb.Size             = UDim2.new(0, 16, 0, 16)
-    thumb.Position         = isOn and UDim2.new(0, 23, 0, 3) or UDim2.new(0, 3, 0, 3)
-    thumb.BackgroundColor3 = C.white
-    thumb.BorderSizePixel  = 0
-    thumb.ZIndex           = 13
-    thumb.Parent           = track
-    makeCorner(thumb, 99)
+local overlayDot = mk("Frame", {
+    Size=UDim2.new(0,6,0,6),
+    Position=UDim2.new(0,10,0.5,-3),
+    BackgroundColor3=C.accent,
+    BorderSizePixel=0,
+    ZIndex=51,
+    Parent=overlay
+})
+corner(overlayDot, 99)
 
-    local btn = Instance.new("TextButton")
-    btn.Size               = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text               = ""
-    btn.ZIndex             = 14
-    btn.Parent             = track
+local overlayLabel = mk("TextLabel", {
+    Size=UDim2.new(1,-70,1,0),
+    Position=UDim2.new(0,21,0,0),
+    BackgroundTransparency=1,
+    Text="MACRO · INACTIVE  [F]",
+    TextColor3=C.accent,
+    Font=Enum.Font.GothamBold,
+    TextSize=10,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=51,
+    Parent=overlay
+})
 
-    return track, thumb, stroke, btn
+local overlayKeybindLbl = mk("TextLabel", {
+    Size=UDim2.new(0,60,1,0),
+    Position=UDim2.new(1,-62,0,0),
+    BackgroundTransparency=1,
+    Text=currentKeybind.Name,
+    TextColor3=C.textHint,
+    Font=Enum.Font.Gotham,
+    TextSize=9,
+    TextXAlignment=Enum.TextXAlignment.Right,
+    ZIndex=51,
+    Parent=overlay
+})
+
+-- ============ MAIN PANEL ============
+local PANEL_W         = 340
+local PANEL_H_VISIBLE = 630
+local PANEL_H_CLOSED  = 44
+local HEADER_H        = 44
+local TAB_H           = 36
+
+local frame = mk("Frame", {
+    Name="MainPanel",
+    Size=UDim2.new(0, PANEL_W, 0, PANEL_H_VISIBLE),
+    Position=UDim2.new(0.5, -(PANEL_W/2), 0, 46),
+    BackgroundColor3=C.bg,
+    BorderSizePixel=0,
+    ClipsDescendants=true,
+    ZIndex=10,
+    Parent=gui
+})
+corner(frame, 12)
+local mainPanelStroke = stroke(frame, C.accentBorder, 1, 0.5)
+
+-- Animated background gradient frame (for animated themes)
+local animBg = mk("Frame", {
+    Size=UDim2.new(1,0,1,0),
+    BackgroundColor3=C.bg,
+    BorderSizePixel=0,
+    ZIndex=10,
+    Parent=frame
+})
+local animGrad = mk("UIGradient", {
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 14, 36)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(7,  6,  14)),
+    }),
+    Rotation=140,
+    Parent=animBg
+})
+
+-- ===== HEADER =====
+local header = mk("Frame", {
+    Size=UDim2.new(1,0,0,HEADER_H),
+    BackgroundColor3=C.bgHeader,
+    BorderSizePixel=0,
+    ZIndex=20,
+    Parent=frame
+})
+
+mk("Frame", {
+    Size=UDim2.new(1,0,0,1),
+    Position=UDim2.new(0,0,1,-1),
+    BackgroundColor3=C.accentBorder,
+    BackgroundTransparency=0.45,
+    BorderSizePixel=0,
+    ZIndex=21,
+    Parent=header
+})
+
+local headerDot = mk("Frame", {
+    Size=UDim2.new(0,7,0,7),
+    Position=UDim2.new(0,11,0.5,-3.5),
+    BackgroundColor3=C.accent,
+    BorderSizePixel=0,
+    ZIndex=21,
+    Parent=header
+})
+corner(headerDot, 99)
+
+mk("TextLabel", {
+    Size=UDim2.new(0,130,1,0),
+    Position=UDim2.new(0,24,0,0),
+    BackgroundTransparency=1,
+    Text="MACRO SPAM F",
+    TextColor3=C.textMain,
+    Font=Enum.Font.GothamBold,
+    TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=21,
+    Parent=header
+})
+
+local statusBadge = mk("TextLabel", {
+    Size=UDim2.new(0,34,0,18),
+    Position=UDim2.new(0,156,0.5,-9),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.15,
+    Text="OFF",
+    TextColor3=C.accent,
+    Font=Enum.Font.GothamBold,
+    TextSize=10,
+    ZIndex=21,
+    Parent=header
+})
+corner(statusBadge, 5)
+
+local hideBtn = mk("TextButton", {
+    Size=UDim2.new(0,62,0,24),
+    Position=UDim2.new(1,-70,0.5,-12),
+    BackgroundColor3=C.bgRow,
+    Text="Hide ▲",
+    TextColor3=C.textMuted,
+    Font=Enum.Font.Gotham,
+    TextSize=10,
+    ZIndex=21,
+    Parent=header
+})
+corner(hideBtn, 6)
+stroke(hideBtn, C.accentDim, 1, 0.5)
+
+-- ===== TABS BAR =====
+local tabBar = mk("Frame", {
+    Size=UDim2.new(1,0,0,TAB_H),
+    Position=UDim2.new(0,0,0,HEADER_H),
+    BackgroundColor3=C.bgDeep,
+    BackgroundTransparency=0.2,
+    BorderSizePixel=0,
+    ZIndex=20,
+    Parent=frame
+})
+
+mk("Frame", {
+    Size=UDim2.new(1,0,0,1),
+    Position=UDim2.new(0,0,1,-1),
+    BackgroundColor3=C.accentBorder,
+    BackgroundTransparency=0.55,
+    BorderSizePixel=0,
+    ZIndex=21,
+    Parent=tabBar
+})
+
+-- Tab: Macro
+local tabMacroBtn = mk("TextButton", {
+    Size=UDim2.new(0.5,-2,1,-8),
+    Position=UDim2.new(0,4,0,4),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.15,
+    Text="⚡  Macro",
+    TextColor3=C.accent,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    ZIndex=21,
+    Parent=tabBar
+})
+corner(tabMacroBtn, 7)
+local tabMacroStroke = stroke(tabMacroBtn, C.accentBorder, 1, 0.3)
+
+-- Tab: Themes
+local tabThemesBtn = mk("TextButton", {
+    Size=UDim2.new(0.5,-2,1,-8),
+    Position=UDim2.new(0.5,-2,0,4),
+    BackgroundColor3=C.bgRow,
+    BackgroundTransparency=0.1,
+    Text="🎨  Themes",
+    TextColor3=C.textMuted,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    ZIndex=21,
+    Parent=tabBar
+})
+corner(tabThemesBtn, 7)
+local tabThemesStroke = stroke(tabThemesBtn, C.accentDim, 1, 0.6)
+
+-- ===== CONTENT AREA =====
+local CONTENT_Y = HEADER_H + TAB_H
+local CONTENT_H = PANEL_H_VISIBLE - CONTENT_Y
+
+-- ─── MACRO TAB ────────────────────────────────────────────
+local macroScroll = mk("ScrollingFrame", {
+    Size=UDim2.new(1,0,0,CONTENT_H),
+    Position=UDim2.new(0,0,0,CONTENT_Y),
+    BackgroundTransparency=1,
+    BorderSizePixel=0,
+    ScrollBarThickness=2,
+    ScrollBarImageColor3=C.accentBorder,
+    ScrollingDirection=Enum.ScrollingDirection.Y,
+    ElasticBehavior=Enum.ElasticBehavior.Never,
+    ZIndex=11,
+    Visible=true,
+    Parent=frame
+})
+
+local body = mk("Frame", {
+    Name="Body",
+    BackgroundTransparency=1,
+    BorderSizePixel=0,
+    ZIndex=12,
+    Parent=macroScroll
+})
+
+-- ─── THEMES TAB ───────────────────────────────────────────
+local themesScroll = mk("ScrollingFrame", {
+    Size=UDim2.new(1,0,0,CONTENT_H),
+    Position=UDim2.new(0,0,0,CONTENT_Y),
+    BackgroundTransparency=1,
+    BorderSizePixel=0,
+    ScrollBarThickness=2,
+    ScrollBarImageColor3=C.accentBorder,
+    ScrollingDirection=Enum.ScrollingDirection.Y,
+    ElasticBehavior=Enum.ElasticBehavior.Never,
+    ZIndex=11,
+    Visible=false,
+    Parent=frame
+})
+
+local themesBody = mk("Frame", {
+    Name="ThemesBody",
+    BackgroundTransparency=1,
+    BorderSizePixel=0,
+    ZIndex=12,
+    Parent=themesScroll
+})
+
+-- ============================================================
+--   MACRO TAB CONTENT (UI HELPERS)
+-- ============================================================
+
+local function sectionLabel(text, y)
+    local wrapper = mk("Frame",{
+        Size=UDim2.new(1,-24,0,18),
+        Position=UDim2.new(0,12,0,y),
+        BackgroundTransparency=1,
+        ZIndex=12,
+        Parent=body
+    })
+    mk("TextLabel",{
+        Size=UDim2.new(0,0,1,0),
+        AutomaticSize=Enum.AutomaticSize.X,
+        BackgroundTransparency=1,
+        Text=text,
+        TextColor3=C.textHint,
+        Font=Enum.Font.GothamSemibold,
+        TextSize=9,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        ZIndex=12,
+        Parent=wrapper
+    })
+    mk("Frame",{
+        Size=UDim2.new(1,-80,0,1),
+        Position=UDim2.new(0,72,0.5,0),
+        BackgroundColor3=C.accentBorder,
+        BackgroundTransparency=0.68,
+        BorderSizePixel=0,
+        ZIndex=12,
+        Parent=wrapper
+    })
 end
 
-local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local function sep(y)
+    mk("Frame",{
+        Size=UDim2.new(1,-24,0,1),
+        Position=UDim2.new(0,12,0,y),
+        BackgroundColor3=C.accentDim,
+        BackgroundTransparency=0.65,
+        BorderSizePixel=0,
+        ZIndex=12,
+        Parent=body
+    })
+end
 
--- ============ OVERLAY ============
-local overlay = Instance.new("Frame")
-overlay.Name                   = "Overlay"
-overlay.Size                   = UDim2.new(0, 265, 0, 28)
-overlay.Position               = UDim2.new(0.5, -132, 0, 8)
-overlay.BackgroundColor3       = C.bgDeep
-overlay.BackgroundTransparency = 0.08
-overlay.BorderSizePixel        = 0
-overlay.ZIndex                 = 50
-overlay.Parent                 = gui
-makeCorner(overlay, 7)
-local overlayStroke = makeStroke(overlay, C.accentBorder, 1, 0.5)
-
-local overlayDot = Instance.new("Frame")
-overlayDot.Size             = UDim2.new(0, 7, 0, 7)
-overlayDot.Position         = UDim2.new(0, 10, 0.5, -3)
-overlayDot.BackgroundColor3 = C.accent
-overlayDot.BorderSizePixel  = 0
-overlayDot.ZIndex           = 51
-overlayDot.Parent           = overlay
-makeCorner(overlayDot, 99)
-
-local overlayLabel = Instance.new("TextLabel")
-overlayLabel.Size               = UDim2.new(1, -75, 1, 0)
-overlayLabel.Position           = UDim2.new(0, 22, 0, 0)
-overlayLabel.BackgroundTransparency = 1
-overlayLabel.Text               = "MACRO — INACTIVE  [F]"
-overlayLabel.TextColor3         = C.accent
-overlayLabel.Font               = Enum.Font.GothamBold
-overlayLabel.TextSize           = 11
-overlayLabel.TextXAlignment     = Enum.TextXAlignment.Left
-overlayLabel.ZIndex             = 51
-overlayLabel.Parent             = overlay
-
-local overlayKeybindLbl = Instance.new("TextLabel")
-overlayKeybindLbl.Size               = UDim2.new(0, 68, 1, 0)
-overlayKeybindLbl.Position           = UDim2.new(1, -70, 0, 0)
-overlayKeybindLbl.BackgroundTransparency = 1
-overlayKeybindLbl.Text               = currentKeybind.Name
-overlayKeybindLbl.TextColor3         = C.textHint
-overlayKeybindLbl.Font               = Enum.Font.Gotham
-overlayKeybindLbl.TextSize           = 10
-overlayKeybindLbl.TextXAlignment     = Enum.TextXAlignment.Right
-overlayKeybindLbl.ZIndex             = 51
-overlayKeybindLbl.Parent             = overlay
-
--- ============ PANEL ============
-local PANEL_W         = 340
-local PANEL_H_VISIBLE = 470
-local PANEL_H_CLOSED  = 46
-local HEADER_H        = 46
-
-local frame = Instance.new("Frame")
-frame.Name                  = "MainPanel"
-frame.Size                  = UDim2.new(0, PANEL_W, 0, PANEL_H_VISIBLE)
-frame.Position              = UDim2.new(0.5, -(PANEL_W/2), 0.28, 0)
-frame.BackgroundColor3      = C.bg
-frame.BorderSizePixel       = 0
-frame.ClipsDescendants      = true
-frame.ZIndex                = 10
-frame.Parent                = gui
-makeCorner(frame, 13)
-makeStroke(frame, C.accentBorder, 1, 0.6)
-
-local grad = Instance.new("UIGradient")
-grad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 18, 42)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(10,  8, 20)),
-})
-grad.Rotation = 140
-grad.Parent   = frame
-
--- HEADER
-local header = Instance.new("Frame")
-header.Size                   = UDim2.new(1, 0, 0, HEADER_H)
-header.BackgroundColor3       = C.bgHeader
-header.BackgroundTransparency = 0.0
-header.BorderSizePixel        = 0
-header.ZIndex                 = 20
-header.Parent                 = frame
-
-local headerSep = Instance.new("Frame")
-headerSep.Size                   = UDim2.new(1, 0, 0, 1)
-headerSep.Position               = UDim2.new(0, 0, 1, -1)
-headerSep.BackgroundColor3       = C.accentBorder
-headerSep.BackgroundTransparency = 0.55
-headerSep.BorderSizePixel        = 0
-headerSep.ZIndex                 = 21
-headerSep.Parent                 = header
-
-local headerDot = Instance.new("Frame")
-headerDot.Size             = UDim2.new(0, 8, 0, 8)
-headerDot.Position         = UDim2.new(0, 12, 0.5, -4)
-headerDot.BackgroundColor3 = C.accent
-headerDot.BorderSizePixel  = 0
-headerDot.ZIndex           = 21
-headerDot.Parent           = header
-makeCorner(headerDot, 99)
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size               = UDim2.new(0, 130, 1, 0)
-titleLabel.Position           = UDim2.new(0, 26, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text               = "MACRO SPAM F"
-titleLabel.TextColor3         = C.textMain
-titleLabel.Font               = Enum.Font.GothamBold
-titleLabel.TextSize           = 13
-titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
-titleLabel.ZIndex             = 21
-titleLabel.Parent             = header
-
-local statusBadge = Instance.new("TextLabel")
-statusBadge.Size                   = UDim2.new(0, 36, 0, 20)
-statusBadge.Position               = UDim2.new(0, 160, 0.5, -10)
-statusBadge.BackgroundColor3       = C.accentDim
-statusBadge.BackgroundTransparency = 0.2
-statusBadge.Text                   = "OFF"
-statusBadge.TextColor3             = C.accent
-statusBadge.Font                   = Enum.Font.GothamBold
-statusBadge.TextSize               = 11
-statusBadge.ZIndex                 = 21
-statusBadge.Parent                 = header
-makeCorner(statusBadge, 5)
-
-local hideBtn = Instance.new("TextButton")
-hideBtn.Size                   = UDim2.new(0, 68, 0, 26)
-hideBtn.Position               = UDim2.new(1, -76, 0.5, -13)
-hideBtn.BackgroundColor3       = C.bgRow
-hideBtn.BackgroundTransparency = 0.0
-hideBtn.Text                   = "Hide ▲"
-hideBtn.TextColor3             = C.textMuted
-hideBtn.Font                   = Enum.Font.Gotham
-hideBtn.TextSize               = 11
-hideBtn.ZIndex                 = 21
-hideBtn.Parent                 = header
-makeCorner(hideBtn, 6)
-makeStroke(hideBtn, C.accentDim, 1, 0.5)
-
--- ============ SCROLL ============
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size                   = UDim2.new(1, 0, 1, -HEADER_H)
-scrollFrame.Position               = UDim2.new(0, 0, 0, HEADER_H)
-scrollFrame.BackgroundTransparency = 1
-scrollFrame.BorderSizePixel        = 0
-scrollFrame.ScrollBarThickness     = 3
-scrollFrame.ScrollBarImageColor3   = C.accentBorder
-scrollFrame.ScrollingDirection     = Enum.ScrollingDirection.Y
-scrollFrame.ElasticBehavior        = Enum.ElasticBehavior.Never
-scrollFrame.ZIndex                 = 11
-scrollFrame.Parent                 = frame
-
-local body = Instance.new("Frame")
-body.Name                   = "Body"
-body.BackgroundTransparency = 1
-body.BorderSizePixel        = 0
-body.ZIndex                 = 12
-body.Parent                 = scrollFrame
-
--- ============ BODY HELPERS ============
-local function bCorner(p, r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8); return c end
-local function bStroke(p, col, th, tr) local s=Instance.new("UIStroke",p); s.Color=col or C.accentBorder; s.Thickness=th or 1; s.Transparency=tr or 0.55; return s end
-
-local function makeSectionLabel(text, y)
-    local l = Instance.new("TextLabel")
-    l.Size=UDim2.new(1,-28,0,14); l.Position=UDim2.new(0,14,0,y)
-    l.BackgroundTransparency=1; l.Text=text; l.TextColor3=C.textHint
-    l.Font=Enum.Font.GothamSemibold; l.TextSize=10
-    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=12; l.Parent=body
+local function makeSwitch(parent, xPos, yPos, isOn, onCol, onBorder)
+    local track = mk("Frame",{
+        Size=UDim2.new(0,38,0,20),
+        Position=UDim2.new(0,xPos,0,yPos),
+        BackgroundColor3=isOn and onCol or C.accentDim,
+        BackgroundTransparency=0.25,
+        BorderSizePixel=0,
+        ZIndex=14,
+        Parent=parent
+    })
+    corner(track,10)
+    local str=stroke(track, isOn and onBorder or C.accentBorder, 1, isOn and 0.4 or 0.6)
+    local thumb=mk("Frame",{
+        Size=UDim2.new(0,14,0,14),
+        Position=isOn and UDim2.new(0,21,0,3) or UDim2.new(0,3,0,3),
+        BackgroundColor3=C.white,
+        BorderSizePixel=0,
+        ZIndex=15,
+        Parent=track
+    })
+    corner(thumb,99)
+    local btn=mk("TextButton",{
+        Size=UDim2.new(1,0,1,0),
+        BackgroundTransparency=1,
+        Text="",
+        ZIndex=16,
+        Parent=track
+    })
+    return track, thumb, str, btn
 end
 
 local function makeKeybindRow(labelText, yPos, displayText)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size=UDim2.new(0,110,0,30); lbl.Position=UDim2.new(0,14,0,yPos)
-    lbl.BackgroundTransparency=1; lbl.Text=labelText; lbl.TextColor3=C.textMuted
-    lbl.Font=Enum.Font.Gotham; lbl.TextSize=12
-    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=12; lbl.Parent=body
-
-    local display = Instance.new("TextButton")
-    display.Size=UDim2.new(0,100,0,28); display.Position=UDim2.new(0,128,0,yPos+1)
-    display.BackgroundColor3=C.bgDeep; display.BackgroundTransparency=0.2
-    display.Text=displayText; display.TextColor3=C.textMain
-    display.Font=Enum.Font.GothamSemibold; display.TextSize=11; display.ZIndex=12; display.Parent=body
-    bCorner(display,7); bStroke(display,C.accentBorder,1,0.6)
-
-    local btn = Instance.new("TextButton")
-    btn.Size=UDim2.new(0,82,0,28); btn.Position=UDim2.new(1,-96,0,yPos+1)
-    btn.BackgroundColor3=C.bgRow; btn.BackgroundTransparency=0.0
-    btn.Text="Change"; btn.TextColor3=C.textMuted
-    btn.Font=Enum.Font.GothamSemibold; btn.TextSize=11; btn.ZIndex=12; btn.Parent=body
-    bCorner(btn,7); bStroke(btn,C.accentDim,1,0.5)
+    mk("TextLabel",{
+        Size=UDim2.new(0,100,0,28),
+        Position=UDim2.new(0,12,0,yPos),
+        BackgroundTransparency=1,
+        Text=labelText,
+        TextColor3=C.textSub,
+        Font=Enum.Font.Gotham,
+        TextSize=11,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        ZIndex=12,
+        Parent=body
+    })
+    local display=mk("TextButton",{
+        Size=UDim2.new(0,96,0,26),
+        Position=UDim2.new(0,114,0,yPos+1),
+        BackgroundColor3=C.bgInput,
+        BackgroundTransparency=0.1,
+        Text=displayText,
+        TextColor3=C.textMain,
+        Font=Enum.Font.GothamSemibold,
+        TextSize=10,
+        ZIndex=12,
+        Parent=body
+    })
+    corner(display,6)
+    stroke(display,C.accentBorder,1,0.55)
+    local btn=mk("TextButton",{
+        Size=UDim2.new(0,76,0,26),
+        Position=UDim2.new(1,-88,0,yPos+1),
+        BackgroundColor3=C.bgRow,
+        Text="Change",
+        TextColor3=C.textMuted,
+        Font=Enum.Font.GothamSemibold,
+        TextSize=10,
+        ZIndex=12,
+        Parent=body
+    })
+    corner(btn,6)
+    stroke(btn,C.accentDim,1,0.55)
     return display, btn
 end
 
-local function makeToggleRowLabel(text, y)
-    local l = Instance.new("TextLabel")
-    l.Size=UDim2.new(0,200,0,30); l.Position=UDim2.new(0,14,0,y)
-    l.BackgroundTransparency=1; l.Text=text; l.TextColor3=C.textMuted
-    l.Font=Enum.Font.Gotham; l.TextSize=12
-    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=12; l.Parent=body
+local function makeCard(y, h)
+    local card=mk("Frame",{
+        Size=UDim2.new(1,-24,0,h),
+        Position=UDim2.new(0,12,0,y),
+        BackgroundColor3=C.bgCard,
+        BackgroundTransparency=0.25,
+        BorderSizePixel=0,
+        ZIndex=12,
+        Parent=body
+    })
+    corner(card,10)
+    stroke(card,C.accentBorder,1,0.65)
+    return card
 end
 
-local function makeSep(y)
-    local s=Instance.new("Frame"); s.Size=UDim2.new(1,-28,0,1); s.Position=UDim2.new(0,14,0,y)
-    s.BackgroundColor3=C.accentDim; s.BackgroundTransparency=0.7
-    s.BorderSizePixel=0; s.ZIndex=12; s.Parent=body
+local function makePreset(parent, x, y, w, h, text, val, callback)
+    local pb=mk("TextButton",{
+        Size=UDim2.new(0,w,0,h),
+        Position=UDim2.new(0,x,0,y),
+        BackgroundColor3=C.bgRow,
+        BackgroundTransparency=0.1,
+        Text=text,
+        TextColor3=C.textMuted,
+        Font=Enum.Font.GothamSemibold,
+        TextSize=9,
+        ZIndex=14,
+        Parent=parent
+    })
+    corner(pb,5)
+    stroke(pb,C.accentDim,1,0.6)
+    pb.MouseButton1Click:Connect(function() callback(val) end)
+    return pb
 end
 
--- ============ BODY CONTENT ============
+-- ============ MAIN TOGGLE ============
+local toggleBtn=mk("TextButton",{
+    Size=UDim2.new(1,-24,0,38),
+    Position=UDim2.new(0,12,0,10),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.45,
+    Text="● MACRO DISABLED",
+    TextColor3=C.accent,
+    Font=Enum.Font.GothamBold,
+    TextSize=12,
+    ZIndex=12,
+    Parent=body
+})
+corner(toggleBtn,9)
+local toggleStroke=stroke(toggleBtn,C.accentBorder,1,0.35)
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size=UDim2.new(1,-28,0,38); toggleBtn.Position=UDim2.new(0,14,0,10)
-toggleBtn.BackgroundColor3=C.accentDim; toggleBtn.BackgroundTransparency=0.55
-toggleBtn.Text="● MACRO DISABLED"; toggleBtn.TextColor3=C.accent
-toggleBtn.Font=Enum.Font.GothamBold; toggleBtn.TextSize=13; toggleBtn.ZIndex=12; toggleBtn.Parent=body
-bCorner(toggleBtn,9)
-local toggleStroke = bStroke(toggleBtn,C.accentBorder,1,0.45)
-
-makeSectionLabel("KEYBINDS", 58)
+-- ============ KEYBINDS ============
+sectionLabel("KEYS", 60)
 local keybindDisplay, bindBtn    = makeKeybindRow("Toggle macro:", 76,  currentKeybind.Name)
-local hideDisplay,    hideBndBtn = makeKeybindRow("Hide panel:",   110, hideKeybind.Name)
-local spamDisplay,    spamBndBtn = makeKeybindRow("Spam key:",     144, spamKey.Name)
+local hideDisplay,    hideBndBtn = makeKeybindRow("Hide panel:",   108, hideKeybind.Name)
+local spamDisplay,    spamBndBtn = makeKeybindRow("Spam key:",     140, spamKey.Name)
 
-makeSectionLabel("SPEED", 186)
+sep(177)
 
-local cpsLbl = Instance.new("TextLabel")
-cpsLbl.Size=UDim2.new(0,140,0,28); cpsLbl.Position=UDim2.new(0,14,0,203)
-cpsLbl.BackgroundTransparency=1; cpsLbl.Text="Keys per second"; cpsLbl.TextColor3=C.textMuted
-cpsLbl.Font=Enum.Font.Gotham; cpsLbl.TextSize=12
-cpsLbl.TextXAlignment=Enum.TextXAlignment.Left; cpsLbl.ZIndex=12; cpsLbl.Parent=body
+-- ============ MODE ============
+sectionLabel("MODE", 184)
 
-local cpsBox = Instance.new("TextBox")
-cpsBox.Size=UDim2.new(0,100,0,28); cpsBox.Position=UDim2.new(1,-114,0,203)
-cpsBox.BackgroundColor3=C.bgDeep; cpsBox.BackgroundTransparency=0.2
-cpsBox.Text=tostring(keysPerSecond); cpsBox.TextColor3=C.white
-cpsBox.Font=Enum.Font.GothamSemibold; cpsBox.TextSize=14; cpsBox.ZIndex=12; cpsBox.Parent=body
-bCorner(cpsBox,7); bStroke(cpsBox,C.accentBorder,1,0.55)
+local modeToggleBtn=mk("TextButton",{
+    Size=UDim2.new(0,144,0,28),
+    Position=UDim2.new(0,12,0,199),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.15,
+    Text="⇄  Toggle",
+    TextColor3=C.accent,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    ZIndex=12,
+    Parent=body
+})
+corner(modeToggleBtn,7)
+local modeToggleStroke=stroke(modeToggleBtn,C.accentBorder,1,0.3)
 
-local presets = {{"100",100},{"300",300},{"500",500},{"MAX",2000}}
-for i, p in ipairs(presets) do
-    local pb = Instance.new("TextButton")
-    pb.Size=UDim2.new(0,66,0,22); pb.Position=UDim2.new(0,14+(i-1)*72,0,238)
-    pb.BackgroundColor3=C.bgRow; pb.BackgroundTransparency=0.0
-    pb.Text=p[1]; pb.TextColor3=C.textMuted
-    pb.Font=Enum.Font.GothamSemibold; pb.TextSize=11; pb.ZIndex=12; pb.Parent=body
-    bCorner(pb,5); bStroke(pb,C.accentDim,1,0.55)
-    local val = p[2]
-    pb.MouseButton1Click:Connect(function()
-        keysPerSecond=val; cpsBox.Text=tostring(val)
+local modeHoldBtn=mk("TextButton",{
+    Size=UDim2.new(0,144,0,28),
+    Position=UDim2.new(1,-156,0,199),
+    BackgroundColor3=C.bgRow,
+    BackgroundTransparency=0.1,
+    Text="⏷  Hold",
+    TextColor3=C.textMuted,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    ZIndex=12,
+    Parent=body
+})
+corner(modeHoldBtn,7)
+local modeHoldStroke=stroke(modeHoldBtn,C.accentDim,1,0.6)
+
+sep(237)
+
+-- ============ KPS CARD ============
+local KPS_CARD_H = 108
+sectionLabel("KEYS PER SECOND", 244)
+local kpsCard=makeCard(260, KPS_CARD_H)
+local KPS_CARD_W = PANEL_W - 24
+local kpsOnTrack, kpsOnThumb, kpsOnStroke, kpsOnBtn = makeSwitch(kpsCard, KPS_CARD_W - 52, KPS_CARD_H - 28, true, C.green, C.greenBorder)
+
+mk("TextLabel",{
+    Size=UDim2.new(0,90,0,20),
+    Position=UDim2.new(0,10,0,9),
+    BackgroundTransparency=1,
+    Text="KEY SPAM",
+    TextColor3=C.green,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=13,
+    Parent=kpsCard
+})
+
+local kpsKeyDisplay=mk("TextLabel",{
+    Size=UDim2.new(0,70,0,20),
+    Position=UDim2.new(0,10,0,32),
+    BackgroundColor3=C.bgDeep,
+    BackgroundTransparency=0.1,
+    Text="KEY: "..spamKey.Name,
+    TextColor3=C.textSub,
+    Font=Enum.Font.GothamSemibold,
+    TextSize=9,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    ZIndex=13,
+    Parent=kpsCard
+})
+corner(kpsKeyDisplay,5)
+stroke(kpsKeyDisplay,C.accentBorder,1,0.6)
+
+local kpsBox=mk("TextBox",{
+    Size=UDim2.new(0,70,0,30),
+    Position=UDim2.new(0,10,0,65),
+    BackgroundColor3=C.bgDeep,
+    BackgroundTransparency=0.1,
+    Text=tostring(keysPerSecond),
+    TextColor3=C.white,
+    Font=Enum.Font.GothamBold,
+    TextSize=16,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    ZIndex=13,
+    Parent=kpsCard
+})
+corner(kpsBox,7)
+stroke(kpsBox,C.accentBorder,1,0.45)
+
+mk("TextLabel",{
+    Size=UDim2.new(0,22,0,30),
+    Position=UDim2.new(0,82,0,65),
+    BackgroundTransparency=1,
+    Text="/s",
+    TextColor3=C.textHint,
+    Font=Enum.Font.Gotham,
+    TextSize=10,
+    ZIndex=13,
+    Parent=kpsCard
+})
+
+local KPS_PRESETS = {{"100",100},{"300",300},{"500",500},{"1k",1000},{"2k",2000}}
+local kpsPresetX = 106
+for i, p in ipairs(KPS_PRESETS) do
+    makePreset(kpsCard, kpsPresetX + (i-1)*43, 8, 40, 20, p[1], p[2], function(val)
+        keysPerSecond=val; kpsBox.Text=tostring(val)
     end)
 end
 
-makeSep(272)
+local kpsBarBg=mk("Frame",{
+    Size=UDim2.new(0,207,0,3),
+    Position=UDim2.new(0,106,0,34),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.3,
+    BorderSizePixel=0,
+    ZIndex=13,
+    Parent=kpsCard
+})
+corner(kpsBarBg,99)
+local kpsFill=mk("Frame",{
+    Size=UDim2.new(keysPerSecond/2000,0,1,0),
+    BackgroundColor3=C.accent,
+    BorderSizePixel=0,
+    ZIndex=14,
+    Parent=kpsBarBg
+})
+corner(kpsFill,99)
 
--- ============ MACRO MODE SELECTOR ============
-makeSectionLabel("MACRO MODE", 280)
+local KPS_PRESETS2 = {{"50",50},{"200",200},{"750",750},{"1.5k",1500}}
+for i, p in ipairs(KPS_PRESETS2) do
+    makePreset(kpsCard, kpsPresetX + (i-1)*52, 41, 48, 18, p[1], p[2], function(val)
+        keysPerSecond=val; kpsBox.Text=tostring(val)
+    end)
+end
 
-local modeToggleBtn = Instance.new("TextButton")
-modeToggleBtn.Size=UDim2.new(0,144,0,30); modeToggleBtn.Position=UDim2.new(0,14,0,296)
-modeToggleBtn.BackgroundColor3=C.accentDim; modeToggleBtn.BackgroundTransparency=0.2
-modeToggleBtn.Text="⇄  Toggle"; modeToggleBtn.TextColor3=C.accent
-modeToggleBtn.Font=Enum.Font.GothamBold; modeToggleBtn.TextSize=12; modeToggleBtn.ZIndex=12; modeToggleBtn.Parent=body
-bCorner(modeToggleBtn,7)
-local modeToggleStroke = bStroke(modeToggleBtn,C.accentBorder,1,0.35)
+makePreset(kpsCard, kpsPresetX + 215, 65, 42, 30, "MAX", 2000, function(val)
+    keysPerSecond=val; kpsBox.Text=tostring(val)
+end)
 
-local modeHoldBtn = Instance.new("TextButton")
-modeHoldBtn.Size=UDim2.new(0,144,0,30); modeHoldBtn.Position=UDim2.new(1,-158,0,296)
-modeHoldBtn.BackgroundColor3=C.bgRow; modeHoldBtn.BackgroundTransparency=0.0
-modeHoldBtn.Text="⏷  Hold"; modeHoldBtn.TextColor3=C.textMuted
-modeHoldBtn.Font=Enum.Font.GothamBold; modeHoldBtn.TextSize=12; modeHoldBtn.ZIndex=12; modeHoldBtn.Parent=body
-bCorner(modeHoldBtn,7)
-local modeHoldStroke = bStroke(modeHoldBtn,C.accentDim,1,0.6)
+sep(375)
 
-makeSep(336)
+-- ============ CPS CARD ============
+local CPS_CARD_H = 116
+sectionLabel("CLICKS PER SECOND", 382)
+local cpsCard=makeCard(398, CPS_CARD_H)
+local cpsOnTrack, cpsOnThumb, cpsOnStroke, cpsOnBtn = makeSwitch(cpsCard, KPS_CARD_W - 52, CPS_CARD_H - 28, false, C.cyan, C.cyanBorder)
 
-makeToggleRowLabel("Status overlay", 340)
-local swTrack, swThumb, swStroke, swBtn = makeSwitch(body, -56, 343, true, C.green, C.greenBorder)
+local cpsCardLabel=mk("TextLabel",{
+    Size=UDim2.new(0,90,0,20),
+    Position=UDim2.new(0,10,0,9),
+    BackgroundTransparency=1,
+    Text="AUTO CLICK",
+    TextColor3=C.textMuted,
+    Font=Enum.Font.GothamBold,
+    TextSize=11,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=13,
+    Parent=cpsCard
+})
 
-makeSep(380)
+local lmbBtn=mk("TextButton",{
+    Size=UDim2.new(0,44,0,20),
+    Position=UDim2.new(0,10,0,34),
+    BackgroundColor3=C.cyanDim,
+    BackgroundTransparency=0.15,
+    Text="LMB",
+    TextColor3=C.cyan,
+    Font=Enum.Font.GothamBold,
+    TextSize=10,
+    ZIndex=13,
+    Parent=cpsCard
+})
+corner(lmbBtn,6)
+local lmbStroke=stroke(lmbBtn,C.cyanBorder,1,0.35)
 
-makeToggleRowLabel("Unlock FPS (999)", 384)
-local fpsTrack, fpsThumb, fpsStroke, fpsBtn = makeSwitch(body, -56, 387, false, C.cyan, C.cyanBorder)
+local rmbBtn=mk("TextButton",{
+    Size=UDim2.new(0,44,0,20),
+    Position=UDim2.new(0,57,0,34),
+    BackgroundColor3=C.bgRow,
+    BackgroundTransparency=0.1,
+    Text="RMB",
+    TextColor3=C.textMuted,
+    Font=Enum.Font.GothamBold,
+    TextSize=10,
+    ZIndex=13,
+    Parent=cpsCard
+})
+corner(rmbBtn,6)
+local rmbStroke=stroke(rmbBtn,C.accentDim,1,0.6)
 
-makeSep(420)
+local cpsBox=mk("TextBox",{
+    Size=UDim2.new(0,70,0,30),
+    Position=UDim2.new(0,10,0,72),
+    BackgroundColor3=C.bgDeep,
+    BackgroundTransparency=0.1,
+    Text=tostring(clicksPerSecond),
+    TextColor3=C.white,
+    Font=Enum.Font.GothamBold,
+    TextSize=16,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    ZIndex=13,
+    Parent=cpsCard
+})
+corner(cpsBox,7)
+stroke(cpsBox,C.cyanBorder,1,0.45)
 
-makeToggleRowLabel("Cartoon mode (FPS boost)", 424)
-local lgTrack, lgThumb, lgStroke, lgBtn = makeSwitch(body, -56, 427, false, C.amber, C.amberBorder)
+mk("TextLabel",{
+    Size=UDim2.new(0,22,0,30),
+    Position=UDim2.new(0,82,0,72),
+    BackgroundTransparency=1,
+    Text="/s",
+    TextColor3=C.textHint,
+    Font=Enum.Font.Gotham,
+    TextSize=10,
+    ZIndex=13,
+    Parent=cpsCard
+})
 
-makeSep(460)
+local CPS_PRESETS = {{"10",10},{"50",50},{"200",200},{"500",500},{"2k",2000}}
+for i, p in ipairs(CPS_PRESETS) do
+    makePreset(cpsCard, kpsPresetX + (i-1)*43, 8, 40, 20, p[1], p[2], function(val)
+        clicksPerSecond=val; cpsBox.Text=tostring(val)
+    end)
+end
 
-local creditsLbl = Instance.new("TextLabel")
-creditsLbl.Size=UDim2.new(1,-28,0,22); creditsLbl.Position=UDim2.new(0,14,0,463)
-creditsLbl.BackgroundTransparency=1; creditsLbl.Text="Made by Zaza  ·  v4.8"
-creditsLbl.TextColor3=C.textHint; creditsLbl.Font=Enum.Font.Gotham; creditsLbl.TextSize=10
-creditsLbl.TextXAlignment=Enum.TextXAlignment.Center; creditsLbl.ZIndex=12; creditsLbl.Parent=body
+local cpsBarBg=mk("Frame",{
+    Size=UDim2.new(0,207,0,3),
+    Position=UDim2.new(0,106,0,34),
+    BackgroundColor3=C.cyanDim,
+    BackgroundTransparency=0.3,
+    BorderSizePixel=0,
+    ZIndex=13,
+    Parent=cpsCard
+})
+corner(cpsBarBg,99)
+local cpsFill=mk("Frame",{
+    Size=UDim2.new(clicksPerSecond/2000,0,1,0),
+    BackgroundColor3=C.cyan,
+    BorderSizePixel=0,
+    ZIndex=14,
+    Parent=cpsBarBg
+})
+corner(cpsFill,99)
 
-local BODY_H = 494
-body.Size = UDim2.new(1,0,0,BODY_H)
-scrollFrame.CanvasSize = UDim2.new(0,0,0,BODY_H)
+local CPS_PRESETS2 = {{"5",5},{"25",25},{"100",100},{"1k",1000}}
+for i, p in ipairs(CPS_PRESETS2) do
+    makePreset(cpsCard, kpsPresetX + (i-1)*52, 41, 48, 18, p[1], p[2], function(val)
+        clicksPerSecond=val; cpsBox.Text=tostring(val)
+    end)
+end
 
--- ============ LÓGICA ============
+makePreset(cpsCard, kpsPresetX + 215, 72, 42, 30, "MAX", 2000, function(val)
+    clicksPerSecond=val; cpsBox.Text=tostring(val)
+end)
+
+sep(521)
+
+-- ============ EXTRAS ============
+sectionLabel("EXTRAS", 528)
+
+local function extRow(text, y)
+    mk("TextLabel",{
+        Size=UDim2.new(1,-60,0,28),
+        Position=UDim2.new(0,12,0,y),
+        BackgroundTransparency=1,
+        Text=text,
+        TextColor3=C.textSub,
+        Font=Enum.Font.Gotham,
+        TextSize=11,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        ZIndex=12,
+        Parent=body
+    })
+end
+
+extRow("Status overlay", 536)
+local swTrack, swThumb, swStroke, swBtn = makeSwitch(body, PANEL_W-24-52, 539, true, C.green, C.greenBorder)
+
+sep(572)
+extRow("Unlock FPS (999)", 576)
+local fpsTrack, fpsThumb, fpsStroke, fpsBtn = makeSwitch(body, PANEL_W-24-52, 579, false, C.cyan, C.cyanBorder)
+
+sep(612)
+extRow("Cartoon Mode (FPS boost)", 616)
+local lgTrack, lgThumb, lgStroke, lgBtn = makeSwitch(body, PANEL_W-24-52, 619, false, C.amber, C.amberBorder)
+
+sep(652)
+
+mk("TextLabel",{
+    Size=UDim2.new(1,-24,0,22),
+    Position=UDim2.new(0,12,0,655),
+    BackgroundTransparency=1,
+    Text="by Zaza  ·  v6.0",
+    TextColor3=C.textHint,
+    Font=Enum.Font.Gotham,
+    TextSize=9,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    ZIndex=12,
+    Parent=body
+})
+
+local BODY_H = 684
+body.Size=UDim2.new(1,0,0,BODY_H)
+macroScroll.CanvasSize=UDim2.new(0,0,0,BODY_H)
+
+-- ============================================================
+--   THEMES TAB CONTENT
+-- ============================================================
+
+-- Header label in themes tab
+mk("TextLabel",{
+    Size=UDim2.new(1,-24,0,28),
+    Position=UDim2.new(0,12,0,10),
+    BackgroundTransparency=1,
+    Text="Choose your UI theme",
+    TextColor3=C.textSub,
+    Font=Enum.Font.GothamSemibold,
+    TextSize=11,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=12,
+    Parent=themesBody
+})
+
+-- Subtitle
+mk("TextLabel",{
+    Size=UDim2.new(1,-24,0,18),
+    Position=UDim2.new(0,12,0,33),
+    BackgroundTransparency=1,
+    Text="✦ = Static   🌌🌃💫 = Animated background",
+    TextColor3=C.textHint,
+    Font=Enum.Font.Gotham,
+    TextSize=9,
+    TextXAlignment=Enum.TextXAlignment.Left,
+    ZIndex=12,
+    Parent=themesBody
+})
+
+-- Separator
+mk("Frame",{
+    Size=UDim2.new(1,-24,0,1),
+    Position=UDim2.new(0,12,0,56),
+    BackgroundColor3=C.accentDim,
+    BackgroundTransparency=0.5,
+    BorderSizePixel=0,
+    ZIndex=12,
+    Parent=themesBody
+})
+
+-- Theme cards
+local themeCardRefs = {}
+local THEME_CARD_H = 62
+local THEME_START_Y = 64
+
+for i, theme in ipairs(THEMES) do
+    local yPos = THEME_START_Y + (i-1) * (THEME_CARD_H + 8)
+    local isSelected = (i == currentThemeIndex)
+
+    -- Card
+    local card = mk("Frame",{
+        Size=UDim2.new(1,-24,0,THEME_CARD_H),
+        Position=UDim2.new(0,12,0,yPos),
+        BackgroundColor3=isSelected and theme.accent or theme.bg,
+        BackgroundTransparency=isSelected and 0.82 or 0.55,
+        BorderSizePixel=0,
+        ZIndex=12,
+        Parent=themesBody
+    })
+    corner(card,10)
+    local cardStroke = stroke(card,
+        isSelected and theme.accent or theme.accentBorder,
+        isSelected and 1.5 or 1,
+        isSelected and 0.3 or 0.6
+    )
+
+    -- Preview color swatches (3 dots showing accent, green, cyan of theme)
+    local swatchColors = {theme.accent, theme.green, theme.cyan}
+    for si, sc in ipairs(swatchColors) do
+        local swatch = mk("Frame",{
+            Size=UDim2.new(0,10,0,10),
+            Position=UDim2.new(0, 10 + (si-1)*16, 0, 8),
+            BackgroundColor3=sc,
+            BorderSizePixel=0,
+            ZIndex=13,
+            Parent=card
+        })
+        corner(swatch,99)
+    end
+
+    -- Theme icon + name
+    mk("TextLabel",{
+        Size=UDim2.new(0,200,0,22),
+        Position=UDim2.new(0,10,0,22),
+        BackgroundTransparency=1,
+        Text=theme.icon.."  "..theme.name,
+        TextColor3=theme.textMain,
+        Font=Enum.Font.GothamBold,
+        TextSize=13,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        ZIndex=13,
+        Parent=card
+    })
+
+    -- Animated badge
+    if theme.animated then
+        local badge = mk("TextLabel",{
+            Size=UDim2.new(0,68,0,18),
+            Position=UDim2.new(0,10,0,40),
+            BackgroundColor3=theme.accentDim,
+            BackgroundTransparency=0.2,
+            Text="✦ ANIMATED",
+            TextColor3=theme.accent,
+            Font=Enum.Font.GothamBold,
+            TextSize=8,
+            TextXAlignment=Enum.TextXAlignment.Center,
+            ZIndex=13,
+            Parent=card
+        })
+        corner(badge,5)
+    end
+
+    -- Selected checkmark / select button
+    local selBtn = mk("TextButton",{
+        Size=UDim2.new(0,70,0,26),
+        Position=UDim2.new(1,-80,0.5,-13),
+        BackgroundColor3=isSelected and theme.accent or theme.accentDim,
+        BackgroundTransparency=isSelected and 0.1 or 0.4,
+        Text=isSelected and "✓ Active" or "Select",
+        TextColor3=isSelected and theme.bg or theme.textMuted,
+        Font=Enum.Font.GothamBold,
+        TextSize=10,
+        ZIndex=13,
+        Parent=card
+    })
+    corner(selBtn,7)
+
+    -- Click to select
+    local capturedIndex = i
+    selBtn.MouseButton1Click:Connect(function()
+        currentThemeIndex = capturedIndex
+        applyTheme(capturedIndex)
+    end)
+    card.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            currentThemeIndex = capturedIndex
+            applyTheme(capturedIndex)
+        end
+    end)
+
+    themeCardRefs[i] = {card=card, cardStroke=cardStroke, selBtn=selBtn}
+end
+
+local THEMES_BODY_H = THEME_START_Y + #THEMES * (THEME_CARD_H + 8) + 20
+themesBody.Size = UDim2.new(1,0,0,THEMES_BODY_H)
+themesScroll.CanvasSize = UDim2.new(0,0,0,THEMES_BODY_H)
+
+-- ============================================================
+--   THEME APPLICATION ENGINE
+-- ============================================================
+
+-- Animated background loop connection
+local animBgConnection = nil
+local animBgFrameIndex = 1
+local animBgTime = 0
+
+local function stopAnimBg()
+    if animBgConnection then
+        animBgConnection:Disconnect()
+        animBgConnection = nil
+    end
+end
+
+local function startAnimBg(theme)
+    stopAnimBg()
+    animBgFrameIndex = 1
+    animBgTime = 0
+    local frames = theme.animFrames
+    local numFrames = #frames
+    local cycleDuration = 3.5 -- seconds per frame
+
+    animBgConnection = RunService.Heartbeat:Connect(function(dt)
+        animBgTime += dt
+        if animBgTime >= cycleDuration then
+            animBgTime = 0
+            animBgFrameIndex = (animBgFrameIndex % (numFrames - 1)) + 1
+            local nextIndex = animBgFrameIndex + 1
+            if nextIndex > numFrames then nextIndex = 1 end
+            local topColor = frames[animBgFrameIndex][1]
+            local botColor = frames[animBgFrameIndex][2]
+            local tweenTarget = {
+                Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, topColor),
+                    ColorSequenceKeypoint.new(1, botColor),
+                })
+            }
+            -- UIGradient can't be tweened directly so we lerp manually
+            -- We'll do a short loop interpolation
+            local startTop = frames[animBgFrameIndex][1]
+            local startBot = frames[animBgFrameIndex][2]
+            local endTop   = frames[nextIndex][1]
+            local endBot   = frames[nextIndex][2]
+            local elapsed  = 0
+            local transitionTime = cycleDuration
+            -- Remove old sub-connection and start new transition
+            task.spawn(function()
+                local t = 0
+                while t < 1 do
+                    t += RunService.Heartbeat:Wait() / transitionTime
+                    t = math.min(t, 1)
+                    local tc = startTop:Lerp(endTop, t)
+                    local bc = startBot:Lerp(endBot, t)
+                    animGrad.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, tc),
+                        ColorSequenceKeypoint.new(1, bc),
+                    })
+                end
+            end)
+        end
+    end)
+end
+
+-- Collect all recolor-able UI elements into a table for easy bulk recolor
+-- We do a "live recolor" approach: walk through known references
+-- This is a selective recolor of key elements that drive the look
+
+-- We'll define a function that does a full recolor pass
+-- It tweens major accent elements and snaps the rest
+
+function applyTheme(index)
+    local t = THEMES[index]
+    applyThemeToC(t) -- Update C table
+
+    -- Stop any current animation
+    stopAnimBg()
+
+    -- Background
+    if t.animated then
+        animBg.BackgroundTransparency = 1
+        -- Set initial gradient
+        animGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, t.animFrames[1][1]),
+            ColorSequenceKeypoint.new(1, t.animFrames[1][2]),
+        })
+        animGrad.Rotation = 140
+        startAnimBg(t)
+    else
+        animBg.BackgroundTransparency = 0
+        animBg.BackgroundColor3 = t.bg
+        animGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, t.bgHeader),
+            ColorSequenceKeypoint.new(1, t.bgDeep),
+        })
+        animGrad.Rotation = 140
+    end
+
+    -- Panel frame
+    TweenService:Create(frame, tweenInfo, {BackgroundColor3=t.bg}):Play()
+    TweenService:Create(mainPanelStroke, tweenInfo, {Color=t.accentBorder}):Play()
+
+    -- Header
+    TweenService:Create(header, tweenInfo, {BackgroundColor3=t.bgHeader}):Play()
+    TweenService:Create(headerDot, tweenInfo, {BackgroundColor3=t.accent}):Play()
+    TweenService:Create(statusBadge, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+    TweenService:Create(hideBtn, tweenInfo, {BackgroundColor3=t.bgRow}):Play()
+
+    -- Tab bar
+    TweenService:Create(tabBar, tweenInfo, {BackgroundColor3=t.bgDeep}):Play()
+    if activeTab == "macro" then
+        TweenService:Create(tabMacroBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(tabThemesBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(tabMacroStroke, tweenInfo, {Color=t.accentBorder}):Play()
+        TweenService:Create(tabThemesStroke, tweenInfo, {Color=t.accentDim}):Play()
+    else
+        TweenService:Create(tabThemesBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(tabMacroBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(tabThemesStroke, tweenInfo, {Color=t.accentBorder}):Play()
+        TweenService:Create(tabMacroStroke, tweenInfo, {Color=t.accentDim}):Play()
+    end
+
+    -- Main toggle button
+    if macroEnabled then
+        TweenService:Create(toggleBtn, tweenInfo, {BackgroundColor3=t.greenDim, TextColor3=t.green}):Play()
+        TweenService:Create(toggleStroke, tweenInfo, {Color=t.greenBorder}):Play()
+    else
+        TweenService:Create(toggleBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(toggleStroke, tweenInfo, {Color=t.accentBorder}):Play()
+    end
+
+    -- Mode buttons
+    if macroMode == "toggle" then
+        TweenService:Create(modeToggleBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(modeHoldBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(modeToggleStroke, tweenInfo, {Color=t.accentBorder}):Play()
+        TweenService:Create(modeHoldStroke, tweenInfo, {Color=t.accentDim}):Play()
+    else
+        TweenService:Create(modeHoldBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(modeToggleBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(modeHoldStroke, tweenInfo, {Color=t.accentBorder}):Play()
+        TweenService:Create(modeToggleStroke, tweenInfo, {Color=t.accentDim}):Play()
+    end
+
+    -- KPS card
+    TweenService:Create(kpsCard, tweenInfo, {BackgroundColor3=t.bgCard}):Play()
+    TweenService:Create(kpsFill, tweenInfo, {BackgroundColor3=t.accent}):Play()
+    TweenService:Create(kpsBarBg, tweenInfo, {BackgroundColor3=t.accentDim}):Play()
+    if kpsEnabled then
+        TweenService:Create(kpsOnTrack, tweenInfo, {BackgroundColor3=t.green}):Play()
+        TweenService:Create(kpsOnStroke, tweenInfo, {Color=t.greenBorder}):Play()
+    else
+        TweenService:Create(kpsOnTrack, tweenInfo, {BackgroundColor3=t.accentDim}):Play()
+        TweenService:Create(kpsOnStroke, tweenInfo, {Color=t.accentBorder}):Play()
+    end
+
+    -- CPS card
+    TweenService:Create(cpsCard, tweenInfo, {BackgroundColor3=t.bgCard}):Play()
+    TweenService:Create(cpsFill, tweenInfo, {BackgroundColor3=t.cyan}):Play()
+    TweenService:Create(cpsBarBg, tweenInfo, {BackgroundColor3=t.cyanDim}):Play()
+    if cpsEnabled then
+        TweenService:Create(cpsOnTrack, tweenInfo, {BackgroundColor3=t.cyan}):Play()
+        TweenService:Create(cpsOnStroke, tweenInfo, {Color=t.cyanBorder}):Play()
+        cpsCardLabel.TextColor3 = t.cyan
+    else
+        TweenService:Create(cpsOnTrack, tweenInfo, {BackgroundColor3=t.accentDim}):Play()
+        TweenService:Create(cpsOnStroke, tweenInfo, {Color=t.accentBorder}):Play()
+        cpsCardLabel.TextColor3 = t.textMuted
+    end
+
+    -- Overlay
+    TweenService:Create(overlay, tweenInfo, {BackgroundColor3=t.bgDeep}):Play()
+    TweenService:Create(overlayStroke, tweenInfo, {Color=t.accentBorder}):Play()
+    TweenService:Create(overlayDot, tweenInfo, {BackgroundColor3=macroEnabled and t.green or t.accent}):Play()
+    overlayLabel.TextColor3 = macroEnabled and t.green or t.accent
+
+    -- Extras switches
+    TweenService:Create(swTrack, tweenInfo, {BackgroundColor3=overlayIsOn and t.green or t.accentDim}):Play()
+    TweenService:Create(swStroke, tweenInfo, {Color=overlayIsOn and t.greenBorder or t.accentBorder}):Play()
+    TweenService:Create(fpsTrack, tweenInfo, {BackgroundColor3=fpsUnlockOn and t.cyan or t.accentDim}):Play()
+    TweenService:Create(fpsStroke, tweenInfo, {Color=fpsUnlockOn and t.cyanBorder or t.accentBorder}):Play()
+    TweenService:Create(lgTrack, tweenInfo, {BackgroundColor3=lowGraphicsOn and t.amber or t.accentDim}):Play()
+    TweenService:Create(lgStroke, tweenInfo, {Color=lowGraphicsOn and t.amberBorder or t.accentBorder}):Play()
+
+    -- Update theme cards selection visuals
+    for i2, ref in pairs(themeCardRefs) do
+        local th2 = THEMES[i2]
+        local isSel = (i2 == index)
+        TweenService:Create(ref.card, tweenInfo, {
+            BackgroundColor3 = isSel and th2.accent or th2.bg,
+            BackgroundTransparency = isSel and 0.82 or 0.55,
+        }):Play()
+        TweenService:Create(ref.cardStroke, tweenInfo, {
+            Color = isSel and th2.accent or th2.accentBorder,
+            Transparency = isSel and 0.3 or 0.6,
+        }):Play()
+        ref.selBtn.Text = isSel and "✓ Active" or "Select"
+        TweenService:Create(ref.selBtn, tweenInfo, {
+            BackgroundColor3 = isSel and th2.accent or th2.accentDim,
+            BackgroundTransparency = isSel and 0.1 or 0.4,
+            TextColor3 = isSel and th2.bg or th2.textMuted,
+        }):Play()
+    end
+end
+
+-- ============================================================
+--   TAB SWITCHING
+-- ============================================================
+
+local function switchTab(tab)
+    activeTab = tab
+    local t = THEMES[currentThemeIndex]
+    if tab == "macro" then
+        macroScroll.Visible = true
+        themesScroll.Visible = false
+        TweenService:Create(tabMacroBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(tabThemesBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(tabMacroStroke, tweenInfo, {Color=t.accentBorder, Transparency=0.3}):Play()
+        TweenService:Create(tabThemesStroke, tweenInfo, {Color=t.accentDim, Transparency=0.6}):Play()
+    else
+        macroScroll.Visible = false
+        themesScroll.Visible = true
+        TweenService:Create(tabThemesBtn, tweenInfo, {BackgroundColor3=t.accentDim, TextColor3=t.accent}):Play()
+        TweenService:Create(tabMacroBtn, tweenInfo, {BackgroundColor3=t.bgRow, TextColor3=t.textMuted}):Play()
+        TweenService:Create(tabThemesStroke, tweenInfo, {Color=t.accentBorder, Transparency=0.3}):Play()
+        TweenService:Create(tabMacroStroke, tweenInfo, {Color=t.accentDim, Transparency=0.6}):Play()
+    end
+end
+
+tabMacroBtn.MouseButton1Click:Connect(function()   switchTab("macro")  end)
+tabThemesBtn.MouseButton1Click:Connect(function()  switchTab("themes") end)
+
+-- ============================================================
+--   MACRO LOGIC
+-- ============================================================
 
 local function updateOverlayText()
-    overlayLabel.Text      = "MACRO — "..(macroEnabled and "ACTIVE" or "INACTIVE").."  ["..spamKey.Name.."]"
+    local both = (kpsEnabled and cpsEnabled) and (spamKey.Name.." + CPS") or (kpsEnabled and spamKey.Name or (cpsEnabled and "CPS" or "-"))
+    overlayLabel.Text = "MACRO · "..(macroEnabled and "ACTIVE" or "INACTIVE").."  ["..both.."]"
     overlayKeybindLbl.Text = currentKeybind.Name
 end
 
 local function updateMacroVisuals()
+    local t = THEMES[currentThemeIndex]
     if macroEnabled then
-        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=C.greenDim,BackgroundTransparency=0.55,TextColor3=C.green}):Play()
-        TweenService:Create(toggleStroke, tweenInfo,{Color=C.greenBorder,Transparency=0.35}):Play()
-        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=C.green}):Play()
-        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=C.greenDim,TextColor3=C.green}):Play()
-        TweenService:Create(overlayStroke,tweenInfo,{Color=C.greenBorder,Transparency=0.4}):Play()
-        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=C.green}):Play()
-        overlayLabel.TextColor3=C.green; toggleBtn.Text="● MACRO ENABLED"; statusBadge.Text="ON"
+        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=t.greenDim,BackgroundTransparency=0.4,TextColor3=t.green}):Play()
+        TweenService:Create(toggleStroke, tweenInfo,{Color=t.greenBorder,Transparency=0.25}):Play()
+        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=t.green}):Play()
+        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=t.greenDim,TextColor3=t.green}):Play()
+        TweenService:Create(overlayStroke,tweenInfo,{Color=t.greenBorder,Transparency=0.35}):Play()
+        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=t.green}):Play()
+        overlayLabel.TextColor3=t.green
+        toggleBtn.Text="● MACRO ENABLED"
+        statusBadge.Text="ON"
     else
-        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.55,TextColor3=C.accent}):Play()
-        TweenService:Create(toggleStroke, tweenInfo,{Color=C.accentBorder,Transparency=0.45}):Play()
-        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=C.accent}):Play()
-        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=C.accentDim,TextColor3=C.accent}):Play()
-        TweenService:Create(overlayStroke,tweenInfo,{Color=C.accentBorder,Transparency=0.5}):Play()
-        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=C.accent}):Play()
-        overlayLabel.TextColor3=C.accent; toggleBtn.Text="● MACRO DISABLED"; statusBadge.Text="OFF"
+        TweenService:Create(toggleBtn,    tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.45,TextColor3=t.accent}):Play()
+        TweenService:Create(toggleStroke, tweenInfo,{Color=t.accentBorder,Transparency=0.35}):Play()
+        TweenService:Create(headerDot,    tweenInfo,{BackgroundColor3=t.accent}):Play()
+        TweenService:Create(statusBadge,  tweenInfo,{BackgroundColor3=t.accentDim,TextColor3=t.accent}):Play()
+        TweenService:Create(overlayStroke,tweenInfo,{Color=t.accentBorder,Transparency=0.45}):Play()
+        TweenService:Create(overlayDot,   tweenInfo,{BackgroundColor3=t.accent}):Play()
+        overlayLabel.TextColor3=t.accent
+        toggleBtn.Text="● MACRO DISABLED"
+        statusBadge.Text="OFF"
     end
     updateOverlayText()
 end
 
 local function enableMacro()
-    if spamRunning then return end
-    macroEnabled = true
+    if macroEnabled then return end
+    macroEnabled=true
     updateMacroVisuals()
-    startSpam()
+    if kpsEnabled then startKPS() end
+    if cpsEnabled then startCPS() end
 end
 
 local function disableMacro()
-    macroEnabled = false
-    spamRunning  = false
+    macroEnabled=false
+    stopKPS(); stopCPS()
     updateMacroVisuals()
 end
 
@@ -605,8 +1758,77 @@ local function toggleMacro()
     if macroEnabled then disableMacro() else enableMacro() end
 end
 
+-- KPS switch
+local function setKPSEnabled(val)
+    kpsEnabled=val
+    local t = THEMES[currentThemeIndex]
+    if val then
+        TweenService:Create(kpsOnTrack, tweenInfo,{BackgroundColor3=t.green,BackgroundTransparency=0.25}):Play()
+        TweenService:Create(kpsOnStroke,tweenInfo,{Color=t.greenBorder}):Play()
+        TweenService:Create(kpsOnThumb, tweenInfo,{Position=UDim2.new(0,21,0,3)}):Play()
+        TweenService:Create(kpsCard,    tweenInfo,{BackgroundTransparency=0.15}):Play()
+        kpsCard:FindFirstChildWhichIsA("TextLabel").TextColor3=t.green
+        if macroEnabled then startKPS() end
+    else
+        TweenService:Create(kpsOnTrack, tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(kpsOnStroke,tweenInfo,{Color=t.accentBorder}):Play()
+        TweenService:Create(kpsOnThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
+        TweenService:Create(kpsCard,    tweenInfo,{BackgroundTransparency=0.45}):Play()
+        if macroEnabled then stopKPS() end
+    end
+    updateOverlayText()
+end
+
+-- CPS switch
+local function setCPSEnabled(val)
+    cpsEnabled=val
+    local t = THEMES[currentThemeIndex]
+    if val then
+        TweenService:Create(cpsOnTrack, tweenInfo,{BackgroundColor3=t.cyan,BackgroundTransparency=0.25}):Play()
+        TweenService:Create(cpsOnStroke,tweenInfo,{Color=t.cyanBorder}):Play()
+        TweenService:Create(cpsOnThumb, tweenInfo,{Position=UDim2.new(0,21,0,3)}):Play()
+        TweenService:Create(cpsCard,    tweenInfo,{BackgroundTransparency=0.15}):Play()
+        cpsCardLabel.TextColor3=t.cyan
+        if macroEnabled then startCPS() end
+    else
+        TweenService:Create(cpsOnTrack, tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(cpsOnStroke,tweenInfo,{Color=t.accentBorder}):Play()
+        TweenService:Create(cpsOnThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
+        TweenService:Create(cpsCard,    tweenInfo,{BackgroundTransparency=0.45}):Play()
+        cpsCardLabel.TextColor3=t.textMuted
+        if macroEnabled then stopCPS() end
+    end
+    updateOverlayText()
+end
+
+kpsOnBtn.MouseButton1Click:Connect(function()
+    kpsEnabled=not kpsEnabled; setKPSEnabled(kpsEnabled)
+end)
+cpsOnBtn.MouseButton1Click:Connect(function()
+    cpsEnabled=not cpsEnabled; setCPSEnabled(cpsEnabled)
+end)
+
+-- LMB / RMB
+lmbBtn.MouseButton1Click:Connect(function()
+    cpsButton="LMB"
+    local t=THEMES[currentThemeIndex]
+    TweenService:Create(lmbBtn,tweenInfo,{BackgroundColor3=t.cyanDim,BackgroundTransparency=0.15}):Play()
+    lmbBtn.TextColor3=t.cyan; lmbStroke.Color=t.cyanBorder; lmbStroke.Transparency=0.35
+    TweenService:Create(rmbBtn,tweenInfo,{BackgroundColor3=t.bgRow,BackgroundTransparency=0.1}):Play()
+    rmbBtn.TextColor3=t.textMuted; rmbStroke.Color=t.accentDim; rmbStroke.Transparency=0.6
+end)
+rmbBtn.MouseButton1Click:Connect(function()
+    cpsButton="RMB"
+    local t=THEMES[currentThemeIndex]
+    TweenService:Create(rmbBtn,tweenInfo,{BackgroundColor3=t.redDim,BackgroundTransparency=0.15}):Play()
+    rmbBtn.TextColor3=t.red; rmbStroke.Color=t.redBorder; rmbStroke.Transparency=0.35
+    TweenService:Create(lmbBtn,tweenInfo,{BackgroundColor3=t.bgRow,BackgroundTransparency=0.1}):Play()
+    lmbBtn.TextColor3=t.textMuted; lmbStroke.Color=t.accentDim; lmbStroke.Transparency=0.6
+end)
+
+-- Panel collapse
 local function togglePanel()
-    panelVisible = not panelVisible
+    panelVisible=not panelVisible
     if panelVisible then
         TweenService:Create(frame,tweenInfo,{Size=UDim2.new(0,PANEL_W,0,PANEL_H_VISIBLE)}):Play()
         hideBtn.Text="Hide ▲"
@@ -617,113 +1839,115 @@ local function togglePanel()
 end
 
 local function toggleEverything()
-    everythingVisible = not everythingVisible
-    frame.Visible = everythingVisible
+    everythingVisible=not everythingVisible
+    frame.Visible=everythingVisible
 end
 
+-- Extras switches
 local function toggleOverlaySwitch()
-    overlayIsOn = not overlayIsOn
-    overlay.Visible = overlayIsOn
+    overlayIsOn=not overlayIsOn
+    local t=THEMES[currentThemeIndex]
+    overlay.Visible=overlayIsOn
     if overlayIsOn then
-        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=C.green,BackgroundTransparency=0.3}):Play()
-        TweenService:Create(swStroke,tweenInfo,{Color=C.greenBorder}):Play()
-        TweenService:Create(swThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
+        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=t.green,BackgroundTransparency=0.25}):Play()
+        TweenService:Create(swStroke,tweenInfo,{Color=t.greenBorder}):Play()
+        TweenService:Create(swThumb, tweenInfo,{Position=UDim2.new(0,21,0,3)}):Play()
     else
-        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
-        TweenService:Create(swStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(swTrack, tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(swStroke,tweenInfo,{Color=t.accentBorder}):Play()
         TweenService:Create(swThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
     end
 end
 
 local function toggleFPSUnlock()
-    fpsUnlockOn = not fpsUnlockOn
+    fpsUnlockOn=not fpsUnlockOn
+    local t=THEMES[currentThemeIndex]
     if fpsUnlockOn then
         startFPSLoop(); applyFPSUnlock()
-        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=C.cyan,BackgroundTransparency=0.3}):Play()
-        TweenService:Create(fpsStroke,tweenInfo,{Color=C.cyanBorder}):Play()
-        TweenService:Create(fpsThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
+        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=t.cyan,BackgroundTransparency=0.25}):Play()
+        TweenService:Create(fpsStroke,tweenInfo,{Color=t.cyanBorder}):Play()
+        TweenService:Create(fpsThumb, tweenInfo,{Position=UDim2.new(0,21,0,3)}):Play()
     else
         stopFPSLoop(); restoreFPSCap()
-        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
-        TweenService:Create(fpsStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(fpsTrack, tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(fpsStroke,tweenInfo,{Color=t.accentBorder}):Play()
         TweenService:Create(fpsThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
     end
 end
 
 local function toggleCartoonMode()
-    lowGraphicsOn = not lowGraphicsOn
+    lowGraphicsOn=not lowGraphicsOn
+    local t=THEMES[currentThemeIndex]
     if lowGraphicsOn then
         applyCartoonMode()
-        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=C.amber,BackgroundTransparency=0.3}):Play()
-        TweenService:Create(lgStroke,tweenInfo,{Color=C.amberBorder}):Play()
-        TweenService:Create(lgThumb, tweenInfo,{Position=UDim2.new(0,23,0,3)}):Play()
+        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=t.amber,BackgroundTransparency=0.25}):Play()
+        TweenService:Create(lgStroke,tweenInfo,{Color=t.amberBorder}):Play()
+        TweenService:Create(lgThumb, tweenInfo,{Position=UDim2.new(0,21,0,3)}):Play()
     else
         restoreCartoonMode()
-        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.4}):Play()
-        TweenService:Create(lgStroke,tweenInfo,{Color=C.accentDim}):Play()
+        TweenService:Create(lgTrack, tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.4}):Play()
+        TweenService:Create(lgStroke,tweenInfo,{Color=t.accentBorder}):Play()
         TweenService:Create(lgThumb, tweenInfo,{Position=UDim2.new(0,3,0,3)}):Play()
     end
 end
 
--- ============ MODO TOGGLE / HOLD ============
+-- Mode selector
 local function setMacroMode(mode)
-    macroMode = mode
-    if mode == "toggle" and macroEnabled then
-        disableMacro()
-    end
-    if mode == "toggle" then
-        TweenService:Create(modeToggleBtn,tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.2}):Play()
-        modeToggleBtn.TextColor3=C.accent
-        TweenService:Create(modeToggleStroke,tweenInfo,{Color=C.accentBorder,Transparency=0.35}):Play()
-        TweenService:Create(modeHoldBtn,tweenInfo,{BackgroundColor3=C.bgRow,BackgroundTransparency=0.0}):Play()
-        modeHoldBtn.TextColor3=C.textMuted
-        TweenService:Create(modeHoldStroke,tweenInfo,{Color=C.accentDim,Transparency=0.6}):Play()
+    macroMode=mode
+    local t=THEMES[currentThemeIndex]
+    if mode=="toggle" and macroEnabled then disableMacro() end
+    if mode=="toggle" then
+        TweenService:Create(modeToggleBtn,tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.15}):Play()
+        modeToggleBtn.TextColor3=t.accent
+        TweenService:Create(modeToggleStroke,tweenInfo,{Color=t.accentBorder,Transparency=0.3}):Play()
+        TweenService:Create(modeHoldBtn,tweenInfo,{BackgroundColor3=t.bgRow,BackgroundTransparency=0.1}):Play()
+        modeHoldBtn.TextColor3=t.textMuted
+        TweenService:Create(modeHoldStroke,tweenInfo,{Color=t.accentDim,Transparency=0.6}):Play()
     else
-        TweenService:Create(modeHoldBtn,tweenInfo,{BackgroundColor3=C.accentDim,BackgroundTransparency=0.2}):Play()
-        modeHoldBtn.TextColor3=C.accent
-        TweenService:Create(modeHoldStroke,tweenInfo,{Color=C.accentBorder,Transparency=0.35}):Play()
-        TweenService:Create(modeToggleBtn,tweenInfo,{BackgroundColor3=C.bgRow,BackgroundTransparency=0.0}):Play()
-        modeToggleBtn.TextColor3=C.textMuted
-        TweenService:Create(modeToggleStroke,tweenInfo,{Color=C.accentDim,Transparency=0.6}):Play()
+        TweenService:Create(modeHoldBtn,tweenInfo,{BackgroundColor3=t.accentDim,BackgroundTransparency=0.15}):Play()
+        modeHoldBtn.TextColor3=t.accent
+        TweenService:Create(modeHoldStroke,tweenInfo,{Color=t.accentBorder,Transparency=0.3}):Play()
+        TweenService:Create(modeToggleBtn,tweenInfo,{BackgroundColor3=t.bgRow,BackgroundTransparency=0.1}):Play()
+        modeToggleBtn.TextColor3=t.textMuted
+        TweenService:Create(modeToggleStroke,tweenInfo,{Color=t.accentDim,Transparency=0.6}):Play()
     end
 end
 
 modeToggleBtn.MouseButton1Click:Connect(function() setMacroMode("toggle") end)
 modeHoldBtn.MouseButton1Click:Connect(function()   setMacroMode("hold")   end)
 
--- ======= DRAG =======
-local dragging, dragStart, startPos = false, nil, nil
+-- ===== DRAG =====
+local dragging, dragStart, startPos=false,nil,nil
 header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if input.UserInputType==Enum.UserInputType.MouseButton1 then
         dragging=true; dragStart=input.Position; startPos=frame.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X,
-                                    startPos.Y.Scale, startPos.Y.Offset+d.Y)
+    if dragging and input.UserInputType==Enum.UserInputType.MouseMovement then
+        local d=input.Position-dragStart
+        frame.Position=UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
+    if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
 end)
 
--- ======= KEYBINDS =======
+-- ===== KEYBINDS =====
 local function setWaiting(mode, btn)
-    waitingFor=mode; btn.Text="Press key..."; btn.TextColor3=C.accent
+    waitingFor=mode; btn.Text="Press a key..."; btn.TextColor3=C.accent
 end
 local function clearWaiting(btn, displayLbl, name)
     waitingFor=nil; btn.Text="Change"; btn.TextColor3=C.textMuted; displayLbl.Text=name
 end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if input.UserInputType~=Enum.UserInputType.Keyboard then return end
 
-    if input.KeyCode == Enum.KeyCode.Escape and waitingFor then
-        if     waitingFor=="macro"   then clearWaiting(bindBtn,    keybindDisplay, currentKeybind.Name)
-        elseif waitingFor=="hide"    then clearWaiting(hideBndBtn, hideDisplay,    hideKeybind.Name)
-        elseif waitingFor=="spamkey" then clearWaiting(spamBndBtn, spamDisplay,    spamKey.Name) end
+    if input.KeyCode==Enum.KeyCode.Escape and waitingFor then
+        if     waitingFor=="macro"   then clearWaiting(bindBtn,keybindDisplay,currentKeybind.Name)
+        elseif waitingFor=="hide"    then clearWaiting(hideBndBtn,hideDisplay,hideKeybind.Name)
+        elseif waitingFor=="spamkey" then clearWaiting(spamBndBtn,spamDisplay,spamKey.Name) end
         waitingFor=nil; return
     end
 
@@ -734,33 +1958,49 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         hideKeybind=input.KeyCode; clearWaiting(hideBndBtn,hideDisplay,input.KeyCode.Name); return
     elseif waitingFor=="spamkey" then
         spamKey=input.KeyCode; clearWaiting(spamBndBtn,spamDisplay,input.KeyCode.Name)
+        kpsKeyDisplay.Text="KEY: "..input.KeyCode.Name
         updateOverlayText(); return
     end
 
     if gameProcessed then return end
 
-    if input.KeyCode == currentKeybind then
-        if macroMode == "toggle" then
-            toggleMacro()
-        elseif macroMode == "hold" then
-            holdActive = true
-            enableMacro()
-        end
-    elseif input.KeyCode == hideKeybind then
+    if input.KeyCode==currentKeybind then
+        if macroMode=="toggle" then toggleMacro()
+        elseif macroMode=="hold" then holdActive=true; enableMacro() end
+    elseif input.KeyCode==hideKeybind then
         toggleEverything()
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    if input.KeyCode == currentKeybind and macroMode == "hold" then
-        holdActive = false
-        disableMacro()
+    if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+    if input.KeyCode==currentKeybind and macroMode=="hold" then
+        holdActive=false; disableMacro()
     end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
 end)
 
--- ======= CONNECTIONS =======
+-- Input boxes
+kpsBox.FocusLost:Connect(function(enter)
+    if enter then
+        local n=tonumber(kpsBox.Text)
+        if n and n>0 then keysPerSecond=math.clamp(n,1,2000); kpsBox.Text=tostring(keysPerSecond)
+        else kpsBox.Text=tostring(keysPerSecond) end
+    end
+    local pct=math.clamp(keysPerSecond/2000, 0.015, 1)
+    TweenService:Create(kpsFill,tweenFast,{Size=UDim2.new(pct,0,1,0)}):Play()
+end)
+
+cpsBox.FocusLost:Connect(function(enter)
+    if enter then
+        local n=tonumber(cpsBox.Text)
+        if n and n>0 then clicksPerSecond=math.clamp(n,1,2000); cpsBox.Text=tostring(clicksPerSecond)
+        else cpsBox.Text=tostring(clicksPerSecond) end
+    end
+    local pct=math.clamp(clicksPerSecond/2000, 0.015, 1)
+    TweenService:Create(cpsFill,tweenFast,{Size=UDim2.new(pct,0,1,0)}):Play()
+end)
+
+-- Connections
 toggleBtn.MouseButton1Click:Connect(toggleMacro)
 hideBtn.MouseButton1Click:Connect(togglePanel)
 swBtn.MouseButton1Click:Connect(toggleOverlaySwitch)
@@ -770,24 +2010,15 @@ bindBtn.MouseButton1Click:Connect(function()    setWaiting("macro",   bindBtn)  
 hideBndBtn.MouseButton1Click:Connect(function() setWaiting("hide",    hideBndBtn) end)
 spamBndBtn.MouseButton1Click:Connect(function() setWaiting("spamkey", spamBndBtn) end)
 
-cpsBox.FocusLost:Connect(function(enter)
-    if enter then
-        local num = tonumber(cpsBox.Text)
-        if num and num > 0 then
-            keysPerSecond=math.clamp(num,1,2000)
-            cpsBox.Text=tostring(keysPerSecond)
-        else
-            cpsBox.Text=tostring(keysPerSecond)
-        end
-    end
-end)
-
--- ======= INIT =======
+-- Init
 updateOverlayText()
-print("✅ Macro Spam F v4.8 — Made by Zaza")
-print("   Toggle macro  : "..currentKeybind.Name)
-print("   Hide panel    : "..hideKeybind.Name)
-print("   Spam key      : "..spamKey.Name)
-print("   Max KPS       : 2000")
-print("   Loop          : task.spawn nativo, sin Heartbeat overhead")
-print("   Modo          : Toggle / Hold")
+-- Apply default theme visually to init the background
+applyTheme(1)
+
+print("✅ Macro Spam F v6.0 — by Zaza")
+print("   KPS loop   : Heartbeat cumulative (anti-lag)")
+print("   CPS loop   : Heartbeat cumulative (anti-lag)")
+print("   Max KPS/CPS: 2000")
+print("   Toggle      : "..currentKeybind.Name)
+print("   Hide        : "..hideKeybind.Name)
+print("   Themes      : 8 total (3 animated)")
