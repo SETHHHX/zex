@@ -1,0 +1,2562 @@
+do --// Initialization & Anti-Cheat Bypass
+    local StarterGui = cloneref and cloneref(game:GetService("StarterGui")) or game:GetService("StarterGui")
+    local Bind = Instance.new("BindableFunction")
+    
+    local Thread_Changed = false
+    local Anti_Cheat_Bypassed = false
+
+    do 
+        if getnilinstances and getreg and getscriptfromthread then
+            local Target_Names = {}
+
+            local nil_instances = getnilinstances()
+            for i = 1, #nil_instances do
+                local obj = nil_instances[i]
+                if obj and (obj:IsA("Script") or obj:IsA("LocalScript")) then
+                    local name = tostring(obj.Name)
+                    if #name >= 16 and name:match("^%w+$") then
+                        Target_Names[name] = true
+                    else
+                        Thread_Changed = true
+                    end
+                end
+            end
+
+            if Thread_Changed then
+                warn("[DEBUG]: Structural variance detected in nil instances. Engaging deep registry scan...")
+            end
+
+            local Success, Error = pcall(function()
+                local registry = getreg()
+                for _, v in next, registry do
+                    if type(v) == "thread" and coroutine.status(v) ~= "dead" then
+                        local success_src, script_src = pcall(getscriptfromthread, v)
+                        if success_src and script_src then
+                            local script_name = tostring(script_src)
+                            
+                            if Target_Names[script_name] or (Thread_Changed and #script_name >= 16 and script_name:match("^%w+$")) then
+                                coroutine.close(v)
+                                Anti_Cheat_Bypassed = true
+                            end
+                        end
+                    end
+                end
+            end)
+
+            if not Success and Error then
+                warn("[DEBUG]: Critical error during registry thread termination: " .. tostring(Error))
+            elseif Anti_Cheat_Bypassed then
+                pcall(StarterGui.SetCore, StarterGui, "SendNotification", {
+                    Title = "Success",
+                    Text = "Anti-cheat threads terminated. Proceed?",
+                    Duration = 30,
+                    Button1 = "Proceed",
+                    Button2 = "Cancel",
+                    Callback = Bind
+                })
+                warn("[DEBUG]: Anti-cheat threads successfully terminated!")
+            else
+                warn("[DEBUG]: Registry scan complete. No active anti-cheat threads found.")
+                Thread_Changed = true
+                task.spawn(function() task.wait(0.1); Bind:Invoke("Proceed") end)
+            end
+        else
+            warn("[DEBUG]: Environment unsupported. Missing required closure/registry functions.")
+            pcall(StarterGui.SetCore, StarterGui, "SendNotification", {
+                Title = "Warning",
+                Text = "Environment unsupported. Code execution may be unsafe. Proceed?",
+                Duration = 15,
+                Button1 = "Use Anyway",
+                Button2 = "Cancel",
+                Callback = Bind
+            })
+        end
+    end
+
+    Bind.OnInvoke = function(Choice)
+        Bind:Destroy()
+        if Choice == "Cancel" then 
+            warn("[DEBUG]: Script execution cancelled by the user.")
+            return 
+        end
+
+        --// =======================================================
+        --//             MAIN SCRIPT (FLUENT INITIALIZATION)
+        --// =======================================================
+        
+        local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+        local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+        local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+        local Window = Fluent:CreateWindow({
+            Title = "Splix Premium | South Bronx Farmer",
+            SubTitle = "by Seth",
+            TabWidth = 160,
+            Size = UDim2.fromOffset(580, 460),
+            Acrylic = true,
+            Theme = "Dark",
+            MinimizeKey = Enum.KeyCode.LeftControl
+        })
+
+        --// Services & Core References
+        Workspace           = cloneref(game:GetService("Workspace"))
+        Players             = cloneref(game:GetService("Players"))
+        CoreGui             = cloneref(game:GetService("CoreGui"))
+        StarterGui          = cloneref(game:GetService("StarterGui"))
+        Lighting            = cloneref(game:GetService("Lighting"))
+        ReplicatedStorage   = cloneref(game:GetService("ReplicatedStorage"))
+        UserInputService    = cloneref(game:GetService("UserInputService"))
+        RunService          = cloneref(game:GetService("RunService"))
+        HttpService         = cloneref(game:GetService("HttpService"))
+        TeleportService     = cloneref(game:GetService("TeleportService"))
+        VirtualUser         = cloneref(game:GetService("VirtualUser"))
+        VirtualInputManager = cloneref(game:GetService("VirtualInputManager"))
+        TweenService        = cloneref(game:GetService("TweenService"))
+        LocalPlayer         = Players.LocalPlayer
+        Mouse               = LocalPlayer:GetMouse()
+        Camera              = Workspace.CurrentCamera
+
+        --// Configuration Table
+        local Config = {
+            ["Functions"] = {};
+            ["IsOwned_Bike"] = "...";
+            ["AutoFarm"] = {
+                ["Running"] = false,
+                ["MovementType"] = "Safe Mode",
+                ["Marshmallow"] = {
+                    ["Enabled"] = false,
+                    ["Status"] = {
+                        ["Earned"] = 0,
+                        ["Total_Sold"] = 0,
+                        ["Sold_Type"] = {
+                            ["Small Marshmallow Bag"] = 0,
+                            ["Medium Marshmallow Bag"] = 0,
+                            ["Large Marshmallow Bag"] = 0,
+                        }
+                    }
+                },
+                ["Chips"] = {
+                    ["Enabled"] = false,
+                    ["Status"] = {
+                        ["Earned"] = 0,
+                        ["Delivered"] = 0,
+                    }
+                },
+                ["Card"] = {
+                    ["Enabled"] = false,
+                    ["Status"] = {
+                        ["Earned"] = 0,
+                        ["Swipes"] = 0,
+                    }
+                }
+            }
+        }
+
+        local IS_AFK = false
+        local Died_Counter = 0
+        local chipFarmActive = false
+        local MarshmallowFarm_Thread = nil
+        local MarshMallowStep = "Water"
+        local CardFarmRunning = false
+        local camConnection = nil
+        local LookDownConnection = nil
+        local _SM_HeartbeatConnection = nil
+        local _SM_MeshPart = nil
+        local _SM_MeshPart2 = nil
+        local _SM_Root = nil
+        local SafeModeRunning = false
+
+        local MarshmallowSellPrice = {
+            ["Small Marshmallow Bag"]  = 1470,
+            ["Medium Marshmallow Bag"] = 2840,
+            ["Large Marshmallow Bag"]  = 4050,
+        }
+
+        local MarshmallowItems = {
+            "Small Marshmallow Bag",
+            "Medium Marshmallow Bag",
+            "Large Marshmallow Bag",
+        }
+
+        local Apartments_Lists = {
+            "BH1", "BH2", "BH3", "BH4",
+            "Home 1", "Home 2", "Home 3", "Home 4",
+            "LT1", "WH1"
+        }
+
+        --// Core Utility Functions
+        local function pressE()
+            VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.E, false, game)
+            task.wait(0.1)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        end
+
+        local function safeFirePrompt(pp)
+            if not pp then return false end
+            if not pcall(function() return pp:IsA("ProximityPrompt") end) then return false end
+            if not pp:IsA("ProximityPrompt") then return false end
+            if not pp.Parent then return false end
+            pcall(function()
+                pp.MaxActivationDistance = 50
+                pp.Enabled = true
+                pp.HoldDuration = 0
+                pp.RequiresLineOfSight = false
+                if pp.Parent and pp.Parent:IsA("BasePart") then
+                    workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, pp.Parent.Position)
+                end
+                pp:InputHoldBegin(); task.wait(0.05); pp:InputHoldEnd()
+            end)
+            return true
+        end
+
+        local function safeEquip(toolName)
+            local c = LocalPlayer.Character
+            local hum = c and c:FindFirstChildOfClass("Humanoid")
+            if not hum then return false end
+            local tool = LocalPlayer.Backpack:FindFirstChild(toolName) or c:FindFirstChild(toolName)
+            if not tool then return false end
+            pcall(function() hum:EquipTool(tool) end)
+            task.wait(0.3)
+            return true
+        end
+
+        local function GetNumberOfItemsInBackpack(name)
+            local n = 0
+            for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do if v.Name == name then n += 1 end end
+            if LocalPlayer.Character then
+                for _, v in ipairs(LocalPlayer.Character:GetChildren()) do if v.Name == name then n += 1 end end
+            end
+            return n
+        end
+        local getItemCount = GetNumberOfItemsInBackpack
+
+        getgenv().Find_Bike = function()
+            for _, Value in Workspace:GetChildren() do
+                if Value:FindFirstChild("Owner")
+                    and string.match(tostring(Value), LocalPlayer.Name .. "'s Car")
+                    and Value:FindFirstChild("Body")
+                    and Value:FindFirstChild("Body"):FindFirstChild("Passenger") then
+                    return Value
+                end
+            end
+            return nil
+        end
+
+        local RoadSidewalkFolder = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Roads/Sidewalks")
+        local NoclipParts = {}
+
+        local SetHiddenProperty = function(instance, property, value)
+            pcall(function() sethiddenproperty(instance, property, value) end)
+        end
+
+        local ExclusionsSideWalk_Folder = function(Part)
+            return (RoadSidewalkFolder and Part:IsDescendantOf(RoadSidewalkFolder))
+                or (Part.Name == "default")
+                or (Part.Name == "Sidewalk")
+                or (Part.Name == "Floor")
+                or (Part.Name == "Collision")
+                or (Part.Name == "QuaterCylinder")
+                or Part:IsDescendantOf(LocalPlayer.Character)
+                or (Part.Parent and Part.Parent:IsA("Model") and Players:GetPlayerFromCharacter(Part.Parent) ~= nil)
+                or (Part:IsA("VehicleSeat") or Part:IsA("Vehicle"))
+                or (Part.Name == "AntiFall_Platform1")
+                or (Part.Name == "AntiFall_Platform2")
+        end
+
+        local Reset_Noclip = function()
+            for part, props in pairs(NoclipParts) do
+                if part:IsA("BasePart") then
+                    SetHiddenProperty(part, "CanCollide", props.CanCollide)
+                end
+            end
+            NoclipParts = {}
+        end
+
+        local Noclip = function()
+            local Character = LocalPlayer.Character
+            if not Character then return end
+            local Root = Character:FindFirstChild("HumanoidRootPart")
+            if not Root then return end
+            local Pos = Root.Position
+            local radius = 15
+            local region = Region3.new(Pos - Vector3.new(radius, radius, radius), Pos + Vector3.new(radius, radius, radius))
+            local parts = Workspace:FindPartsInRegion3(region, nil, math.huge)
+            for _, part in ipairs(parts) do
+                if part:IsA("BasePart") and not ExclusionsSideWalk_Folder(part) and not Workspace:FindFirstChild("Do not touch") then
+                    if not NoclipParts[part] then
+                        NoclipParts[part] = { CanCollide = part.CanCollide }
+                        SetHiddenProperty(part, "CanCollide", false)
+                    end
+                end
+            end
+        end
+
+        function pointCamAt(target)
+            local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not root or not target then return end
+            local targetPos = (typeof(target) == "Instance" and target:IsA("BasePart")) and target.Position or target
+            workspace.CurrentCamera.CFrame = CFrame.lookAt(root.Position + Vector3.new(0, 1.5, 0), targetPos)
+        end
+
+        LookDown = function(Zoom, Front)
+            if LookDownConnection then return end
+            LookDownConnection = RunService.RenderStepped:Connect(function()
+                local Character = LocalPlayer.Character
+                if not Character then return end
+                local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+                if not HumanoidRootPart then return end
+                local characterPos   = HumanoidRootPart.Position
+                local lookDirection  = HumanoidRootPart.CFrame.LookVector
+                local flatLook       = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
+                local targetCFrame   = CFrame.lookAt(characterPos, characterPos + flatLook)
+                if Front then targetCFrame = targetCFrame * CFrame.Angles(0, 0, 0)
+                else targetCFrame = targetCFrame * CFrame.Angles(math.rad(-80), 0, 0) end
+                local cameraPosition = characterPos - (targetCFrame.LookVector * Zoom)
+                Camera.CFrame = CFrame.lookAt(cameraPosition, characterPos)
+            end)
+        end
+
+        local function SafeModeCleanup()
+            SafeModeRunning = false
+            if _SM_HeartbeatConnection then _SM_HeartbeatConnection:Disconnect(); _SM_HeartbeatConnection = nil end
+            if _SM_Root then _SM_Root.Anchored = false end
+            if _SM_MeshPart  and _SM_MeshPart.Parent  then _SM_MeshPart:Destroy()  end
+            if _SM_MeshPart2 and _SM_MeshPart2.Parent then _SM_MeshPart2:Destroy() end
+            Reset_Noclip()
+        end
+
+        local function anyFarmRunning()
+            return getgenv().CardFarm == true or chipFarmActive == true or MarshmallowFarm_Thread ~= nil
+        end
+
+ --// Teleport Logic
+        Teleport = function(Destination)
+            local movementMode = Config["AutoFarm"]["MovementType"]
+
+            if movementMode == "Teleport Mode (IN-PROGRESS)" then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 9e9, 0)
+                task.wait(1)
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Destination
+                return (LocalPlayer.Character.HumanoidRootPart.Position - Destination.Position).Magnitude < 20 and "Success" or "Failed"
+
+            elseif movementMode == "Safe Mode" then
+                if LocalPlayer.Character.Humanoid.SeatPart and LocalPlayer.Character.Humanoid.SeatPart.Name == "DriveSeat" then
+                    return "Failed"
+                end
+                local Root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if not Root then return "Failed" end
+                _SM_Root = Root
+
+                _SM_MeshPart = Instance.new("Part")
+                _SM_MeshPart.Name = "AntiFall_Platform1"
+                _SM_MeshPart.Size = Vector3.new(2048, 2, 2048)
+                _SM_MeshPart.CFrame = CFrame.new(0, -6.5, 0)
+                _SM_MeshPart.Transparency = 0.3
+                _SM_MeshPart.Anchored = true
+                _SM_MeshPart.CanCollide = true
+                _SM_MeshPart.Parent = Workspace
+
+                _SM_MeshPart2 = Instance.new("Part")
+                _SM_MeshPart2.Name = "AntiFall_Platform2"
+                _SM_MeshPart2.Size = Vector3.new(2048, 2, 2048)
+                _SM_MeshPart2.CFrame = CFrame.new(935, -6.5, 65)
+                _SM_MeshPart2.Transparency = 0.3
+                _SM_MeshPart2.Anchored = true
+                _SM_MeshPart2.CanCollide = true
+                _SM_MeshPart2.Parent = Workspace
+
+                _SM_HeartbeatConnection = RunService.Stepped:Connect(function() if Root and Root.Parent then Noclip() end end)
+                SafeModeRunning = true
+                local UndergroundPos = Vector3.new(Root.Position.X, -1, Root.Position.Z)
+                local Tween_Root = TweenService:Create(Root, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { CFrame = CFrame.new(UndergroundPos) * CFrame.Angles(0, math.atan2(Root.CFrame.LookVector.X, Root.CFrame.LookVector.Z), 0) })
+                Tween_Root:Play(); Tween_Root.Completed:Wait()
+                task.wait(0.2)
+
+                local GoalPos = Vector3.new(Destination.X, -2.1378674507141113, Destination.Z)
+                LookDown(15, false)
+
+                while anyFarmRunning() and Root and Root.Parent and (Vector3.new(Root.Position.X, 0, Root.Position.Z) - Vector3.new(GoalPos.X, 0, GoalPos.Z)).Magnitude > (1.7 + math.random() * 0.1) do
+                    local Direction = (GoalPos - Root.Position).Unit
+                    local LookTarget = Vector3.new(GoalPos.X, -2.1378674507141113, GoalPos.Z)
+                    local NextPosition = Root.Position + Direction
+                    Noclip()
+                    Root.CFrame = CFrame.new(Vector3.new(NextPosition.X, -2.1378674507141113, NextPosition.Z), LookTarget)
+                    task.wait(0.05)
+                end
+
+                if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+                if not anyFarmRunning() then
+                    SafeModeCleanup()
+                    if Root and Root.Parent then
+                        local surfacePos = Vector3.new(Root.Position.X, 3, Root.Position.Z)
+                        local Tween_Up = TweenService:Create(Root, TweenInfo.new(1, Enum.EasingStyle.Linear), { CFrame = CFrame.new(surfacePos) * CFrame.Angles(0, math.atan2(Root.CFrame.LookVector.X, Root.CFrame.LookVector.Z), 0) })
+                        Tween_Up:Play(); Tween_Up.Completed:Wait()
+                    end
+                    return "Stopped"
+                end
+                Root.CFrame = Destination
+                task.wait(0.1)
+                SafeModeCleanup()
+                return "Success"
+
+elseif movementMode == "Bike" then
+                local Bike = Find_Bike()
+                if Bike == nil then
+                    SpawnBike()
+                    Bike = Find_Bike()
+                    if Bike == nil then return "Failed" end
+                end
+
+                local Character = LocalPlayer.Character
+                local Hum = Character and Character:FindFirstChildOfClass("Humanoid")
+                if not Character or not Hum then return "Failed" end
+
+                if not Hum.SeatPart or Hum.SeatPart.Name ~= "DriveSeat" then
+                    Character.HumanoidRootPart.CFrame = Bike.DriveSeat.CFrame
+                    task.wait(0.2)
+                    if Bike.DriveSeat:FindFirstChild("Attachment") and Bike.DriveSeat.Attachment:FindFirstChild("ProximityPrompt") then
+                        fireproximityprompt(Bike.DriveSeat.Attachment.ProximityPrompt)
+                    end
+                    task.wait(0.4)
+                end
+
+                if not Hum.SeatPart or Hum.SeatPart.Name ~= "DriveSeat" then
+                    Character.HumanoidRootPart.CFrame = Destination
+                    return "Success"
+                end
+
+                local primaryPart = Bike.PrimaryPart or Bike:FindFirstChild("Root")
+                if not primaryPart then return "Failed" end
+
+                local targetPos = Destination.Position + Vector3.new(0, 1.5, 0)
+                local targetCFrame = CFrame.new(targetPos, targetPos + Destination.LookVector)
+
+                -- Limpiar cualquier freno viejo de un TP anterior
+                local oldPos = primaryPart:FindFirstChild("_TP_HoldPosition")
+                if oldPos then oldPos:Destroy() end
+                local oldOri = primaryPart:FindFirstChild("_TP_HoldOrientation")
+                if oldOri then oldOri:Destroy() end
+                local oldAtt = primaryPart:FindFirstChild("_TP_Attachment")
+                if oldAtt then oldAtt:Destroy() end
+
+                -- Mover TODA la bici de una sola vez usando SetPrimaryPartCFrame,
+                -- que respeta los welds entre las partes (no las desarma como
+                -- mover cada parte individualmente sí puede hacer).
+                Bike:SetPrimaryPartCFrame(targetCFrame)
+
+                for _, Value in Bike:GetDescendants() do
+                    if Value:IsA("BasePart") then
+                        pcall(function()
+                            Value.Velocity = Vector3.new(0, 0, 0)
+                            Value.RotVelocity = Vector3.new(0, 0, 0)
+                            Value.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            Value.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        end)
+                    end
+                end
+
+                -- Frizar el chasis con fuerza MODERADA (no extrema) para que no
+                -- se mueva ni caiga, sin romper los welds de las ruedas.
+                local attachment = Instance.new("Attachment")
+                attachment.Name = "_TP_Attachment"
+                attachment.Parent = primaryPart
+
+                local holdPos = Instance.new("BodyPosition")
+                holdPos.Name = "_TP_HoldPosition"
+                holdPos.Position = targetPos
+                holdPos.MaxForce = Vector3.new(50000, 50000, 50000)
+                holdPos.P = 3000
+                holdPos.D = 500
+                holdPos.Parent = primaryPart
+
+                local holdOri = Instance.new("BodyGyro")
+                holdOri.Name = "_TP_HoldOrientation"
+                holdOri.CFrame = targetCFrame
+                holdOri.MaxTorque = Vector3.new(50000, 50000, 50000)
+                holdOri.P = 3000
+                holdOri.D = 500
+                holdOri.Parent = primaryPart
+
+                Character.HumanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 1.5, 0))
+
+                task.wait(0.2)
+
+                return "Success"
+            end
+        end
+
+        -- ✅ NUEVO: descongela la bici quitando los constraints de freno del TP,
+-- para que vuelva a moverse con física normal cuando se detiene el farm.
+local function UnfreezeBike()
+    local Bike = Find_Bike()
+    if not Bike then return end
+
+    local primaryPart = Bike.PrimaryPart or Bike:FindFirstChild("Root")
+    if not primaryPart then return end
+
+    local holdPos = primaryPart:FindFirstChild("_TP_HoldPosition")
+    if holdPos then holdPos:Destroy() end
+
+    local holdOri = primaryPart:FindFirstChild("_TP_HoldOrientation")
+    if holdOri then holdOri:Destroy() end
+
+    local attachment = primaryPart:FindFirstChild("_TP_Attachment")
+    if attachment then attachment:Destroy() end
+
+    -- Limpiar también cualquier velocidad residual al soltar la bici
+    for _, Value in Bike:GetDescendants() do
+        if Value:IsA("BasePart") then
+            pcall(function()
+                Value.Velocity = Vector3.new(0, 0, 0)
+                Value.RotVelocity = Vector3.new(0, 0, 0)
+                Value.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                Value.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end)
+        end
+    end
+
+    print("🚲 Bici descongelada")
+end
+
+        SpawnBike = function()
+            local Bike = Find_Bike()
+            local b = buffer.create(1)
+            buffer.writeu8(b, 0, 1)
+
+            if Bike == nil then
+                ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("RPC"):FireServer(b, "Spawn", "DirtBike")
+                local BikeForce = false
+                task.spawn(function() task.wait(3); BikeForce = true end)
+                repeat task.wait() until Find_Bike() ~= nil or BikeForce == true
+                Bike = Find_Bike()
+                task.wait()
+                if Bike == nil then return "Failed" end
+            end
+            Bike.DriveSeat.Attachment.ProximityPrompt.HoldDuration = 0
+            Bike.DriveSeat.Attachment.ProximityPrompt.RequiresLineOfSight = false
+            LocalPlayer.Character.HumanoidRootPart.CFrame = Bike.PrimaryPart.CFrame
+            task.wait(0.3)
+            fireproximityprompt(Bike.DriveSeat.Attachment.ProximityPrompt)
+            task.wait(0.5)
+        end
+
+        --// Apartment Helpers
+        BuyApartment = function()
+            local Owns_Apartment = function(Apartment)
+                local Board = Apartment:FindFirstChild("Board")
+                local Label = Board and Board:FindFirstChild("name") and Board.name:FindFirstChild("SurfaceGui") and Board.name.SurfaceGui:FindFirstChild("TextLabel")
+                return Label and Label.Text == LocalPlayer.Name
+            end
+            local Is_Vacant = function(Apartment)
+                local Board = Apartment:FindFirstChild("Board")
+                local Label = Board and Board:FindFirstChild("name") and Board.name:FindFirstChild("SurfaceGui") and Board.name.SurfaceGui:FindFirstChild("TextLabel")
+                return Label and Label.Text == "VACANT"
+            end
+            local Apartments = Workspace.Map:FindFirstChild("APTS")
+            local Houses     = Workspace.Map:FindFirstChild("Houses")
+            if not Apartments or not Houses then return false end
+
+            local SelectedApartment = nil
+            for _, ApartmentName in ipairs(Apartments_Lists) do
+                local APT = Apartments:FindFirstChild(ApartmentName)
+                if APT and APT:IsA("Model") then
+                    if Owns_Apartment(APT) then SelectedApartment = APT; break
+                    elseif not SelectedApartment and Is_Vacant(APT) then SelectedApartment = APT end
+                end
+            end
+            if Owns_Apartment(SelectedApartment) then
+                return true
+            end
+            if not SelectedApartment then return false end
+            local Board = SelectedApartment:FindFirstChild("Board")
+            if Board then
+                Teleport(CFrame.new(Board:GetPivot().Position))
+            end
+            if Is_Vacant(SelectedApartment) then
+                local prompt = Board and Board:FindFirstChild("backboard") and Board.backboard:FindFirstChild("ProximityPrompt")
+                if prompt then
+                    prompt.HoldDuration = 0
+                    prompt.RequiresLineOfSight = false
+                    task.wait(0.5)
+                    fireproximityprompt(prompt)
+                end
+            end
+            task.wait(1)
+            return true
+        end
+
+        GetPersonalApartment = function()
+            local Apartment = nil
+            for _, Value in Workspace.Map.APTS:GetChildren() do
+                if Value:FindFirstChild("name", true) and Value:FindFirstChild("name", true):FindFirstChild("TextLabel", true) then
+                    if Value:FindFirstChild("name", true):FindFirstChild("TextLabel", true).Text == LocalPlayer.Name then
+                        Apartment = Value; break
+                    end
+                end
+            end
+            return Apartment
+        end
+
+        local Get_House = function()
+            for _, Value in Workspace.Map.APTS:GetChildren() do
+                if Value:FindFirstChild("Board") then
+                    if Value:FindFirstChild("Board").name.SurfaceGui.TextLabel.Text == LocalPlayer.Name then
+                        return Workspace.Map.Houses:FindFirstChild(Value.Name) or Workspace.Map.Locations.Apartments:FindFirstChild(Value.Name)
+                    end
+                end
+            end
+            return nil
+        end
+
+        --// Task Watcher
+        local Task_Text
+        task.spawn(function()
+            while task.wait(0.1) do
+                local Main = LocalPlayer.PlayerGui:FindFirstChild("Main")
+                if Main then
+                    local TaskUpdate = Main:FindFirstChild("TaskUpdate")
+                    if TaskUpdate and TaskUpdate:FindFirstChild("TextLabel") then
+                        Task_Text = TaskUpdate:FindFirstChild("TextLabel").Text
+                    end
+                end
+            end
+        end)
+
+        -- Check helper para verificar si la olla está libre o lista
+        local function IsMallowPotReady()
+            if MarshMallowStep == "Water" or MarshMallowStep == "Sell" then 
+                return true 
+            end
+            local House = Get_House()
+            if not House then return false end
+            local Interior = House:FindFirstChild("Interior") or House
+            local Pot = Interior:FindFirstChild("Cooking Pot", true)
+            if Pot and Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel") then
+                return Pot.Timer.TextLabel.Text == "0"
+            end
+            return false
+        end
+
+--// =============================================
+--//             MARSHMALLOW FARM (SOLO 1) - CORREGIDO
+--// =============================================
+Start_MarshmallowFarm = function()
+    if MarshmallowFarm_Thread then return end
+    MarshmallowFarm_Thread = task.spawn(function()
+        while Config["AutoFarm"]["Marshmallow"]["Enabled"] do
+            -- Siempre hace SOLO 1 marshmallow
+            local Items = {"Gelatin", "Sugar Block Bag", "Water"}
+            local Items_Price = { ["Gelatin"] = 70, ["Sugar Block Bag"] = 100, ["Water"] = 20 }
+
+            -- =============================================
+            -- PASO 1: COMPRAR INGREDIENTES (SOLO SI NO TENEMOS)
+            -- =============================================
+            local hasWater = GetNumberOfItemsInBackpack("Water") >= 1
+            local hasSugar = GetNumberOfItemsInBackpack("Sugar Block Bag") >= 1
+            local hasGelatin = GetNumberOfItemsInBackpack("Gelatin") >= 1
+            local hasEmptyBag = GetNumberOfItemsInBackpack("Empty Bag") >= 1
+            
+            print("📦 Inventario: Water=" .. tostring(hasWater) .. ", Sugar=" .. tostring(hasSugar) .. ", Gelatin=" .. tostring(hasGelatin) .. ", EmptyBag=" .. tostring(hasEmptyBag))
+
+            -- Si falta algún ingrediente, comprar
+            if not hasWater or not hasSugar or not hasGelatin or not hasEmptyBag then
+                print("🛒 Comprando ingredientes faltantes...")
+                Teleport(CFrame.new(510, 4, 602))
+                task.wait(0.5)
+                
+                if not hasWater then
+                    print("💧 Comprando Water...")
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Water")
+                    Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"] -= 20
+                    task.wait(0.5)
+                end
+                if not hasSugar then
+                    print("🍬 Comprando Sugar Block Bag...")
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Sugar Block Bag")
+                    Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"] -= 100
+                    task.wait(0.5)
+                end
+                if not hasGelatin then
+                    print("🧪 Comprando Gelatin...")
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Gelatin")
+                    Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"] -= 70
+                    task.wait(0.5)
+                end
+                if not hasEmptyBag then
+                    print("🛍️ Comprando Empty Bag...")
+                    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Empty Bag")
+                    -- Empty Bag no tiene costo
+                    task.wait(0.5)
+                end
+                task.wait(1)
+            end
+
+            -- =============================================
+            -- PASO 2: IR A CASA
+            -- =============================================
+            local House = Get_House()
+            if not House then
+                BuyApartment()
+                task.wait(1); House = Get_House()
+            end
+
+            local Personal_Apartment = GetPersonalApartment()
+            if Personal_Apartment and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(0, 90, 0) and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(0, -90, 0) and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(180, 0, 180) then
+                Personal_Apartment.Door.Interact.Attachment.ProximityPrompt.HoldDuration = 0
+                Personal_Apartment.Door.Interact.Attachment.ProximityPrompt.RequiresLineOfSight = false
+                Teleport(Personal_Apartment.Door.Interact.CFrame)
+                task.wait(0.5)
+                fireproximityprompt(Personal_Apartment.Door.Interact.Attachment.ProximityPrompt)
+                task.wait(1)
+            end
+
+            local Interior = House:FindFirstChild("Interior") or House
+            for _, Value in Interior:GetChildren() do
+                if Value.Name == "Floor" or Value.Name == "Cooking Pot" or Value.Name == "Stove" then 
+                    Value.CanCollide = false 
+                end
+            end
+            
+            local Pot = Interior:FindFirstChild("Cooking Pot", true)
+            if not Pot then 
+                print("❌ No se encontró la olla!")
+                task.wait(2)
+                continue 
+            end
+            
+            Teleport(Pot.CFrame * CFrame.new(0, 0, 3))
+            task.wait(1)
+
+            local function tween_and_prompt(Prompt)
+                if not Prompt then return end
+                Prompt.HoldDuration = 0
+                Prompt.MaxActivationDistance = 50
+                Prompt.RequiresLineOfSight = false
+                LookDown(8, false)
+                fireproximityprompt(Prompt)
+                if LookDownConnection then 
+                    LookDownConnection:Disconnect() 
+                    LookDownConnection = nil 
+                end
+            end
+
+            -- =============================================
+            -- PASO 3: WATER
+            -- =============================================
+            if GetNumberOfItemsInBackpack("Water") >= 1 then
+                print("💧 Poniendo Water...")
+                safeEquip("Water")
+                tween_and_prompt(Pot.Attachment.ProximityPrompt)
+                task.wait(1)
+                -- Esperar a que el agua hierva
+                local waitCount = 0
+                repeat 
+                    task.wait(1)
+                    waitCount = waitCount + 1
+                    print("⏳ Esperando agua... " .. waitCount .. "s - Task_Text: " .. tostring(Task_Text))
+                until Task_Text == "Pour gelatin into the pot." or Task_Text == "Dump the sugar block from the bag into the pot." or waitCount > 30 or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                print("✅ Agua lista!")
+            end
+
+            -- =============================================
+            -- PASO 4: SUGAR BLOCK BAG
+            -- =============================================
+            if GetNumberOfItemsInBackpack("Sugar Block Bag") >= 1 then
+                print("🍬 Poniendo Sugar Block Bag...")
+                safeEquip("Sugar Block Bag")
+                tween_and_prompt(Pot.Attachment.ProximityPrompt)
+                task.wait(1)
+                -- Esperar a que la sugar se procese
+                local waitCount = 0
+                repeat 
+                    task.wait(1)
+                    waitCount = waitCount + 1
+                    print("⏳ Esperando Sugar... " .. waitCount .. "s - Task_Text: " .. tostring(Task_Text))
+                until Task_Text == "Pour gelatin into the pot." or waitCount > 35 or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                LocalPlayer.Character.Humanoid:UnequipTools()
+                print("✅ Sugar lista!")
+            end
+
+            -- =============================================
+            -- PASO 5: GELATIN
+            -- =============================================
+            if GetNumberOfItemsInBackpack("Gelatin") >= 1 then
+                print("🧪 Poniendo Gelatin...")
+                
+                -- Asegurarnos de que el timer esté en 0
+                local timerLabel = Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel")
+                if timerLabel then
+                    print("⏱️ Timer actual: " .. timerLabel.Text)
+                    repeat 
+                        task.wait(0.5)
+                        print("⏱️ Esperando timer a 0... Actual: " .. timerLabel.Text)
+                    until timerLabel.Text == "0" or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                end
+                
+                -- Equipar Gelatin
+                safeEquip("Gelatin")
+                task.wait(0.5)
+                
+                -- Hacer fire al prompt
+                print("🔥 Haciendo fire al prompt de la olla para Gelatin...")
+                tween_and_prompt(Pot.Attachment.ProximityPrompt)
+                task.wait(1)
+                
+                -- Esperar a que cambie el Task_Text
+                local waitCount = 0
+                repeat 
+                    task.wait(1)
+                    waitCount = waitCount + 1
+                    print("⏳ Esperando Gelatin... " .. waitCount .. "s - Task_Text: " .. tostring(Task_Text))
+                until Task_Text == "Let the solution cook for 45 seconds." or waitCount > 40 or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                
+                LocalPlayer.Character.Humanoid:UnequipTools()
+                print("✅ Gelatin puesta!")
+            end
+
+            -- =============================================
+            -- PASO 6: COLLECT (USAR EMPTY BAG)
+            -- =============================================
+            if GetNumberOfItemsInBackpack("Empty Bag") >= 1 then
+                print("🛍️ Recogiendo con Empty Bag...")
+                -- Esperar a que el timer llegue a 0
+                local timerLabel = Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel")
+                if timerLabel then
+                    print("⏱️ Esperando timer a 0... Actual: " .. timerLabel.Text)
+                    repeat 
+                        task.wait(1)
+                        print("⏱️ Timer: " .. timerLabel.Text)
+                    until timerLabel.Text == "0" or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                end
+                
+                safeEquip("Empty Bag")
+                tween_and_prompt(Pot.Attachment.ProximityPrompt)
+                task.wait(1.5)
+                
+                -- Esperar a que desaparezca el Empty Bag
+                local waitCount = 0
+                repeat 
+                    task.wait(0.5)
+                    waitCount = waitCount + 1
+                    print("⏳ Esperando que desaparezca Empty Bag... " .. waitCount .. "s")
+                until not LocalPlayer.Character:FindFirstChild("Empty Bag") or waitCount > 20 or not Config["AutoFarm"]["Marshmallow"]["Enabled"]
+                
+                LocalPlayer.Character.Humanoid:UnequipTools()
+                print("✅ Marshmallow recolectado!")
+            end
+
+            -- =============================================
+            -- PASO 7: VENDER
+            -- =============================================
+            print("💰 Vendiendo Marshmallow...")
+            Teleport(CFrame.new(511, 4, 598))
+            task.wait(0.5)
+            
+            local Lamont = Workspace.Folders.NPCs:FindFirstChild("Lamont Bell")
+            if Lamont then
+                Lamont.UpperTorso.ProximityPrompt.HoldDuration = 0
+                Lamont.UpperTorso.ProximityPrompt.RequiresLineOfSight = false
+                
+                local soldAny = false
+                for _, Value in LocalPlayer.Backpack:GetChildren() do
+                    if Value:IsA("Tool") then
+                        local mItem = nil
+                        for _, name in ipairs(MarshmallowItems) do 
+                            if Value.Name == name then 
+                                mItem = name 
+                                break 
+                            end 
+                        end
+                        if mItem then
+                            print("🍬 Vendiendo: " .. mItem)
+                            LocalPlayer.Character.Humanoid:EquipTool(Value)
+                            task.wait(0.2)
+                            pointCamAt(Lamont.UpperTorso)
+                            fireproximityprompt(Lamont.UpperTorso.ProximityPrompt)
+                            Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"] += MarshmallowSellPrice[mItem]
+                            Config["AutoFarm"]["Marshmallow"]["Status"]["Total_Sold"] += 1
+                            Config.AutoFarm.Marshmallow.Status.Sold_Type[mItem] = (Config.AutoFarm.Marshmallow.Status.Sold_Type[mItem] or 0) + 1
+                            soldAny = true
+                            task.wait(0.3)
+                        end
+                    end
+                end
+                
+                if soldAny then
+                    print("✅ Venta completada!")
+                else
+                    print("⚠️ No hay marshmallows para vender")
+                end
+            end
+
+            -- =============================================
+            -- PASO 8: ESPERAR Y REINICIAR
+            -- =============================================
+            print("🔄 Ciclo completado! Esperando 2 segundos antes de reiniciar...")
+            MarshMallowStep = "Water"
+            task.wait(2)
+            
+            -- El siguiente ciclo comprará ingredientes si faltan
+        end
+    end)
+end
+
+Stop_MarshmallowFarm = function()
+    if not MarshmallowFarm_Thread then return end
+    if coroutine.status(MarshmallowFarm_Thread) ~= "dead" then
+        pcall(task.cancel, MarshmallowFarm_Thread)
+        MarshmallowFarm_Thread = nil
+        SafeModeCleanup()
+        if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+    end
+end
+
+--// =============================================
+--//             CARD FARM (CON DETECCIÓN DE RECHAZO)
+--// =============================================
+local cardPickupTimeoutStart = 0 
+
+local function CheckBankRejectionUI()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local mainGui = playerGui and playerGui:FindFirstChild("Main")
+    local basicNotif = mainGui and mainGui:FindFirstChild("BasicNotification")
+    
+    if basicNotif then
+        for _, textLabel in ipairs(basicNotif:GetDescendants()) do
+            if textLabel:IsA("TextLabel") then
+                if textLabel.Text == "Your application was unsuccessful." then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function AutoPressCardfarmKeys()
+    while getgenv().CardFarm do
+        if not immCard[1] then
+            VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.W, false, game); task.wait(0.1)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.W, false, game); task.wait(0.3)
+        else task.wait(1) end
+    end
+end
+
+local function waitForAlive()
+    repeat task.wait(0.5)
+        local c = LocalPlayer.Character
+        local h = c and c:FindFirstChildOfClass("Humanoid")
+        if c and c:FindFirstChild("HumanoidRootPart") and h and h.Health > 0 then return end
+    until false
+end
+
+local immCard = {false}
+
+function startCardFarming()
+    if CardFarmRunning then return end
+    CardFarmRunning = true
+    task.spawn(AutoPressCardfarmKeys)
+    task.spawn(function()
+        while getgenv().CardFarm do
+            local c = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local hum = c:WaitForChild("Humanoid")
+            if hum.Health <= 0 then waitForAlive(); continue end
+            
+            pcall(function()
+                -- =============================================
+                -- PASO 1: COMPRAR FAKE ID
+                -- =============================================
+                print("🪪 Comprando Fake ID...")
+                Teleport(CFrame.new(216.20, 3.37, -332.39))
+                task.wait(0.5)
+                
+                local idSellerNPC = workspace.Folders.NPCs:FindFirstChild("FakeIDSeller")
+                local idPrompt = idSellerNPC and idSellerNPC.UpperTorso and idSellerNPC.UpperTorso.Attachment:FindFirstChildOfClass("ProximityPrompt")
+                
+                local idCounter = 0
+                repeat
+                    if not getgenv().CardFarm then return end
+                    pointCamAt(idSellerNPC and idSellerNPC.UpperTorso)
+                    safeFirePrompt(idPrompt)
+                    task.wait(0.2)
+                    idCounter += 1
+                    if idCounter > 40 then 
+                        print("❌ Timeout comprando Fake ID")
+                        return 
+                    end
+                until LocalPlayer.Backpack:FindFirstChild("Fake ID")
+                
+                print("✅ Fake ID comprado!")
+                task.wait(1)
+
+                -- =============================================
+                -- PASO 2: APLICAR AL BANCO
+                -- =============================================
+                local idTool = LocalPlayer.Backpack:FindFirstChild("Fake ID")
+                if idTool then 
+                    hum:EquipTool(idTool)
+                    task.wait(0.5)
+                end
+                
+                print("🏦 Aplicando al banco...")
+                Teleport(CFrame.new(-48.74, 6.50, -317.00))
+                task.wait(0.5)
+
+                local tellerNPC = workspace.Folders.NPCs:FindFirstChild("Bank Teller")
+                local tellerPrompt = tellerNPC and tellerNPC.UpperTorso and tellerNPC.UpperTorso.Attachment:FindFirstChildOfClass("ProximityPrompt")
+                
+                local applyCounter = 0
+                local aplicacionExitosa = false
+                
+                repeat
+                    if not getgenv().CardFarm then return end
+                    pointCamAt(tellerNPC and tellerNPC.UpperTorso)
+                    safeFirePrompt(tellerPrompt)
+                    task.wait(0.3)
+                    applyCounter += 1
+                    
+                    -- Verificar si la aplicación fue rechazada
+                    if CheckBankRejectionUI() then
+                        print("❌ Aplicación rechazada por el banco!")
+                        -- Eliminar el Fake ID si aún existe
+                        local stillHasID = LocalPlayer.Backpack:FindFirstChild("Fake ID") or c:FindFirstChild("Fake ID")
+                        hum:UnequipTools()
+                        task.wait(0.5)
+                        if stillHasID then stillHasID:Destroy() end
+                        task.wait(1)
+                        -- Reiniciar el ciclo desde el principio
+                        return
+                    end
+                    
+                    if applyCounter > 30 then 
+                        print("❌ Timeout aplicando al banco")
+                        return 
+                    end
+                    
+                    -- Verificar si el Fake ID desapareció (aplicación aceptada)
+                    if not c:FindFirstChild("Fake ID") and not LocalPlayer.Backpack:FindFirstChild("Fake ID") then
+                        aplicacionExitosa = true
+                        print("✅ Aplicación aceptada!")
+                        break
+                    end
+                    
+                until aplicacionExitosa == true
+
+                if not aplicacionExitosa then
+                    print("❌ No se pudo completar la aplicación")
+                    return
+                end
+
+                -- =============================================
+                -- PASO 3: ESPERAR A QUE IMPRIMAN LA TARJETA (46 segundos)
+                -- =============================================
+                print("⏳ Esperando 46 segundos para que impriman la tarjeta...")
+                local waitStart = tick()
+                local esperaCompleta = false
+                
+                -- Mientras esperamos, revisamos si aparece la card o si hay rechazo
+                repeat
+                    if not getgenv().CardFarm then return end
+                    task.wait(0.5)
+                    
+                    -- Verificar si la card ya apareció (por si acaso)
+                    if LocalPlayer.Backpack:FindFirstChild("Card") or c:FindFirstChild("Card") then
+                        print("✅ Card apareció antes de tiempo!")
+                        esperaCompleta = true
+                        break
+                    end
+                    
+                    -- Verificar rechazo durante la espera
+                    if CheckBankRejectionUI() then
+                        print("❌ Aplicación rechazada durante la espera!")
+                        return
+                    end
+                    
+                until (tick() - waitStart) >= 46
+                
+                if not esperaCompleta then
+                    print("✅ Tiempo de espera completado (46s)")
+                end
+
+                -- =============================================
+                -- PASO 4: RECOGER LA TARJETA
+                -- =============================================
+                print("📇 Recogiendo la tarjeta...")
+                cardPickupTimeoutStart = tick()
+                Teleport(CFrame.new(-41.77, 3.37, -332.23))
+                task.wait(0.5)
+                
+                local cardPickup = workspace:FindFirstChild("CardPickup")
+                local cardPickupPrompt = cardPickup and cardPickup.Attachment:FindFirstChildOfClass("ProximityPrompt")
+                
+                local pickupCounter = 0
+                local cardRecogida = false
+                
+                repeat
+                    if not getgenv().CardFarm then return end
+                    
+                    pointCamAt(cardPickup)
+                    safeFirePrompt(cardPickupPrompt)
+                    task.wait(0.3)
+                    pickupCounter += 1
+                    
+                    -- Verificar si la card apareció
+                    if LocalPlayer.Backpack:FindFirstChild("Card") or c:FindFirstChild("Card") then
+                        cardRecogida = true
+                        print("✅ Tarjeta recogida!")
+                        break
+                    end
+                    
+                    -- Timeout: si pasan más de 18 segundos, reintentar
+                    if tick() - cardPickupTimeoutStart > 4 then
+                        print("⚠️ Timeout recogiendo tarjeta, reintentando...")
+                        Teleport(CFrame.new(-41.77, 3.37, -332.23))
+                        cardPickupTimeoutStart = tick()
+                        pickupCounter = 0
+                    end
+                    
+                    if pickupCounter > 80 then 
+                        print("❌ Timeout recogiendo tarjeta")
+                        return 
+                    end
+                    
+                until cardRecogida == true
+
+                if not cardRecogida then
+                    print("❌ No se pudo recoger la tarjeta")
+                    return
+                end
+
+                -- =============================================
+                -- PASO 5: USAR TARJETA EN EL ATM
+                -- =============================================
+                local cardTool = LocalPlayer.Backpack:FindFirstChild("Card")
+                if cardTool then 
+                    hum:EquipTool(cardTool)
+                    task.wait(0.5)
+                end
+
+                print("🏧 Buscando ATM...")
+                local atmsFolder = workspace.Map:FindFirstChild("ATMS")
+                local closestATM, shortestDist = nil, math.huge
+                
+                for _, atm in ipairs(atmsFolder:GetChildren()) do
+                    if atm:IsA("BasePart") and atm.Name:match("^ATM%d*$") then
+                        local prompt = atm:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt and prompt.Enabled and c:FindFirstChild("HumanoidRootPart") then
+                            local dist = (c.HumanoidRootPart.Position - atm.Position).Magnitude
+                            if dist < shortestDist then 
+                                shortestDist = dist
+                                closestATM = atm 
+                            end
+                        end
+                    end
+                end
+                
+                if not closestATM then 
+                    print("❌ No se encontró ATM")
+                    return 
+                end
+                
+                print("🏧 Usando ATM...")
+                Teleport(CFrame.new(closestATM.Position + (closestATM.CFrame.LookVector * -2.5)))
+                task.wait(0.5)
+                
+                local atmPrompt = closestATM:FindFirstChildWhichIsA("ProximityPrompt", true)
+                local iStart = tick()
+                
+                repeat
+                    if not getgenv().CardFarm then return end
+                    pointCamAt(closestATM)
+                    safeFirePrompt(atmPrompt)
+                    task.wait(0.5)
+                until LocalPlayer.PlayerGui:FindFirstChild("ATM") or (tick() - iStart > 8)
+
+                if LocalPlayer.PlayerGui:FindFirstChild("ATM") then
+                    print("💳 Swipeando tarjeta...")
+                    Config["AutoFarm"]["Card"]["Status"]["Swipes"] += 1
+                    
+                    local gStart = tick()
+                    repeat
+                        if not getgenv().CardFarm or not LocalPlayer.PlayerGui:FindFirstChild("ATM") then break end
+                        
+                        pointCamAt(closestATM)
+                        local atmFrame = LocalPlayer.PlayerGui.ATM:FindFirstChild("Frame")
+                        if atmFrame and atmFrame:FindFirstChild("Swipe") then 
+                            game.GuiService.SelectedObject = atmFrame.Swipe 
+                        end
+                        
+                        VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.Return,    false, game)
+                        task.wait(0.06)
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return,    false, game)
+                        task.wait(0.01)
+                        VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.BackSlash, false, game)
+                        task.wait(0.06)
+                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.BackSlash, false, game)
+                        task.wait(0.1)
+                        
+                    until not LocalPlayer.PlayerGui:FindFirstChild("ATM") or not getgenv().CardFarm or (tick() - gStart > 12)
+                    
+                    print("✅ Swipe completado!")
+                end
+            end)
+            
+            print("🔄 Ciclo de Card completado! Esperando 2 segundos...")
+            task.wait(2)
+        end
+        CardFarmRunning = false
+    end)
+end
+
+--// =============================================
+--//             MULTI FARM (MARSHMALLOW + CARD)
+--// =============================================
+local SAFEZONE_POSITION = CFrame.new(-750, 4, 393)
+
+local MultiFarmRunning = false
+local MultiFarmThread = nil
+local cardCooldownStart = 0
+local waitingForCard = false
+local cardRetryNeeded = false
+
+-- ✅ NUEVO: estado de verificación en background
+local bankCheckThread = nil
+local bankCheckResult = nil -- nil = sin resultado todavía, o "REJECTED"/"APPROVED"/"NO_CARD"/"TIMEOUT"
+local bankCheckRunning = false
+
+local function IsMallowInCooldown()
+    local House = Get_House()
+    if not House then return false end
+    local Interior = House:FindFirstChild("Interior") or House
+    local Pot = Interior:FindFirstChild("Cooking Pot", true)
+    if Pot and Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel") then
+        return Pot.Timer.TextLabel.Text ~= "0"
+    end
+    return false
+end
+
+local function IsCardInCooldown()
+    return waitingForCard and (tick() - cardCooldownStart < 46)
+end
+
+-- ✅ FUNCIÓN MEJORADA: Busca el mensaje en TODA la GUI
+local function WaitForBankResult(timeout)
+    timeout = timeout or 15
+    local start = tick()
+
+    while tick() - start < timeout do
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if not playerGui then
+            task.wait(0.1)
+            continue
+        end
+
+        -- Buscar en TODOS los hijos de PlayerGui
+        for _, guiObject in ipairs(playerGui:GetDescendants()) do
+            if guiObject:IsA("TextLabel") or guiObject:IsA("TextBox") then
+                local text = guiObject.Text or ""
+
+                -- Mensaje de rechazo
+                if text:find("unsuccessful") or text:find("Your application was unsuccessful") then
+                    print("✅ Detectado: REJECTED")
+                    return "REJECTED"
+                end
+
+                -- Mensaje de aprobación
+                if text:find("successful") and text:find("30 seconds") then
+                    print("✅ Detectado: APPROVED")
+                    return "APPROVED"
+                end
+
+                -- Mensaje de no estar en lista
+                if text:find("not on the wait list") then
+                    print("✅ Detectado: NO_CARD")
+                    return "NO_CARD"
+                end
+            end
+        end
+
+        task.wait(0.1)
+    end
+
+    print("⏰ TIMEOUT esperando respuesta del banco")
+    return "TIMEOUT"
+end
+
+-- ✅ NUEVO: lanza la verificación del banco en un thread separado.
+-- No bloquea el loop principal; el resultado se guarda en bankCheckResult
+-- y el loop principal de Start_MultiFarm lo revisa periódicamente.
+local function StartBackgroundBankCheck(timeout)
+    if bankCheckRunning then
+        return -- ya hay una verificación corriendo, no lanzar otra
+    end
+
+    bankCheckRunning = true
+    bankCheckResult = nil
+
+    bankCheckThread = task.spawn(function()
+        local result = WaitForBankResult(timeout or 15)
+
+        -- Verificación manual extra si dio timeout
+        if result == "TIMEOUT" then
+            task.wait(0.5)
+            local c = LocalPlayer.Character
+            local stillHasID = LocalPlayer.Backpack:FindFirstChild("Fake ID") or (c and c:FindFirstChild("Fake ID"))
+            if not stillHasID then
+                print("✅ Fake ID desapareció = aplicación aceptada! (detectado en background)")
+                result = "APPROVED"
+            end
+        end
+
+        bankCheckResult = result
+        bankCheckRunning = false
+    end)
+end
+
+local function SwipeCard()
+    local c = LocalPlayer.Character
+    local hum = c and c:FindFirstChildOfClass("Humanoid")
+
+    local cardTool = LocalPlayer.Backpack:FindFirstChild("Card") or (c and c:FindFirstChild("Card"))
+    if not cardTool then
+        print("❌ No se encontró la tarjeta para swippear")
+        return false
+    end
+    if hum then hum:EquipTool(cardTool); task.wait(0.5) end
+
+    print("🏧 Buscando ATM...")
+    local atmsFolder = workspace.Map:FindFirstChild("ATMS")
+    local closestATM, shortestDist = nil, math.huge
+    if atmsFolder and c and c:FindFirstChild("HumanoidRootPart") then
+        for _, atm in ipairs(atmsFolder:GetChildren()) do
+            if atm:IsA("BasePart") and atm.Name:match("^ATM%d*$") then
+                local prompt = atm:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and prompt.Enabled then
+                    local dist = (c.HumanoidRootPart.Position - atm.Position).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist; closestATM = atm
+                    end
+                end
+            end
+        end
+    end
+
+    if not closestATM then print("❌ No se encontró ATM"); return false end
+
+    Teleport(CFrame.new(closestATM.Position + (closestATM.CFrame.LookVector * -2.5)))
+    task.wait(1.0)
+
+    local atmPrompt = closestATM:FindFirstChildWhichIsA("ProximityPrompt", true)
+    local iStart = tick()
+    repeat
+        if not MultiFarmRunning then return false end
+        pointCamAt(closestATM)
+        safeFirePrompt(atmPrompt)
+        task.wait(0.5)
+    until LocalPlayer.PlayerGui:FindFirstChild("ATM") or (tick() - iStart > 8)
+
+    if LocalPlayer.PlayerGui:FindFirstChild("ATM") then
+        print("💳 Swipeando tarjeta...")
+        Config["AutoFarm"]["Card"]["Status"]["Swipes"] += 1
+        local gStart = tick()
+        repeat
+            if not MultiFarmRunning or not LocalPlayer.PlayerGui:FindFirstChild("ATM") then break end
+            pointCamAt(closestATM)
+            local atmFrame = LocalPlayer.PlayerGui.ATM:FindFirstChild("Frame")
+            if atmFrame and atmFrame:FindFirstChild("Swipe") then
+                game.GuiService.SelectedObject = atmFrame.Swipe
+            end
+            VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.Return,    false, game); task.wait(0.06)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return,    false, game); task.wait(0.01)
+            VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.BackSlash, false, game); task.wait(0.06)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.BackSlash, false, game); task.wait(0.1)
+        until not LocalPlayer.PlayerGui:FindFirstChild("ATM") or not MultiFarmRunning or (tick() - gStart > 12)
+        pcall(function() LocalPlayer.PlayerGui.ATM:Destroy() end)
+        print("✅ Swipe completado!")
+        return true
+    end
+
+    return false
+end
+
+local function CollectCard()
+    local c = LocalPlayer.Character
+
+    if LocalPlayer.Backpack:FindFirstChild("Card") or (c and c:FindFirstChild("Card")) then
+        print("✅ Card ya está en inventario, yendo a swippear...")
+        waitingForCard = false
+        return SwipeCard()
+    end
+
+    print("📇 Recogiendo la tarjeta...")
+    Teleport(CFrame.new(-41.77, 3.37, -332.23))
+    task.wait(1.0)
+
+    local cardPickup = workspace:FindFirstChild("CardPickup")
+    local cardPickupPrompt = cardPickup and cardPickup.Attachment:FindFirstChildOfClass("ProximityPrompt")
+
+    local timeoutStart = tick()
+    local globalTimeout = tick()
+
+    repeat
+        if not MultiFarmRunning then return false end
+
+        if tick() - globalTimeout > 40 then
+            print("❌ Card no apareció en 40s, reiniciando ciclo...")
+            waitingForCard = false
+            cardRetryNeeded = true
+            return "RESTART"
+        end
+
+        if tick() - timeoutStart > 18 then
+            print("⚠️ Reintentando posición de recolección...")
+            Teleport(CFrame.new(-41.77, 3.37, -332.23))
+            task.wait(1.0)
+            timeoutStart = tick()
+            cardPickup = workspace:FindFirstChild("CardPickup")
+            cardPickupPrompt = cardPickup and cardPickup.Attachment:FindFirstChildOfClass("ProximityPrompt")
+        end
+
+        if cardPickup then pointCamAt(cardPickup) end
+        safeFirePrompt(cardPickupPrompt)
+        task.wait(0.3)
+
+        if LocalPlayer.Backpack:FindFirstChild("Card") or (c and c:FindFirstChild("Card")) then
+            print("✅ Tarjeta recogida!")
+            waitingForCard = false
+            return SwipeCard()
+        end
+
+    until false
+end
+
+-- ✅ NUEVO: helper que intenta el prompt del Bank Teller con reposicionamiento
+-- automático si el prompt no está disponible o el NPC está en cooldown.
+local function TryApplyAtBank(maxAttempts, repositionEvery)
+    maxAttempts = maxAttempts or 25
+    repositionEvery = repositionEvery or 6 -- cada cuántos intentos sin éxito se reposiciona
+
+    local attempts = 0
+    local attemptsSinceReposition = 0
+
+    local function getTellerAndPrompt()
+        local tellerNPC = workspace.Folders.NPCs:FindFirstChild("Bank Teller")
+        local tellerPrompt = tellerNPC and tellerNPC.UpperTorso and tellerNPC.UpperTorso.Attachment:FindFirstChildOfClass("ProximityPrompt")
+        return tellerNPC, tellerPrompt
+    end
+
+    local function doReposition(tellerNPC)
+        print("🔁 Prompt no disponible / NPC en cooldown, reposicionando...")
+        if tellerNPC and tellerNPC:FindFirstChild("HumanoidRootPart") then
+            Teleport(tellerNPC.HumanoidRootPart.CFrame * CFrame.new(0, 0, -2.5))
+        else
+            Teleport(CFrame.new(-48.74, 6.50, -317.00))
+        end
+        task.wait(1.2)
+    end
+
+    -- posición inicial
+    local tellerNPC = getTellerAndPrompt()
+    doReposition(tellerNPC)
+
+    while attempts < maxAttempts do
+        if not MultiFarmRunning then return false end
+
+        tellerNPC, tellerPrompt = getTellerAndPrompt()
+
+        -- Si el prompt no existe o está deshabilitado (cooldown del NPC),
+        -- NO lo contamos como "se presionó" — reposicionamos en vez de asumir rechazo.
+        local promptUsable = tellerPrompt ~= nil and tellerPrompt.Enabled ~= false
+
+        if not promptUsable then
+            attemptsSinceReposition += 1
+            print("⚠️ Prompt del banco no disponible (NPC posiblemente en cooldown)...")
+            if attemptsSinceReposition >= repositionEvery then
+                doReposition(tellerNPC)
+                attemptsSinceReposition = 0
+            else
+                task.wait(0.6)
+            end
+            attempts += 1
+            continue
+        end
+
+        -- Prompt disponible: lo presionamos
+        print("🔄 Aplicando al banco (intento " .. (attempts + 1) .. ")...")
+        pointCamAt(tellerNPC.UpperTorso)
+        safeFirePrompt(tellerPrompt)
+        task.wait(0.5)
+        attempts += 1
+        attemptsSinceReposition = 0
+
+        return true -- se logró presionar el prompt con éxito
+    end
+
+    print("❌ No se pudo presionar el prompt del banco tras varios intentos")
+    return false
+end
+
+local function DoCardCycle()
+    print("🔄 Iniciando ciclo de Card...")
+    local c = LocalPlayer.Character
+    local hum = c and c:FindFirstChildOfClass("Humanoid")
+
+    -- ✅ NUEVO: si ya tenemos Fake ID (en backpack o equipada), NO comprar otra.
+    -- Simplemente seguimos con la que ya tenemos.
+    local existingID = LocalPlayer.Backpack:FindFirstChild("Fake ID") or (c and c:FindFirstChild("Fake ID"))
+
+    if existingID then
+        print("🪪 Ya tienes una Fake ID, usando la existente (no se comprará otra)...")
+    else
+        print("🪪 Comprando Fake ID...")
+        Teleport(CFrame.new(216.20, 3.37, -332.39))
+        task.wait(1.5)
+
+        local idSellerNPC = workspace.Folders.NPCs:FindFirstChild("FakeIDSeller")
+        local idPrompt = idSellerNPC and idSellerNPC.UpperTorso and idSellerNPC.UpperTorso.Attachment:FindFirstChildOfClass("ProximityPrompt")
+
+        local idCounter = 0
+        repeat
+            if not MultiFarmRunning then return false end
+            if idSellerNPC then pointCamAt(idSellerNPC.UpperTorso) end
+            safeFirePrompt(idPrompt)
+            task.wait(0.5)
+            idCounter += 1
+            if idCounter > 40 then print("❌ Timeout comprando Fake ID"); return false end
+        until LocalPlayer.Backpack:FindFirstChild("Fake ID")
+        print("✅ Fake ID comprado!")
+        task.wait(1.0)
+    end
+
+    -- PASO 2: Equipar y ir al banco
+    c = LocalPlayer.Character
+    hum = c and c:FindFirstChildOfClass("Humanoid")
+    local idTool = LocalPlayer.Backpack:FindFirstChild("Fake ID")
+    if idTool and hum then hum:EquipTool(idTool); task.wait(0.8) end
+
+    print("🏦 Aplicando al banco...")
+
+    -- ✅ Usamos el helper con reposicionamiento automático en vez del loop viejo
+    local pressed = TryApplyAtBank(25, 6)
+    if not pressed then
+        if hum then hum:UnequipTools() end
+        return false
+    end
+
+    -- ✅ Lanzamos la verificación del resultado EN BACKGROUND.
+    -- No bloqueamos aquí: devolvemos true y dejamos que el loop principal
+    -- siga revisando bankCheckResult mientras farmea marshmallow.
+    StartBackgroundBankCheck(15)
+
+    task.wait(0.5)
+    return true
+end
+
+-- ⚠️ EL RESTO DEL CÓDIGO (DoMallowCycle, Start_MultiFarm, Stop_MultiFarm) 
+-- SE MANTIENE IGUAL, salvo el manejo del resultado del banco en background
+
+local function DoMallowCycle()
+    print("🔄 Iniciando ciclo de Marshmallow...")
+    local c = LocalPlayer.Character
+    local hum = c and c:FindFirstChildOfClass("Humanoid")
+
+    local hasWater    = GetNumberOfItemsInBackpack("Water") >= 1
+    local hasSugar    = GetNumberOfItemsInBackpack("Sugar Block Bag") >= 1
+    local hasGelatin  = GetNumberOfItemsInBackpack("Gelatin") >= 1
+    local hasEmptyBag = GetNumberOfItemsInBackpack("Empty Bag") >= 1
+
+    if not hasWater or not hasSugar or not hasGelatin or not hasEmptyBag then
+        print("🛒 Comprando ingredientes...")
+        Teleport(CFrame.new(510, 4, 602))
+        task.wait(0.5)
+        if not hasWater    then ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Water");          task.wait(0.5) end
+        if not hasSugar    then ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Sugar Block Bag"); task.wait(0.5) end
+        if not hasGelatin  then ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Gelatin");         task.wait(0.5) end
+        if not hasEmptyBag then ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase"):FireServer("Empty Bag");       task.wait(0.5) end
+        task.wait(1)
+    end
+
+    local House = Get_House()
+    if not House then BuyApartment(); task.wait(1); House = Get_House() end
+
+    local Personal_Apartment = GetPersonalApartment()
+    if Personal_Apartment and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(0, 90, 0) and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(0, -90, 0) and Personal_Apartment.Door.Interact.Rotation ~= Vector3.new(180, 0, 180) then
+        Personal_Apartment.Door.Interact.Attachment.ProximityPrompt.HoldDuration = 0
+        Personal_Apartment.Door.Interact.Attachment.ProximityPrompt.RequiresLineOfSight = false
+        Teleport(Personal_Apartment.Door.Interact.CFrame)
+        task.wait(0.5)
+        fireproximityprompt(Personal_Apartment.Door.Interact.Attachment.ProximityPrompt)
+        task.wait(1)
+    end
+
+    local Interior = House:FindFirstChild("Interior") or House
+    for _, Value in Interior:GetChildren() do
+        if Value.Name == "Floor" or Value.Name == "Cooking Pot" or Value.Name == "Stove" then
+            Value.CanCollide = false
+        end
+    end
+
+    local Pot = Interior:FindFirstChild("Cooking Pot", true)
+    if not Pot then print("❌ No se encontró la olla!"); return false end
+
+    local function tween_and_prompt(Prompt)
+        if not Prompt then return end
+        Prompt.HoldDuration = 0
+        Prompt.MaxActivationDistance = 50
+        Prompt.RequiresLineOfSight = false
+        LookDown(8, false)
+        fireproximityprompt(Prompt)
+        if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+    end
+
+    local inSafeZone = false
+
+    -- ✅ NUEVO: además de chequear si la card está lista para recoger,
+    -- revisamos si llegó un resultado del banco desde el background thread.
+    local function CheckCardAndSafeZone()
+        -- Revisar resultado del banco en background (no bloqueante)
+        if bankCheckResult ~= nil then
+            local result = bankCheckResult
+            bankCheckResult = nil -- consumir el resultado
+
+            if result == "REJECTED" then
+                print("❌ Aplicación rechazada (detectado en background)! Reintentando ciclo...")
+                local cc = LocalPlayer.Character
+                local hh = cc and cc:FindFirstChildOfClass("Humanoid")
+                if hh then hh:UnequipTools() end
+                cardRetryNeeded = true
+
+            elseif result == "APPROVED" then
+                print("✅ Aplicación aceptada (detectado en background)!")
+                waitingForCard = true
+                cardCooldownStart = tick()
+                print("⏳ Card en cooldown por 46 segundos...")
+
+            elseif result == "NO_CARD" then
+                print("⚠️ No estás en la lista de espera (detectado en background)")
+                local cc = LocalPlayer.Character
+                if LocalPlayer.Backpack:FindFirstChild("Card") or (cc and cc:FindFirstChild("Card")) then
+                    print("✅ Ya tenemos card en inventario")
+                else
+                    cardRetryNeeded = true
+                end
+
+            elseif result == "TIMEOUT" then
+                print("⏰ Timeout esperando respuesta del banco (background), marcando para reintentar...")
+                cardRetryNeeded = true
+            end
+        end
+
+        if waitingForCard and not IsCardInCooldown() then
+            print("⏰ Card lista! Recogiendo y swippeando...")
+            inSafeZone = false
+            local result = CollectCard()
+            if result == "RESTART" then
+                cardRetryNeeded = true
+            elseif result == true then
+                if MultiFarmRunning then
+                    local ok = DoCardCycle()
+                    if not ok then cardRetryNeeded = true end
+                end
+            end
+            Teleport(Pot.CFrame * CFrame.new(0, 0, 3))
+            task.wait(0.5)
+            return
+        end
+
+        if IsCardInCooldown() and IsMallowInCooldown() then
+            if not inSafeZone then
+                print("🏠 Ambos en cooldown! Yendo a Safe Zone...")
+                Teleport(SAFEZONE_POSITION)
+                inSafeZone = true
+            end
+            return
+        end
+
+        inSafeZone = false
+    end
+
+    -- WATER
+    if GetNumberOfItemsInBackpack("Water") >= 1 then
+        print("💧 Poniendo Water...")
+        Teleport(Pot.CFrame * CFrame.new(0, 0, 3)); task.wait(0.5)
+        safeEquip("Water")
+        tween_and_prompt(Pot.Attachment.ProximityPrompt)
+        task.wait(1)
+        local waitCount = 0
+        repeat
+            CheckCardAndSafeZone()
+            task.wait(1); waitCount += 1
+        until Task_Text == "Pour gelatin into the pot." or Task_Text == "Dump the sugar block from the bag into the pot." or waitCount > 30 or not MultiFarmRunning
+        print("✅ Agua lista!")
+    end
+
+    -- SUGAR
+    if GetNumberOfItemsInBackpack("Sugar Block Bag") >= 1 then
+        print("🍬 Poniendo Sugar Block Bag...")
+        Teleport(Pot.CFrame * CFrame.new(0, 0, 3)); task.wait(0.5)
+        safeEquip("Sugar Block Bag")
+        tween_and_prompt(Pot.Attachment.ProximityPrompt)
+        task.wait(1)
+        local waitCount = 0
+        repeat
+            CheckCardAndSafeZone()
+            task.wait(1); waitCount += 1
+        until Task_Text == "Pour gelatin into the pot." or waitCount > 35 or not MultiFarmRunning
+        if hum then hum:UnequipTools() end
+        print("✅ Sugar lista!")
+    end
+
+    -- GELATIN
+    if GetNumberOfItemsInBackpack("Gelatin") >= 1 then
+        print("🧪 Poniendo Gelatin...")
+        local timerLabel = Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel")
+        if timerLabel then
+            repeat
+                CheckCardAndSafeZone()
+                task.wait(0.5)
+            until timerLabel.Text == "0" or not MultiFarmRunning
+        end
+        Teleport(Pot.CFrame * CFrame.new(0, 0, 3)); task.wait(0.5)
+        safeEquip("Gelatin")
+        task.wait(0.5)
+        tween_and_prompt(Pot.Attachment.ProximityPrompt)
+        task.wait(1)
+        local waitCount = 0
+        repeat
+            CheckCardAndSafeZone()
+            task.wait(1); waitCount += 1
+        until Task_Text == "Let the solution cook for 45 seconds." or waitCount > 40 or not MultiFarmRunning
+        if hum then hum:UnequipTools() end
+        print("✅ Gelatin puesta!")
+    end
+
+    -- COLLECT
+    if GetNumberOfItemsInBackpack("Empty Bag") >= 1 then
+        print("🛍️ Esperando cocción y recogiendo...")
+        local timerLabel = Pot:FindFirstChild("Timer") and Pot.Timer:FindFirstChild("TextLabel")
+        if timerLabel then
+            repeat
+                CheckCardAndSafeZone()
+                task.wait(1)
+            until timerLabel.Text == "0" or not MultiFarmRunning
+        end
+        Teleport(Pot.CFrame * CFrame.new(0, 0, 3)); task.wait(0.5)
+        safeEquip("Empty Bag")
+        tween_and_prompt(Pot.Attachment.ProximityPrompt)
+        task.wait(1.5)
+        local waitCount = 0
+        repeat
+            task.wait(0.5); waitCount += 1
+        until not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Empty Bag")) or waitCount > 20 or not MultiFarmRunning
+        if hum then hum:UnequipTools() end
+        print("✅ Marshmallow recolectado!")
+    end
+
+    -- VENDER
+    print("💰 Vendiendo Marshmallow...")
+    Teleport(CFrame.new(511, 4, 598))
+    task.wait(0.5)
+    local Lamont = Workspace.Folders.NPCs:FindFirstChild("Lamont Bell")
+    if Lamont then
+        Lamont.UpperTorso.ProximityPrompt.HoldDuration = 0
+        Lamont.UpperTorso.ProximityPrompt.RequiresLineOfSight = false
+        for _, Value in LocalPlayer.Backpack:GetChildren() do
+            if Value:IsA("Tool") then
+                local mItem = nil
+                for _, name in ipairs(MarshmallowItems) do
+                    if Value.Name == name then mItem = name; break end
+                end
+                if mItem then
+                    LocalPlayer.Character.Humanoid:EquipTool(Value)
+                    task.wait(0.2)
+                    pointCamAt(Lamont.UpperTorso)
+                    fireproximityprompt(Lamont.UpperTorso.ProximityPrompt)
+                    Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"] += MarshmallowSellPrice[mItem]
+                    Config["AutoFarm"]["Marshmallow"]["Status"]["Total_Sold"] += 1
+                    Config.AutoFarm.Marshmallow.Status.Sold_Type[mItem] = (Config.AutoFarm.Marshmallow.Status.Sold_Type[mItem] or 0) + 1
+                    task.wait(0.3)
+                end
+            end
+        end
+    end
+    print("✅ Marshmallow vendido!")
+    return true
+end
+
+function Start_MultiFarm()
+    if MultiFarmRunning then return end
+    MultiFarmRunning = true
+    waitingForCard = false
+    cardRetryNeeded = false
+    bankCheckResult = nil
+    bankCheckRunning = false
+
+    MultiFarmThread = task.spawn(function()
+        print("🚀 Iniciando MultiFarm (Marshmallow + Card)...")
+
+        local c = LocalPlayer.Character
+        local hum = c and c:FindFirstChildOfClass("Humanoid")
+        local oldCard = LocalPlayer.Backpack:FindFirstChild("Card") or (c and c:FindFirstChild("Card"))
+        if oldCard then
+            print("🗑️ Eliminando card vieja del inventario...")
+            if hum then hum:UnequipTools() end
+            task.wait(0.3)
+            oldCard:Destroy()
+            task.wait(0.5)
+        end
+
+        -- ✅ Ya NO eliminamos la Fake ID vieja: si existe, DoCardCycle la reutiliza.
+
+        local cardSuccess = DoCardCycle()
+        if not cardSuccess then
+            print("❌ Falló ciclo inicial de Card, reintentando en el loop...")
+            cardRetryNeeded = true
+        end
+
+        while MultiFarmRunning do
+            -- ✅ Revisar resultado del banco en background también aquí,
+            -- por si el bot está en el loop principal y no dentro de DoMallowCycle.
+            if bankCheckResult ~= nil then
+                local result = bankCheckResult
+                bankCheckResult = nil
+
+                if result == "REJECTED" then
+                    print("❌ Aplicación rechazada (background, loop principal)!")
+                    local cc = LocalPlayer.Character
+                    local hh = cc and cc:FindFirstChildOfClass("Humanoid")
+                    if hh then hh:UnequipTools() end
+                    cardRetryNeeded = true
+
+                elseif result == "APPROVED" then
+                    print("✅ Aplicación aceptada (background, loop principal)!")
+                    waitingForCard = true
+                    cardCooldownStart = tick()
+
+                elseif result == "NO_CARD" then
+                    local cc = LocalPlayer.Character
+                    if not (LocalPlayer.Backpack:FindFirstChild("Card") or (cc and cc:FindFirstChild("Card"))) then
+                        cardRetryNeeded = true
+                    end
+
+                elseif result == "TIMEOUT" then
+                    cardRetryNeeded = true
+                end
+            end
+
+            local cardCooldown = IsCardInCooldown()
+            local mallowCooldown = IsMallowInCooldown()
+
+            if cardRetryNeeded then
+                print("🔄 Reintentando ciclo de Card fallido...")
+                task.wait(2)
+                local ok = DoCardCycle()
+                if ok then
+                    cardRetryNeeded = false
+                else
+                    task.wait(3)
+                end
+                continue
+            end
+
+            if cardCooldown and mallowCooldown then
+                Teleport(SAFEZONE_POSITION)
+                task.wait(2)
+                continue
+            end
+
+            if waitingForCard and not cardCooldown then
+                print("⏰ Card lista! Recogiendo y swippeando...")
+                local swipeResult = CollectCard()
+
+                if swipeResult == "RESTART" then
+                    print("🔄 Reiniciando ciclo de card desde cero...")
+                    waitingForCard = false
+                    cardRetryNeeded = true
+                    task.wait(2)
+
+                elseif swipeResult == true then
+                    print("🔄 Card swippeada! Iniciando nuevo ciclo...")
+                    task.wait(1)
+                    if MultiFarmRunning then
+                        local ok = DoCardCycle()
+                        if not ok then cardRetryNeeded = true end
+                    end
+
+                else
+                    print("❌ Falló CollectCard, marcando para reintentar...")
+                    waitingForCard = false
+                    cardRetryNeeded = true
+                    task.wait(2)
+                end
+                continue
+            end
+
+            if not mallowCooldown then
+                print("🍬 Haciendo Marshmallow...")
+                local mallowSuccess = DoMallowCycle()
+                if not mallowSuccess then
+                    print("⚠️ Falló ciclo de Marshmallow, reintentando...")
+                    task.wait(2)
+                end
+                continue
+            end
+
+            task.wait(0.5)
+        end
+
+        print("🛑 MultiFarm detenido")
+        MultiFarmRunning = false
+        waitingForCard = false
+        cardRetryNeeded = false
+    end)
+end
+
+function Stop_MultiFarm()
+    if MultiFarmThread then
+        pcall(task.cancel, MultiFarmThread)
+        MultiFarmThread = nil
+    end
+    if bankCheckThread then
+        pcall(task.cancel, bankCheckThread)
+        bankCheckThread = nil
+    end
+    MultiFarmRunning = false
+    waitingForCard = false
+    cardRetryNeeded = false
+    bankCheckResult = nil
+    bankCheckRunning = false
+    if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+    SafeModeCleanup()
+    UnfreezeBike()  -- ✅ NUEVO: suelta la bici al detener el farm
+    print("🛑 MultiFarm detenido")
+end
+
+        --// =============================================
+        --//             CHIP FARM
+        --// =============================================
+        local function startChipCamLock()
+            if camConnection then camConnection:Disconnect() end
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+            camConnection = RunService.RenderStepped:Connect(function()
+                if chipFarmActive and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local root = LocalPlayer.Character.HumanoidRootPart
+                    local camOffset = Vector3.new(0, 5, -8)
+                    local camPos = root.Position + camOffset
+                    workspace.CurrentCamera.CFrame = CFrame.lookAt(camPos, root.Position)
+                end
+            end)
+        end
+
+        local function stopChipCamLock()
+            if camConnection then camConnection:Disconnect() end
+            camConnection = nil
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        end
+
+        local function FirePromptSafe(prompt, maxAttempts, targetPart)
+            maxAttempts = maxAttempts or 5
+            if not prompt then return false end
+            if targetPart then
+                local character = LocalPlayer.Character
+                if character then
+                    local root = character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local dist = (root.Position - targetPart.Position).Magnitude
+                        if dist > 15 then
+                            Teleport(CFrame.new(targetPart.Position + Vector3.new(0, 0, 3)))
+                            task.wait(0.5)
+                        end
+                    end
+                end
+            end
+            pcall(function()
+                prompt.Enabled = true
+                prompt.HoldDuration = 0
+                prompt.RequiresLineOfSight = false
+                prompt.MaxActivationDistance = 50
+            end)
+            task.wait(0.5)
+            for i = 1, maxAttempts do
+                local success = pcall(function() fireproximityprompt(prompt) end)
+                if success then return true end
+                task.wait(0.3)
+            end
+            return false
+        end
+
+        function startChipFarm()
+            startChipCamLock()
+            task.spawn(function()
+                local storeEvent = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("StorePurchase")
+                local HomelessStorage = ReplicatedStorage:FindFirstChild("Workspace"):FindFirstChild("Homeless")
+                local HomelessLive = workspace.Folders.HomelessPeople
+                local wordNumbers  = {"One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen"}
+
+                local function getSittingNPCs(folder)
+                    local sitting = {}
+                    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or not folder then return sitting end
+                    for _, npc in ipairs(folder:GetChildren()) do
+                        if table.find(wordNumbers, npc.Name) and npc:GetAttribute("AnimationState") == "Sitting" then table.insert(sitting, npc) end
+                    end
+                    return sitting
+                end
+
+                local function ChipCycle()
+                    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChildOfClass("Humanoid") or LocalPlayer.Character.Humanoid.Health <= 0 then 
+                        waitForAlive() 
+                        return false
+                    end
+                    
+                    local targets = getSittingNPCs(HomelessStorage)
+                    if #targets == 0 then
+                        local ws = 0
+                        repeat 
+                            task.wait(1)
+                            targets = getSittingNPCs(HomelessStorage)
+                            ws += 1
+                            if ws > 30 then break end
+                        until #targets > 0 or not chipFarmActive
+                    end
+                    if not chipFarmActive then return false end
+                    task.wait(2)
+
+                    -- PASO 1: Clipboard + comprar
+                    if Teleport(CFrame.new(-771, 4, -198)) == "Stopped" then return false end
+                    task.wait(1.0)
+                    
+                    local lab = workspace.Map.Locations["The Laboratory"]
+                    local clipboardPrompt = nil
+                    if lab then
+                        clipboardPrompt = lab:FindFirstChild("Prompts") and lab.Prompts:FindFirstChild("Clipboard") and lab.Prompts.Clipboard:FindFirstChild("ProximityPrompt")
+                    end
+                    if clipboardPrompt then
+                        FirePromptSafe(clipboardPrompt, 3)
+                    else
+                        local VIM = game:GetService("VirtualInputManager")
+                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                    end
+                    task.wait(0.5)
+                    storeEvent:FireServer("Potato"); task.wait(0.5)
+                    storeEvent:FireServer("Flour"); task.wait(0.5)
+
+                    -- PASO 2: Procesar chips
+                    if Teleport(CFrame.new(-479, 4, -436)) == "Stopped" then return false end
+                    task.wait(0.5)
+                    local pressPrompt = lab and lab:FindFirstChild("Prompts") and lab.Prompts:FindFirstChild("Press") and lab.Prompts.Press:FindFirstChild("ProximityPrompt")
+                    if pressPrompt then
+                        FirePromptSafe(pressPrompt, 3)
+                    else
+                        local VIM = game:GetService("VirtualInputManager")
+                        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); task.wait(0.1)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                    end
+                    task.wait(1)
+
+                    if Teleport(CFrame.new(-463, 4, -469)) == "Stopped" then return false end
+                    safeEquip("Potato")
+                    task.wait(0.5)
+                    local cutterPrompt = workspace.Map.Locations["The Laboratory"]["Cutting Boards"]["Potato Cutter"].Model.Union.Attachment.ProximityPrompt
+                    if cutterPrompt then FirePromptSafe(cutterPrompt, 3) end
+                    task.wait(3)
+
+                    if Teleport(CFrame.new(-462, 4, -475)) == "Stopped" then return false end
+                    task.wait(0.5)
+                    local bagPrompt = workspace.Map.Locations["The Laboratory"].Prompts["Plastic Bag"].Attachment.ProximityPrompt
+                    if bagPrompt then FirePromptSafe(bagPrompt, 3) end
+                    task.wait(3)
+
+                    if Teleport(CFrame.new(-487, 4, -536)) == "Stopped" then return false end
+                    safeEquip("Flour")
+                    task.wait(0.5)
+                    local bowlPrompt = workspace.Map.Locations["The Laboratory"].Bowls:GetChildren()[2].ProximityPrompt
+                    if bowlPrompt then FirePromptSafe(bowlPrompt, 3) end
+                    task.wait(5.7)
+
+
+                    local pots = workspace.Map.Locations["The Laboratory"].Pots:GetChildren()
+                    local selectedPot = pots[6]
+                    if not selectedPot then return false end
+
+                    local potPos = selectedPot:GetPivot().Position
+                    Teleport(CFrame.new(potPos + Vector3.new(0, 0, 3)))
+                    task.wait(1.0)
+
+                    local potPrompt = selectedPot:FindFirstChild("ProximityPrompt")
+                    if potPrompt then
+                        pcall(function()
+                            potPrompt.Enabled = true
+                            potPrompt.HoldDuration = 0
+                            potPrompt.RequiresLineOfSight = false
+                            potPrompt.MaxActivationDistance = 50
+                        end)
+
+                        for i = 1, 5 do
+                            pcall(function() fireproximityprompt(potPrompt) end)
+                            task.wait(0.5)
+                        end
+
+                        local timerStarted = false
+                        local t = 0
+                        local maxWait = 65
+                        while chipFarmActive and t < maxWait do
+                            task.wait(1); t = t + 1
+                            local timer = selectedPot:FindFirstChild("Timer")
+                            if timer and timer:FindFirstChild("TextLabel") then
+                                local currentTime = timer.TextLabel.Text
+                                if currentTime ~= "0" and not timerStarted then
+                                    timerStarted = true
+                                end
+                                if currentTime == "0" and timerStarted then break end
+                                if currentTime == "0" and t > 10 and not timerStarted then
+                                    pcall(function() fireproximityprompt(potPrompt) end)
+                                    timerStarted = true
+                                end
+                            end
+                        end
+
+                        task.wait(1.0)
+                        if chipFarmActive then 
+                            local VIM = game:GetService("VirtualInputManager")
+                            VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); task.wait(0.1)
+                            VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                            task.wait(1)
+                        end
+                    end
+
+                    -- PASO 4: Poor Guy
+                    if Teleport(CFrame.new(-33, 4, -25)) == "Stopped" then return false end
+                    task.wait(1.0)
+                    local poorGuy = workspace.Folders.NPCs:FindFirstChild("Poor Guy")
+                    if poorGuy then 
+                        local prompt = poorGuy.UpperTorso:FindFirstChildOfClass("ProximityPrompt")
+                        if prompt then
+                            FirePromptSafe(prompt, 3)
+                            task.wait(1.5)
+                        end
+                    end
+
+                    -- PASO 5: Entregar Hot Chips
+                    local hotChipsCount = getItemCount("Hot Chips")
+                    if hotChipsCount > 0 then
+                        local allTargets = getSittingNPCs(HomelessStorage)
+                        for _, v in ipairs(getSittingNPCs(HomelessLive)) do table.insert(allTargets, v) end
+                        for _, npc in ipairs(allTargets) do
+                            if hotChipsCount <= 0 then break end
+                            if not npc or not npc.Parent or npc:GetAttribute("AnimationState") ~= "Sitting" then continue end
+                            Teleport(npc.HumanoidRootPart.CFrame)
+                            safeEquip("Hot Chips")
+                            task.wait(0.3)
+                            local prompt = npc.UpperTorso:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then FirePromptSafe(prompt, 3) end
+                            task.wait(1.5)
+                            Config["AutoFarm"]["Chips"]["Status"]["Earned"] += 300
+                            Config["AutoFarm"]["Chips"]["Status"]["Delivered"] += 1
+                            hotChipsCount = hotChipsCount - 1
+                        end
+                    end
+
+                    return true
+                end
+
+                while chipFarmActive do
+                    local success = ChipCycle()
+                    if not success then task.wait(3) end
+                    if chipFarmActive then task.wait(2) end
+                end
+
+                stopChipCamLock()
+            end)
+        end
+
+        --// =============================================
+        --//             MANUAL TELEPORT
+        --// =============================================
+        local function ExecuteManualTeleport(Destination)
+            local Root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local Hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if not Root or not Hum or Hum.Health <= 0 then return end
+
+            local selectedMode = Config["TeleportTab"] and Config["TeleportTab"]["Mode"] or "Safe Mode"
+
+            Root.Velocity = Vector3.zero
+            Root.RotVelocity = Vector3.zero
+
+            if selectedMode == "Bike" then
+                local Bike = Find_Bike()
+                if Bike == nil then
+                    SpawnBike()
+                    Bike = Find_Bike()
+                    if Bike == nil then return end
+                end
+                
+                if Hum and (not Hum.SeatPart or Hum.SeatPart.Name ~= "DriveSeat") then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = Bike.DriveSeat.CFrame
+                    task.wait(0.2)
+                    if Bike.DriveSeat:FindFirstChild("Attachment") and Bike.DriveSeat.Attachment:FindFirstChild("ProximityPrompt") then
+                        fireproximityprompt(Bike.DriveSeat.Attachment.ProximityPrompt)
+                    end
+                    task.wait(0.4)
+                end
+
+                if Hum.SeatPart and Hum.SeatPart.Name == "DriveSeat" then
+                    local targetPos = Destination.Position + Vector3.new(0, 1.5, 0)
+                    for _ = 1, 5 do 
+                        Bike:SetPrimaryPartCFrame(CFrame.new(targetPos, targetPos + Destination.LookVector)) 
+                        task.wait(0.02)
+                    end
+                    for _, Value in Bike:GetDescendants() do
+                        pcall(function() Value.Velocity = Vector3.new(0, 0, 0) end)
+                        pcall(function() Value.RotVelocity = Vector3.new(0, 0, 0) end)
+                    end
+                else
+                    Root.CFrame = Destination
+                end
+            else
+                if Hum.SeatPart and Hum.SeatPart.Name == "DriveSeat" then return end
+                
+                _SM_Root = Root
+
+                _SM_MeshPart = Instance.new("Part")
+                _SM_MeshPart.Name = "AntiFall_Platform1"
+                _SM_MeshPart.Size = Vector3.new(2048, 2, 2048)
+                _SM_MeshPart.CFrame = CFrame.new(0, -6.5, 0)
+                _SM_MeshPart.Transparency = 0.3
+                _SM_MeshPart.Anchored = true
+                _SM_MeshPart.CanCollide = true
+                _SM_MeshPart.Parent = Workspace
+
+                _SM_MeshPart2 = Instance.new("Part")
+                _SM_MeshPart2.Name = "AntiFall_Platform2"
+                _SM_MeshPart2.Size = Vector3.new(2048, 2, 2048)
+                _SM_MeshPart2.CFrame = CFrame.new(935, -6.5, 65)
+                _SM_MeshPart2.Transparency = 0.3
+                _SM_MeshPart2.Anchored = true
+                _SM_MeshPart2.CanCollide = true
+                _SM_MeshPart2.Parent = Workspace
+
+                _SM_HeartbeatConnection = RunService.Stepped:Connect(function() if Root and Root.Parent then Noclip() end end)
+                SafeModeRunning = true
+
+                local UndergroundPos = Vector3.new(Root.Position.X, -1, Root.Position.Z)
+                local Tween_Root = TweenService:Create(Root, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), { 
+                    CFrame = CFrame.new(UndergroundPos) * CFrame.Angles(0, math.atan2(Root.CFrame.LookVector.X, Root.CFrame.LookVector.Z), 0) 
+                })
+                Tween_Root:Play()
+                Tween_Root.Completed:Wait()
+                task.wait(0.2)
+
+                local GoalPos = Vector3.new(Destination.X, -2.1378674507141113, Destination.Z)
+                LookDown(15, false)
+
+                local ManualTeleportActive = true
+
+                while ManualTeleportActive and Root and Root.Parent and (Vector3.new(Root.Position.X, 0, Root.Position.Z) - Vector3.new(GoalPos.X, 0, GoalPos.Z)).Magnitude > (1.7 + math.random() * 0.1) do
+                    local Direction = (GoalPos - Root.Position).Unit
+                    local LookTarget = Vector3.new(GoalPos.X, -2.1378674507141113, GoalPos.Z)
+                    local NextPosition = Root.Position + Direction
+                    Noclip()
+                    Root.CFrame = CFrame.new(Vector3.new(NextPosition.X, -2.1378674507141113, NextPosition.Z), LookTarget)
+                    task.wait(0.05)
+                end
+
+                if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+                Root.CFrame = Destination
+                task.wait(0.1)
+                SafeModeCleanup()
+            end
+        end
+
+        --// =============================================
+        --//             CHARACTER EVENTS
+        --// =============================================
+        local Humanoid = LocalPlayer.Character:WaitForChild("Humanoid")
+        Humanoid.Died:Connect(function()
+            Died_Counter += 1
+            if Config["AutoFarm"]["Marshmallow"]["Enabled"] then Stop_MarshmallowFarm() end
+        end)
+
+        LocalPlayer.CharacterAdded:Connect(function(Character)
+            Humanoid = Character:WaitForChild("Humanoid")
+            if Config["AutoFarm"]["Marshmallow"]["Enabled"] then
+                Stop_MarshmallowFarm(); task.wait(2); SpawnBike(); task.wait(3); Start_MarshmallowFarm()
+            end
+            Humanoid.Died:Connect(function()
+                Died_Counter += 1
+                if Config["AutoFarm"]["Marshmallow"]["Enabled"] then Stop_MarshmallowFarm() end
+            end)
+        end)
+
+        --// Anti-AFK Idle Handler
+        LocalPlayer.Idled:Connect(function()
+            if not IS_AFK then
+                IS_AFK = true
+                VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                task.wait(0.5)
+                VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            end
+        end)
+        UserInputService.InputBegan:Connect(function() if IS_AFK then IS_AFK = false end end)
+
+        --// =============================================
+        --//         FLUENT WINDOW TABS & UI
+        --// =============================================
+
+        local Tabs = {
+             MultiFarm = Window:AddTab({ Title = "Multi Farm", Icon = "layers" }),
+            Marshmallow = Window:AddTab({ Title = "Marshmallow", Icon = "cookie" }),
+            Card = Window:AddTab({ Title = "Card", Icon = "credit-card" }),
+            Chips = Window:AddTab({ Title = "Chips", Icon = "flame" }),
+            Teleports = Window:AddTab({ Title = "Teleports", Icon = "map-pin" }),
+            Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+        }
+
+        --// =============================================
+        --//             TAB: MARSHMALLOW
+        --// =============================================
+        Tabs.Marshmallow:AddButton({
+            Title = "Buy Apartment (-$250)",
+            Callback = function() BuyApartment() end
+        })
+
+        Tabs.Marshmallow:AddToggle("MallowToggle", {
+            Title = "Enable Marshmallow Farm (1 at a time)", 
+            Default = false,
+            Callback = function(Value)
+                Config["AutoFarm"]["Marshmallow"]["Enabled"] = Value
+                if Value then Start_MarshmallowFarm() else Stop_MarshmallowFarm() end
+            end
+        })
+
+        local MallowStats = Tabs.Marshmallow:AddParagraph({ 
+            Title = "Live Statistics", 
+            Content = "Status: Idle" 
+        })
+
+        task.spawn(function()
+            while task.wait(1) do
+                if Config["AutoFarm"]["Marshmallow"]["Enabled"] then
+                    local statsText = string.format(
+                        "Status: Running 🟢\nSituation: %s\nSmall Bags: %d | Medium: %d | Large: %d\nTotal Sold: %d\nProfit Status: $%d\nDeaths: %d",
+                        tostring(MarshMallowStep),
+                        Config["AutoFarm"]["Marshmallow"]["Status"]["Sold_Type"]["Small Marshmallow Bag"],
+                        Config["AutoFarm"]["Marshmallow"]["Status"]["Sold_Type"]["Medium Marshmallow Bag"],
+                        Config["AutoFarm"]["Marshmallow"]["Status"]["Large Marshmallow Bag"],
+                        Config["AutoFarm"]["Marshmallow"]["Status"]["Total_Sold"],
+                        Config["AutoFarm"]["Marshmallow"]["Status"]["Earned"],
+                        Died_Counter
+                    )
+                    MallowStats:SetDesc(statsText)
+                else
+                    MallowStats:SetDesc("Status: Stopped 🔴")
+                end
+            end
+        end)
+
+        --// =============================================
+        --//             TAB: CARD
+        --// =============================================
+        Tabs.Card:AddToggle("CardToggle", {
+            Title = "Enable Bank Card Farm", 
+            Default = false,
+            Callback = function(Value)
+                getgenv().CardFarm = Value
+                Config["AutoFarm"]["Card"]["Enabled"] = Value
+                if Value then
+                    pcall(function()
+                        local bankParts = workspace.Map.Locations["Community Bank"]
+                        if bankParts:GetChildren()[29] then bankParts:GetChildren()[29]:Destroy() end
+                        if bankParts:GetChildren()[19] then bankParts:GetChildren()[19]:Destroy() end
+                    end)
+                    startCardFarming()
+                else
+                    CardFarmRunning = false
+                end
+            end
+        })
+
+        local CardStatsPara = Tabs.Card:AddParagraph({ Title = "Card Statistics", Content = "Swipes: 0" })
+        task.spawn(function()
+            while task.wait(1) do
+                CardStatsPara:SetDesc(string.format("Status: %s\nTotal ATM Swipes: %d", 
+                    Config["AutoFarm"]["Card"]["Enabled"] and "Running 🟢" or "Stopped 🔴", 
+                    Config["AutoFarm"]["Card"]["Status"]["Swipes"]))
+            end
+        end)
+
+        -- Toggle Multi Farm
+Tabs.MultiFarm:AddToggle("MultiFarmToggle", {
+    Title = "Enable Multi Farm (Marshmallow + Card)",
+    Description = "Optimiza el farmeo entre Marshmallow y Card",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            -- Detener farms individuales si están activos
+            if Config["AutoFarm"]["Marshmallow"]["Enabled"] then
+                Stop_MarshmallowFarm()
+                Config["AutoFarm"]["Marshmallow"]["Enabled"] = false
+            end
+            if Config["AutoFarm"]["Card"]["Enabled"] then
+                getgenv().CardFarm = false
+                CardFarmRunning = false
+                Config["AutoFarm"]["Card"]["Enabled"] = false
+            end
+            Start_MultiFarm()
+        else
+            Stop_MultiFarm()
+        end
+    end
+})
+
+local MultiFarmStats = Tabs.MultiFarm:AddParagraph({ 
+    Title = "Multi Farm Statistics", 
+    Content = "Status: Stopped 🔴" 
+})
+
+task.spawn(function()
+    while task.wait(1) do
+        if MultiFarmRunning then
+            local statusText = string.format(
+                "Status: Running 🟢\nCard Cooldown: %s\nMallow Cooldown: %s\nCard Waiting: %s",
+                IsCardInCooldown() and "⏳ Yes" or "✅ No",
+                IsMallowInCooldown() and "⏳ Yes" or "✅ No",
+                waitingForCard and "⏳ Waiting" or "✅ Ready"
+            )
+            MultiFarmStats:SetDesc(statusText)
+        else
+            MultiFarmStats:SetDesc("Status: Stopped 🔴")
+        end
+    end
+end)
+
+        --// =============================================
+        --//             TAB: CHIPS
+        --// =============================================
+        Tabs.Chips:AddToggle("ChipsToggle", {
+            Title = "Enable Hot Chips Farm", 
+            Default = false,
+            Callback = function(Value)
+                chipFarmActive = Value
+                Config["AutoFarm"]["Chips"]["Enabled"] = Value
+                if Value then
+                    startChipFarm()
+                else
+                    stopChipCamLock(); SafeModeCleanup()
+                    if LookDownConnection then LookDownConnection:Disconnect(); LookDownConnection = nil end
+                end
+            end
+        })
+
+        local ChipStatsPara = Tabs.Chips:AddParagraph({ Title = "Chips Statistics", Content = "Delivered: 0" })
+        task.spawn(function()
+            while task.wait(1) do
+                ChipStatsPara:SetDesc(string.format("Status: %s\nChips Delivered: %d\nSession Est: $%d", 
+                    Config["AutoFarm"]["Chips"]["Enabled"] and "Running 🟢" or "Stopped 🔴", 
+                    Config["AutoFarm"]["Chips"]["Status"]["Delivered"],
+                    Config["AutoFarm"]["Chips"]["Status"]["Earned"]))
+            end
+        end)
+
+        --// =============================================
+        --//             TAB: TELEPORTS
+        --// =============================================
+        local TeleportLocations = {
+            ["Mask Shop"] = CFrame.new(-204, 3, -339),
+            ["Car Dealer"] = CFrame.new(732, 4, 436),
+            ["Bank Teller"] = CFrame.new(-48.74, 6.50, -317.00),
+            ["Fake ID Seller"] = CFrame.new(216.20, 3.37, -332.39),
+        }
+
+        Config["TeleportTab"] = {
+            ["SelectedLocation"] = "Mask Shop",
+            ["Mode"] = "Safe Mode"
+        }
+
+        Tabs.Teleports:AddDropdown("ManualTP_Location", {
+            Title = "Select Destination",
+            Values = { "Mask Shop", "Car Dealer", "Bank Teller", "Fake ID Seller" },
+            CurrentValue = Config["TeleportTab"]["SelectedLocation"],
+            Callback = function(Value)
+                Config["TeleportTab"]["SelectedLocation"] = Value
+            end
+        })
+
+        Tabs.Teleports:AddDropdown("ManualTP_Mode", {
+            Title = "Teleport Movement Mode",
+            Description = "Bike requires your spawned bicycle.",
+            Values = { "Safe Mode", "Bike" },
+            CurrentValue = Config["TeleportTab"]["Mode"],
+            Callback = function(Value)
+                Config["TeleportTab"]["Mode"] = Value
+            end
+        })
+
+        Tabs.Teleports:AddButton({
+            Title = "Teleport to Location",
+            Description = "Executes teleport using the chosen method",
+            Callback = function()
+                local locName = Config["TeleportTab"]["SelectedLocation"]
+                local targetCF = TeleportLocations[locName]
+                if targetCF then
+                    ExecuteManualTeleport(targetCF)
+                    Fluent:Notify({
+                        Title = "Teleport",
+                        Content = "Successfully teleported to " .. locName,
+                        Duration = 3
+                    })
+                else
+                    Fluent:Notify({
+                        Title = "Teleport Error",
+                        Content = "Destination could not be located.",
+                        Duration = 4
+                    })
+                end
+            end
+        })
+
+        --// =============================================
+        --//             TAB: SETTINGS
+        --// =============================================
+        Tabs.Settings:AddDropdown("MovementType", {
+            Title = "Movement Mode (Global)",
+            Values = {"Safe Mode", "Teleport Mode (IN-PROGRESS)", "Bike"},
+            CurrentValue = "Safe Mode",
+            Callback = function(Value)
+                Config["AutoFarm"]["MovementType"] = Value
+                Fluent:Notify({Title = "Movement Changed", Content = "Selected: " .. Value, Duration = 3})
+            end
+        })
+
+        Tabs.Settings:AddButton({
+            Title = "Buy/Spawn Teleport Bike",
+            Description = "Spawnea la DirtBike para usar el modo de transporte rápido.",
+            Callback = function() SpawnBike() end
+        })
+
+        local AFKLabel = Tabs.Settings:AddParagraph({ Title = "Anti-AFK Status", Content = "Status: Monitoring..." })
+        task.spawn(function()
+            while task.wait(1) do
+                if IS_AFK then AFKLabel:SetDesc("Status: Running Anti-AFK Bypasser 🟢")
+                else AFKLabel:SetDesc("Status: Active and Monitoring ⚪") end
+            end
+        end)
+
+        --// =============================================
+        --//             SAVE MANAGER
+        --// =============================================
+        SaveManager:SetLibrary(Fluent)
+        InterfaceManager:SetLibrary(Fluent)
+        SaveManager:IgnoreThemeSettings()
+        SaveManager:SetIgnoreIndexes({})
+        InterfaceManager:SetFolder("SplixFarmer")
+        SaveManager:SetFolder("SplixFarmer/specific-game")
+
+        InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+        SaveManager:BuildConfigSection(Tabs.Settings)
+
+        Window:SelectTab(1)
+        Fluent:Notify({ Title = "Splix Premium", Content = "Script fully initialized with Fluent UI!", Duration = 5 })
+        SaveManager:LoadAutoloadConfig()
+    end
+end
