@@ -383,92 +383,136 @@ local currentStep = "idle"
 local stuckResetting = false
 
 -- =============================================
--- 🚗 VEHICLE SPAWNER FUNCTIONS
+-- 🛠️ PRE-DECLARACIÓN DE FUNCIONES CRÍTICAS (Evita errores Nil)
+-- =============================================
+local stopAutoFarm -- Declaración previa para que resetPlayer pueda verla
+local startAntiStuck
+local spawnVehicle
+local isPlayerInVehicle
+local startAutoFarm
+
+-- =============================================
+-- 🚗 VEHICLE UTILITY FUNCTIONS
 -- =============================================
 
-local function getClosestPodium()
+local function findMyVehicle()
+    local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+    if not vehiclesFolder then return nil end
+    for _, vehicle in ipairs(vehiclesFolder:GetChildren()) do
+        local ownerIdProp = vehicle:FindFirstChild("OwnerUserId")
+        local ownerIdValue = ownerIdProp and (ownerIdProp:IsA("ValueObject") and ownerIdProp.Value or ownerIdProp)
+        if ownerIdValue == player.UserId or vehicle:GetAttribute("OwnerUserId") == player.UserId then
+            return vehicle
+        end
+    end
+    return nil
+end
+
+local function clearForces(vehicleModel)
+    if not vehicleModel then return end
+    for _, part in ipairs(vehicleModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            for _, child in ipairs(part:GetChildren()) do
+                if child.Name == "_DragForce" or child.Name == "_DragGyro" then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+end
+
+local function activatePlayerNoClip()
     local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    
-    if not rootPart then return nil end
-    
-    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
-    local closestPodium = nil
-    local shortestDistance = math.huge
-    
-    for _, obj in ipairs(spawnersFolder:GetChildren()) do
-        local targetPart = nil
-        
-        if obj:IsA("BasePart") then
-            targetPart = obj
-        elseif obj:IsA("Model") then
-            targetPart = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
-        else
-            targetPart = obj:FindFirstChildOfClass("BasePart")
+    if not character then return end
+    pcall(function()
+        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_PLAYER) then
+            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_PLAYER)
         end
-        
-        if targetPart and targetPart.Position then
-            local distance = (rootPart.Position - targetPart.Position).Magnitude
-            
-            if distance < shortestDistance then
-                shortestDistance = distance
-                closestPodium = obj
-            end
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Default", false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Players", false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, GROUP_NOCLIP_PLAYER, false)
+    end)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            originalPlayerState[part] = { CollisionGroup = part.CollisionGroup, CanCollide = part.CanCollide }
+            part.CollisionGroup = GROUP_NOCLIP_PLAYER
+            part.CanCollide = false
         end
-    end
-    
-    return closestPodium
-end
-
-local function spawnVehicle()
-    print("🚗 AutoSpawner: Buscando el podio más cercano...")
-    
-    local podium = getClosestPodium()
-    
-    if podium then
-        print("🎯 Podio detectado: " .. podium:GetFullName())
-        
-        local args = {
-            podium,
-            VEHICLE_MODEL
-        }
-        
-        game:GetService("ReplicatedStorage")
-            :WaitForChild("__remotes")
-            :WaitForChild("VehicleSpawnerService")
-            :WaitForChild("SpawnVehicleFromSpawner")
-            :InvokeServer(unpack(args))
-            
-        print("✅ AutoSpawner: Evento de spawn enviado.")
-        return true
-    else
-        warn("❌ No se pudo encontrar ningún podio cerca.")
-        return false
     end
 end
 
-local function isPlayerInVehicle()
-    if not player.Character then return false end
-    local humanoid = player.Character:FindFirstChild("Humanoid")
-    if not humanoid then return false end
-    
-    -- Verificar si está sentado en algún asiento
-    if humanoid.SeatPart then
-        local seatPart = humanoid.SeatPart
-        local vehicleModel = seatPart:FindFirstAncestorOfClass("Model")
-        if vehicleModel then
-            local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-            if vehiclesFolder and vehicleModel:IsDescendantOf(vehiclesFolder) then
-                return true
+local function deactivatePlayerNoClip()
+    local character = player.Character
+    if not character then return end
+    for part, data in pairs(originalPlayerState) do
+        if part and part.Parent then
+            part.CollisionGroup = data.CollisionGroup
+            part.CanCollide = data.CanCollide
+        end
+    end
+    originalPlayerState = {}
+end
+
+local function activateTotalNoClip(vehicleModel)
+    if not vehicleModel then return end
+    pcall(function()
+        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_CAR) then
+            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_CAR)
+        end
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, GROUP_NOCLIP_CAR, false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Default", false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Players", false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Vehicle", false)
+        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "World", false)
+    end)
+    for _, part in ipairs(vehicleModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if part:GetAttribute("OriginalCollisionGroup") == nil then
+                part:SetAttribute("OriginalCollisionGroup", part.CollisionGroup)
+            end
+            part.CollisionGroup = GROUP_NOCLIP_CAR
+            part.CanCollide = false
+            if part:IsA("MeshPart") then
+                part.Transparency = 0.3
+                part.Material = Enum.Material.SmoothPlastic
             end
         end
     end
-    
-    return false
+end
+
+local function deactivateTotalNoClip(vehicleModel)
+    if not vehicleModel then return end
+    for _, part in ipairs(vehicleModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local originalGroup = part:GetAttribute("OriginalCollisionGroup")
+            part.CollisionGroup = originalGroup or "Default"
+            part.CanCollide = true
+            if part:IsA("MeshPart") then
+                part.Transparency = 0
+                part.Material = Enum.Material.Plastic
+            end
+        end
+    end
+end
+
+function stopAutoFarm()
+    AutoFarmRunning = false
+    travelActive = false
+    if activeMovementLoop then
+        activeMovementLoop:Disconnect()
+        activeMovementLoop = nil
+    end
+    local myCar = findMyVehicle()
+    if myCar then
+        clearForces(myCar)
+        deactivateTotalNoClip(myCar)
+        deactivatePlayerNoClip()
+    end
+    currentStep = "farm_detenido"
 end
 
 -- =============================================
--- 🔄 ANTI-STUCK SYSTEM
+-- 🔄 ANTI-STUCK SYSTEM (Movido arriba para su correcto uso)
 -- =============================================
 
 local function updateProgress(step)
@@ -530,7 +574,7 @@ local function resetPlayer()
     end
 end
 
-local function startAntiStuck()
+function startAntiStuck()
     if AntiStuckThread then return end
     
     AntiStuckThread = task.spawn(function()
@@ -555,20 +599,81 @@ local function startAntiStuck()
 end
 
 -- =============================================
--- 🚗 VEHICLE UTILITY FUNCTIONS
+-- 🚗 VEHICLE SPAWNER FUNCTIONS
 -- =============================================
 
-local function findMyVehicle()
-    local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-    if not vehiclesFolder then return nil end
-    for _, vehicle in ipairs(vehiclesFolder:GetChildren()) do
-        local ownerIdProp = vehicle:FindFirstChild("OwnerUserId")
-        local ownerIdValue = ownerIdProp and (ownerIdProp:IsA("ValueObject") and ownerIdProp.Value or ownerIdProp)
-        if ownerIdValue == player.UserId or vehicle:GetAttribute("OwnerUserId") == player.UserId then
-            return vehicle
+local function getClosestPodium()
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    
+    if not rootPart then return nil end
+    
+    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
+    local closestPodium = nil
+    local shortestDistance = math.huge
+    
+    for _, obj in ipairs(spawnersFolder:GetChildren()) do
+        local targetPart = nil
+        
+        if obj:IsA("BasePart") then
+            targetPart = obj
+        elseif obj:IsA("Model") then
+            targetPart = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+        else
+            targetPart = obj:FindFirstChildOfClass("BasePart")
+        end
+        
+        if targetPart and targetPart.Position then
+            local distance = (rootPart.Position - targetPart.Position).Magnitude
+            
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPodium = obj
+            end
         end
     end
-    return nil
+    
+    return closestPodium
+end
+
+function spawnVehicle()
+    print("🚗 AutoSpawner: Buscando el podio más cercano...")
+    local podium = getClosestPodium()
+    
+    if podium then
+        print("🎯 Podio detectado: " .. podium:GetFullName())
+        local args = { podium, VEHICLE_MODEL }
+        
+        game:GetService("ReplicatedStorage")
+            :WaitForChild("__remotes")
+            :WaitForChild("VehicleSpawnerService")
+            :WaitForChild("SpawnVehicleFromSpawner")
+            :InvokeServer(unpack(args))
+            
+        print("✅ AutoSpawner: Evento de spawn enviado.")
+        return true
+    else
+        warn("❌ No se pudo encontrar ningún podio cerca.")
+        return false
+    end
+end
+
+function isPlayerInVehicle()
+    if not player.Character then return false end
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not humanoid then return false end
+    
+    if humanoid.SeatPart then
+        local seatPart = humanoid.SeatPart
+        local vehicleModel = seatPart:FindFirstAncestorOfClass("Model")
+        if vehicleModel then
+            local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+            if vehiclesFolder and vehicleModel:IsDescendantOf(vehiclesFolder) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function destroyVehicleWheels(vehicleModel)
@@ -587,80 +692,8 @@ local function destroyVehicleWheels(vehicleModel)
     print("✅ Wheels removed!")
 end
 
-local function activatePlayerNoClip()
-    local character = player.Character
-    if not character then return end
-    pcall(function()
-        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_PLAYER) then
-            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_PLAYER)
-        end
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Default", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Players", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, GROUP_NOCLIP_PLAYER, false)
-    end)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            originalPlayerState[part] = { CollisionGroup = part.CollisionGroup, CanCollide = part.CanCollide }
-            part.CollisionGroup = GROUP_NOCLIP_PLAYER
-            part.CanCollide = false
-        end
-    end
-end
-
-local function deactivatePlayerNoClip()
-    local character = player.Character
-    if not character then return end
-    for part, data in pairs(originalPlayerState) do
-        if part and part.Parent then
-            part.CollisionGroup = data.CollisionGroup
-            part.CanCollide = data.CanCollide
-        end
-    end
-    originalPlayerState = {}
-end
-
-local function activateTotalNoClip(vehicleModel)
-    pcall(function()
-        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_CAR) then
-            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_CAR)
-        end
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, GROUP_NOCLIP_CAR, false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Default", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Players", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Vehicle", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "World", false)
-    end)
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if part:GetAttribute("OriginalCollisionGroup") == nil then
-                part:SetAttribute("OriginalCollisionGroup", part.CollisionGroup)
-            end
-            part.CollisionGroup = GROUP_NOCLIP_CAR
-            part.CanCollide = false
-            if part:IsA("MeshPart") then
-                part.Transparency = 0.3
-                part.Material = Enum.Material.SmoothPlastic
-            end
-        end
-    end
-end
-
-local function deactivateTotalNoClip(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local originalGroup = part:GetAttribute("OriginalCollisionGroup")
-            part.CollisionGroup = originalGroup or "Default"
-            part.CanCollide = true
-            if part:IsA("MeshPart") then
-                part.Transparency = 0
-                part.Material = Enum.Material.Plastic
-            end
-        end
-    end
-end
-
 local function freezeInertia(vehicleModel)
+    if not vehicleModel then return end
     for _, part in ipairs(vehicleModel:GetDescendants()) do
         if part:IsA("BasePart") then
             pcall(function()
@@ -675,24 +708,15 @@ end
 
 local function getAllParts(vehicleModel)
     local parts = {}
+    if not vehicleModel then return parts end
     for _, part in ipairs(vehicleModel:GetDescendants()) do
         if part:IsA("BasePart") then table.insert(parts, part) end
     end
     return parts
 end
 
-local function clearForces(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(getAllParts(vehicleModel)) do
-        for _, child in ipairs(part:GetChildren()) do
-            if child.Name == "_DragForce" or child.Name == "_DragGyro" then
-                child:Destroy()
-            end
-        end
-    end
-end
-
 local function anchorVehicle(vehicleModel)
+    if not vehicleModel then return end
     for _, part in ipairs(getAllParts(vehicleModel)) do
         part.Anchored = true
     end
@@ -726,19 +750,16 @@ end
 -- =============================================
 local function countDiamondRings()
     local backpack = player:FindFirstChild("Backpack")
-    if not backpack then return 0 end
     local count = 0
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item.Name == "Fake Diamond Ring" then
-            count += 1
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item.Name == "Fake Diamond Ring" then count += 1 end
         end
     end
     local character = player.Character
     if character then
         for _, item in ipairs(character:GetChildren()) do
-            if item.Name == "Fake Diamond Ring" then
-                count += 1
-            end
+            if item.Name == "Fake Diamond Ring" then count += 1 end
         end
     end
     return count
@@ -753,7 +774,7 @@ local function hasBriefcase()
 end
 
 -- =============================================
--- ✅ FIXED ADJUSTABLE HEIGHT TRAVEL
+-- ✅ FIXED TRAVEL FUNCTION
 -- =============================================
 local function travelToLocation(targetPos)
     local myCar = findMyVehicle()
@@ -772,7 +793,6 @@ local function travelToLocation(targetPos)
     travelActive = true
 
     local dragTargetPos = Vector3.new(targetPos.X, targetPos.Y + dragHeightOffset, targetPos.Z)
-
     local waypoints = calculatePathfindingRoute(primaryPart.Position, dragTargetPos)
     if not waypoints or #waypoints == 0 then
         waypoints = {{Position = primaryPart.Position}, {Position = dragTargetPos}}
@@ -822,11 +842,9 @@ local function travelToLocation(targetPos)
         local finalDirection = Vector3.new(dragTargetPos.X - currentPosition.X, 0, dragTargetPos.Z - currentPosition.Z)
         if finalDirection.Magnitude < 6 or (currentWaypointIndex >= #waypoints and planeDirection.Magnitude < 6) then
             travelActive = false
-            activeMovementLoop:Disconnect()
-            activeMovementLoop = nil
+            if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
 
             print("🎯 Arriving at destination!")
-
             local initialPos = primaryPart.Position
             local currentOrientation = primaryPart.CFrame.Rotation
             local horizontalSteps = 15
@@ -918,7 +936,7 @@ local function travelToLocation(targetPos)
     end
 
     task.wait(0.5)
-    return reachedCurrentDestination
+    return true
 end
 
 -- =============================================
@@ -928,74 +946,56 @@ local function doPurchase()
     local attempts = 0
     while AutoFarmRunning and countDiamondRings() < 5 do
         attempts = attempts + 1
-        if attempts > 5 then
-            warn("⚠️ Could not complete purchase after several attempts")
-            return false
-        end
+        if attempts > 3 then return false end
 
         updateProgress("viajando_a_comprar_" .. attempts)
-        print("🛫 Traveling to purchase zone... (attempt " .. attempts .. ")")
         local travelOk = travelToLocation(BUY_POS)
         if not AutoFarmRunning then return false end
         if not travelOk then continue end
 
         updateProgress("comprando_anillos")
-        print("🛍️ Buying Fake Diamond Rings...")
         local missing = 5 - countDiamondRings()
         for i = 1, missing do
             if not AutoFarmRunning then return false end
-            local args = {
-                workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring")
-            }
-            ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
-            print("   [+] Purchase sent (" .. (countDiamondRings()) .. "/5)")
-            task.wait(0.5)
+            local buyable = workspace:WaitForChild("WorldBuyableItems"):FindFirstChild("Fake Diamond Ring")
+            if buyable then
+                ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(buyable)
+                task.wait(0.5)
+            end
         end
 
-        task.wait(0.4)
-
-        if countDiamondRings() >= 5 then
-            updateProgress("compra_completada")
-            print("✅ 5 Diamond Rings confirmed!")
-            return true
-        else
-            warn("⚠️ Only " .. countDiamondRings() .. "/5 rings, retrying...")
-        end
+        task.wait(1) -- Esperar a que la replicación de inventario procese
+        if countDiamondRings() >= 5 then return true end
     end
     return countDiamondRings() >= 5
 end
 
 local function doSell()
     local attempts = 0
-    while AutoFarmRunning and not hasBriefcase() do
+    while AutoFarmRunning do
         attempts = attempts + 1
-        if attempts > 5 then
-            warn("⚠️ Could not confirm sale after several attempts")
-            return false
-        end
+        if attempts > 3 then return false end
 
         updateProgress("viajando_a_vender_" .. attempts)
-        print("🛫 Traveling to Sale point... (attempt " .. attempts .. ")")
         local travelOk = travelToLocation(SELL_POS)
         if not AutoFarmRunning then return false end
         if not travelOk then continue end
 
         updateProgress("vendiendo")
-        print("💰 Selling illegal merchandise...")
-        local args = {
-            workspace:WaitForChild("NPC"):WaitForChild("Seller")
-        }
-        ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(args))
-        print("   [💰] Sale event executed!")
-
-        task.wait(0.5)
-
-        if hasBriefcase() then
-            updateProgress("venta_completada")
-            print("✅ Briefcase confirmed!")
-            return true
-        else
-            warn("⚠️ Briefcase not detected, retrying...")
+        local seller = workspace:WaitForChild("NPC"):FindFirstChild("Seller")
+        if seller then
+            ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(seller)
+            print("💸 Remote de venta ejecutado, esperando maletín...")
+            
+            -- 🔥 FIX: Pequeño bucle interno esperando el maletín para evitar falsos fallos por lag
+            local checkStart = tick()
+            while tick() - checkStart < 4 do
+                if hasBriefcase() then
+                    updateProgress("venta_completada")
+                    return true 
+                end
+                task.wait(0.5)
+            end
         end
     end
     return hasBriefcase()
@@ -1003,35 +1003,29 @@ end
 
 local function doWash()
     local attempts = 0
-    while AutoFarmRunning and hasBriefcase() do
+    while AutoFarmRunning do
         attempts = attempts + 1
-        if attempts > 5 then
-            warn("⚠️ Could not confirm washing after several attempts")
-            return false
-        end
+        if attempts > 3 then return false end
 
         updateProgress("viajando_a_lavar_" .. attempts)
-        print("🛫 Traveling to laundry... (attempt " .. attempts .. ")")
         local travelOk = travelToLocation(WASH_POS)
         if not AutoFarmRunning then return false end
         if not travelOk then continue end
 
         updateProgress("lavando")
-        print("🧼 Washing briefcase...")
-        local args = {
-            workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart")
-        }
-        ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(args))
-        print("   [✨] Wash event executed!")
-
-        task.wait(0.5)
-
-        if not hasBriefcase() then
-            updateProgress("lavado_completado")
-            print("✅ Briefcase washed!")
-            return true
-        else
-            warn("⚠️ Briefcase still in inventory, retrying...")
+        local trigger = workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):FindFirstChild("PromptPart")
+        if trigger then
+            ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(trigger)
+            
+            -- 🔥 FIX: Espera corta para verificar la desaparición del maletín
+            local checkStart = tick()
+            while tick() - checkStart < 4 do
+                if not hasBriefcase() then
+                    updateProgress("lavado_completado")
+                    return true 
+                end
+                task.wait(0.5)
+            end
         end
     end
     return not hasBriefcase()
@@ -1040,7 +1034,7 @@ end
 -- =============================================
 -- 🔄 MAIN AUTO FARM LOOP
 -- =============================================
-local function startAutoFarm()
+function startAutoFarm()
     print("🚀 STARTING AUTO FARM...")
     updateProgress("iniciando_farm")
 
@@ -1049,32 +1043,20 @@ local function startAutoFarm()
         if car then
             destroyVehicleWheels(car)
 
+            -- Ejecutar compra
             local purchaseOk = doPurchase()
             if not AutoFarmRunning then break end
-            if not purchaseOk then
-                warn("❌ Purchase failed, restarting cycle...")
-                task.wait(1)
-                continue
-            end
 
+            -- Ejecutar venta
             local sellOk = doSell()
             if not AutoFarmRunning then break end
-            if not sellOk then
-                warn("❌ Sale failed, restarting cycle...")
-                task.wait(1)
-                continue
-            end
 
+            -- Ejecutar lavado
             local washOk = doWash()
             if not AutoFarmRunning then break end
-            if not washOk then
-                warn("❌ Wash failed, restarting cycle...")
-                task.wait(1)
-                continue
-            end
-
+            
             updateProgress("ciclo_completado")
-            print("🔄 Complete cycle finished. Starting next round...")
+            print("🔄 Ciclo completo exitoso! Iniciando siguiente ronda...")
         else
             warn("❌ No car detected, retrying in 3 seconds...")
             updateProgress("sin_vehiculo")
@@ -1082,27 +1064,7 @@ local function startAutoFarm()
         end
         task.wait(1)
     end
-
     print("🛑 AutoFarm stopped")
-end
-
-local function stopAutoFarm()
-    AutoFarmRunning = false
-    travelActive = false
-    if activeMovementLoop then
-        activeMovementLoop:Disconnect()
-        activeMovementLoop = nil
-    end
-    if AntiStuckThread then
-        AntiStuckThread = nil
-    end
-    local myCar = findMyVehicle()
-    if myCar then
-        clearForces(myCar)
-        deactivateTotalNoClip(myCar)
-        deactivatePlayerNoClip()
-    end
-    updateProgress("farm_detenido")
 end
 
 -- =============================================
@@ -1125,30 +1087,23 @@ mainSection:Toggle({
     Callback = function(value)
         if value then
             print("🚀 Iniciando Auto Farm...")
-            
-            -- Verificar si ya está en un vehículo
             if isPlayerInVehicle() then
                 print("✅ Jugador ya está en un vehículo, iniciando farm directamente")
                 AutoFarmRunning = true
                 startAntiStuck()
                 AutoFarmThread = task.spawn(startAutoFarm)
             else
-                -- Spawn nuevo vehículo y esperar
                 print("🚗 Spawneando vehículo...")
                 spawnVehicle()
                 
-                -- Iniciar el farm en un thread separado para no bloquear
                 task.spawn(function()
                     print("⏳ Esperando que el vehículo aparezca y el jugador se siente...")
-                    
                     local waitStart = tick()
                     local vehicleSpawned = false
                     
-                    -- Esperar activamente hasta 30 segundos
                     while tick() - waitStart < 30 do
-                        if not value then return end -- Toggle desactivado
+                        if not value then return end
                         
-                        -- Verificar si el vehículo ya existe
                         if not vehicleSpawned then
                             local car = findMyVehicle()
                             if car then
@@ -1157,11 +1112,9 @@ mainSection:Toggle({
                             end
                         end
                         
-                        -- Verificar si el jugador está en el vehículo
                         if isPlayerInVehicle() then
                             print("✅ Jugador sentado en el vehículo!")
-                            task.wait(1) -- Pequeña pausa para asegurar que todo esté listo
-                            
+                            task.wait(1)
                             if not value then return end
                             
                             AutoFarmRunning = true
@@ -1169,12 +1122,10 @@ mainSection:Toggle({
                             AutoFarmThread = task.spawn(startAutoFarm)
                             return
                         end
-                        
                         task.wait(0.5)
                     end
                     
-                    warn("❌ Timeout: No se detectó al jugador en el vehículo después de 30 segundos")
-                    -- Desactivar el toggle
+                    warn("❌ Timeout: No se detectó al jugador en el vehículo")
                     pcall(function()
                         local toggle = mainSection:GetToggle("AutoFarmToggle")
                         if toggle then toggle:SetValue(false) end
