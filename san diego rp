@@ -689,7 +689,7 @@ local function destroyVehicleWheels(vehicleModel)
             end
         end
     end
-    print("✅ Wheels removed!")
+
 end
 
 local function freezeInertia(vehicleModel)
