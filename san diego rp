@@ -355,9 +355,9 @@ local dragSpeed = 400
 local dragHeightOffset = 0
 
 -- 📍 FARM CYCLE COORDINATES
-local BUY_POS = Vector3.new(6821, 20, 17)
+local BUY_POS = Vector3.new(6821, 10, 17)
 local SELL_POS = Vector3.new(155, 18, 264)
-local WASH_POS = Vector3.new(6804, 17, -34)
+local WASH_POS = Vector3.new(6799, 11, -35)
 
 -- 🚗 VEHICLE SPAWN CONFIG
 local VEHICLE_MODEL = "Camry6"
