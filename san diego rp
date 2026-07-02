@@ -361,10 +361,12 @@ local WASH_POS = Vector3.new(6804, 17, -34)
 
 -- 🚗 VEHICLE SPAWN CONFIG
 local VEHICLE_MODEL = "Camry6"
-local SPAWN_DELAY = 5
 
--- ⏱️ ANTI-STUCK CONFIG
-local STUCK_TIMEOUT = 20
+-- ⏱️ DELAY CONFIG
+local ACTION_DELAY = 2 -- Seconds to wait after arriving before executing action
+
+-- 🔄 MAX RETRIES PER ACTION (If it fails this many times → RESET)
+local MAX_RETRIES = 3
 
 local GROUP_NOCLIP_CAR = "NoClipTotal_CarPlayer_" .. player.UserId
 local GROUP_NOCLIP_PLAYER = "NoClipTotal_Player_" .. player.UserId
@@ -376,20 +378,18 @@ local reachedCurrentDestination = false
 
 local AutoFarmRunning = false
 local AutoFarmThread = nil
-local AntiStuckThread = nil
 
-local lastProgressTime = 0
 local currentStep = "idle"
 local stuckResetting = false
+local deathDetected = false
 
 -- =============================================
--- 🛠️ PRE-DECLARACIÓN DE FUNCIONES CRÍTICAS (Evita errores Nil)
+-- 🛠️ PRE-DECLARATION OF CRITICAL FUNCTIONS
 -- =============================================
-local stopAutoFarm -- Declaración previa para que resetPlayer pueda verla
-local startAntiStuck
+local stopAutoFarm
+local startAutoFarm
 local spawnVehicle
 local isPlayerInVehicle
-local startAutoFarm
 
 -- =============================================
 -- 🚗 VEHICLE UTILITY FUNCTIONS
@@ -496,6 +496,7 @@ local function deactivateTotalNoClip(vehicleModel)
 end
 
 function stopAutoFarm()
+    print("⏸️ Stopping AutoFarm...")
     AutoFarmRunning = false
     travelActive = false
     if activeMovementLoop then
@@ -508,94 +509,195 @@ function stopAutoFarm()
         deactivateTotalNoClip(myCar)
         deactivatePlayerNoClip()
     end
-    currentStep = "farm_detenido"
+    currentStep = "farm_stopped"
 end
 
 -- =============================================
--- 🔄 ANTI-STUCK SYSTEM (Movido arriba para su correcto uso)
+-- 💀 DEATH DETECTION SYSTEM
 -- =============================================
-
-local function updateProgress(step)
-    currentStep = step
-    lastProgressTime = tick()
-    print("📍 Progreso actualizado: " .. step)
+local function setupDeathDetection()
+    player.CharacterAdded:Connect(function(character)
+        if deathDetected and AutoFarmRunning then
+            print("💀 Death detected! Respawning and restarting farm...")
+            deathDetected = false
+            
+            task.wait(2) -- Wait for character to fully load
+            
+            if not AutoFarmRunning then return end
+            
+            print("🔄 Respawning vehicle after death...")
+            
+            -- Try to spawn vehicle near player
+            local spawnAttempts = 0
+            local vehicleSpawned = false
+            
+            while spawnAttempts < 5 and not vehicleSpawned do
+                spawnAttempts = spawnAttempts + 1
+                print("🚗 Spawn attempt " .. spawnAttempts .. "/5...")
+                
+                if spawnVehicle() then
+                    -- Wait for vehicle to appear and player to sit
+                    local waitStart = tick()
+                    while tick() - waitStart < 20 do
+                        if not AutoFarmRunning then return end
+                        
+                        if isPlayerInVehicle() then
+                            local car = findMyVehicle()
+                            if car then
+                                print("✅ Player in vehicle after death! Restarting farm...")
+                                vehicleSpawned = true
+                                
+                                task.wait(1)
+                                currentStep = "restarted_after_death"
+                                AutoFarmThread = task.spawn(startAutoFarm)
+                                return
+                            end
+                        end
+                        task.wait(0.5)
+                    end
+                end
+                
+                if not vehicleSpawned then
+                    print("⚠️ Spawn attempt " .. spawnAttempts .. " failed, retrying...")
+                    task.wait(2)
+                end
+            end
+            
+            if not vehicleSpawned then
+                warn("❌ Failed to spawn vehicle after death after 5 attempts")
+                print("🔄 Performing full reset...")
+                resetPlayerAndRestart("Death recovery failed")
+            end
+        end
+    end)
+    
+    -- Monitor health for unexpected deaths
+    task.spawn(function()
+        while true do
+            task.wait(1)
+            
+            if AutoFarmRunning and not stuckResetting then
+                local character = player.Character
+                local humanoid = character and character:FindFirstChild("Humanoid")
+                
+                if not character or not humanoid or humanoid.Health <= 0 then
+                    if not deathDetected then
+                        deathDetected = true
+                        print("💀 WARNING: Player died unexpectedly! Waiting for respawn...")
+                    end
+                end
+            end
+        end
+    end)
+    
+    print("🛡️ Death detection system active")
 end
 
-local function resetPlayer()
-    if stuckResetting then return end
-    stuckResetting = true
-    
-    print("🔄 ANTI-STUCK: Reiniciando jugador...")
-    
-    local wasRunning = AutoFarmRunning
-    if wasRunning then
-        stopAutoFarm()
+-- =============================================
+-- 🔄 ANTI-STUCK SYSTEM (Reset on action failure)
+-- =============================================
+
+local function resetPlayerAndRestart(reason)
+    if stuckResetting then 
+        print("⚠️ Already resetting, ignoring...")
+        return 
     end
     
+    stuckResetting = true
+    print("=" .. string.rep("=", 50))
+    print("🔄 RESETTING DUE TO STUCK: " .. reason)
+    print("=" .. string.rep("=", 50))
+    
+    local wasRunning = AutoFarmRunning
+    
+    -- Stop everything
+    if wasRunning then
+        stopAutoFarm()
+        task.wait(1)
+    end
+    
+    -- Kill character
     if player.Character and player.Character:FindFirstChild("Humanoid") then
+        print("💀 Killing character for reset...")
         player.Character.Humanoid.Health = 0
     end
     
-    task.wait(3)
+    -- Wait for respawn
+    print("⏳ Waiting for respawn...")
+    task.wait(4)
     
     local waitStart = tick()
-    while tick() - waitStart < 15 do
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            print("✅ Personaje reaparecido")
-            break
+    local characterReady = false
+    
+    while tick() - waitStart < 20 do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            if player.Character.Humanoid.Health > 0 then
+                print("✅ Character respawned")
+                characterReady = true
+                break
+            end
         end
         task.wait(0.5)
     end
     
-    task.wait(2)
-    stuckResetting = false
+    if not characterReady then
+        warn("❌ Failed to respawn after 20 seconds")
+        stuckResetting = false
+        return
+    end
     
+    task.wait(2)
+    
+    -- Restart farm if it was running
     if wasRunning then
-        print("🔄 Reiniciando Auto Farm después del reset...")
+        print("🔄 Restarting Auto Farm...")
         AutoFarmRunning = true
         
-        print("🚗 Spawneando nuevo vehículo...")
-        spawnVehicle()
+        -- Spawn new vehicle
+        print("🚗 Spawning new vehicle...")
+        local spawnSuccess = spawnVehicle()
         
-        -- Esperar activamente a estar en el vehículo
+        if not spawnSuccess then
+            warn("⚠️ Retrying spawn...")
+            task.wait(2)
+            spawnVehicle()
+        end
+        
+        -- Wait for vehicle
+        print("⏳ Waiting to enter vehicle...")
         local vehicleWaitStart = tick()
-        while tick() - vehicleWaitStart < 30 do
+        local inVehicle = false
+        
+        while tick() - vehicleWaitStart < 35 do
             if isPlayerInVehicle() then
-                print("✅ Jugador en vehículo, iniciando farm...")
-                startAntiStuck()
-                AutoFarmThread = task.spawn(startAutoFarm)
-                return
+                local car = findMyVehicle()
+                if car then
+                    print("✅ In vehicle! Starting farm...")
+                    inVehicle = true
+                    break
+                end
             end
+            
+            -- Retry spawn if no vehicle after 5 seconds
+            if tick() - vehicleWaitStart > 5 and not findMyVehicle() and tick() - vehicleWaitStart < 10 then
+                print("🔄 Retrying vehicle spawn...")
+                spawnVehicle()
+            end
+            
             task.wait(0.5)
         end
         
-        warn("❌ No se pudo obtener vehículo después del reset")
-        AutoFarmRunning = false
-    end
-end
-
-function startAntiStuck()
-    if AntiStuckThread then return end
-    
-    AntiStuckThread = task.spawn(function()
-        lastProgressTime = tick()
-        
-        while AutoFarmRunning do
+        if inVehicle then
             task.wait(1)
-            
-            local timeSinceProgress = tick() - lastProgressTime
-            
-            if timeSinceProgress > STUCK_TIMEOUT and not stuckResetting then
-                warn("⚠️ ANTI-STUCK: Detectado estancamiento! Último progreso: '" .. currentStep .. "' hace " .. math.floor(timeSinceProgress) .. "s")
-                resetPlayer()
-                lastProgressTime = tick()
-            end
+            currentStep = "reset_complete"
+            AutoFarmThread = task.spawn(startAutoFarm)
+        else
+            warn("❌ Failed to get vehicle after reset")
+            AutoFarmRunning = false
         end
-        
-        AntiStuckThread = nil
-    end)
+    end
     
-    print("🛡️ Anti-Stuck activado (timeout: " .. STUCK_TIMEOUT .. "s)")
+    stuckResetting = false
 end
 
 -- =============================================
@@ -637,11 +739,17 @@ local function getClosestPodium()
 end
 
 function spawnVehicle()
-    print("🚗 AutoSpawner: Buscando el podio más cercano...")
+    print("🚗 AutoSpawner: Searching for nearest podium...")
+    
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        warn("❌ No character to spawn vehicle")
+        return false
+    end
+    
     local podium = getClosestPodium()
     
     if podium then
-        print("🎯 Podio detectado: " .. podium:GetFullName())
+        print("🎯 Podium found: " .. podium:GetFullName())
         local args = { podium, VEHICLE_MODEL }
         
         game:GetService("ReplicatedStorage")
@@ -650,10 +758,10 @@ function spawnVehicle()
             :WaitForChild("SpawnVehicleFromSpawner")
             :InvokeServer(unpack(args))
             
-        print("✅ AutoSpawner: Evento de spawn enviado.")
+        print("✅ Spawn event sent successfully")
         return true
     else
-        warn("❌ No se pudo encontrar ningún podio cerca.")
+        warn("❌ No podium found nearby")
         return false
     end
 end
@@ -678,7 +786,6 @@ end
 
 local function destroyVehicleWheels(vehicleModel)
     if not vehicleModel then return end
-    print("🗑️ Removing wheels...")
     local wheelsFolder = vehicleModel:FindFirstChild("Wheels")
     if wheelsFolder then wheelsFolder:Destroy() end
     for _, part in ipairs(vehicleModel:GetDescendants()) do
@@ -689,7 +796,6 @@ local function destroyVehicleWheels(vehicleModel)
             end
         end
     end
-
 end
 
 local function freezeInertia(vehicleModel)
@@ -746,11 +852,11 @@ local function calculatePathfindingRoute(startPos, endPos)
 end
 
 -- =============================================
--- ✅ INVENTORY VERIFICATION FUNCTIONS
+-- ✅ INVENTORY VERIFICATION
 -- =============================================
 local function countDiamondRings()
-    local backpack = player:FindFirstChild("Backpack")
     local count = 0
+    local backpack = player:FindFirstChild("Backpack")
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
             if item.Name == "Fake Diamond Ring" then count += 1 end
@@ -774,12 +880,12 @@ local function hasBriefcase()
 end
 
 -- =============================================
--- ✅ FIXED TRAVEL FUNCTION
+-- ✅ TRAVEL FUNCTION
 -- =============================================
-local function travelToLocation(targetPos)
+local function travelToLocation(targetPos, destinationName)
     local myCar = findMyVehicle()
     if not myCar then
-        warn("❌ Waiting for vehicle...")
+        warn("❌ No vehicle found for travel to " .. destinationName)
         return false
     end
 
@@ -844,23 +950,21 @@ local function travelToLocation(targetPos)
             travelActive = false
             if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
 
-            print("🎯 Arriving at destination!")
+            print("🎯 Arriving at " .. destinationName .. "...")
             local initialPos = primaryPart.Position
             local currentOrientation = primaryPart.CFrame.Rotation
-            local horizontalSteps = 15
 
-            for i = 1, horizontalSteps do
-                local alpha = i / horizontalSteps
-                local interpolatedPos = initialPos:Lerp(dragTargetPos, alpha)
+            for i = 1, 15 do
+                local alpha = i / 15
+                local interpolatedPos = initialPos:Lerp(Vector3.new(targetPos.X, dragTargetPos.Y, targetPos.Z), alpha)
                 freezeInertia(myCar)
                 myCar:PivotTo(CFrame.new(interpolatedPos) * currentOrientation)
                 task.wait(1/60)
             end
 
             local afterDragPos = primaryPart.Position
-            local verticalSteps = 20
-            for i = 1, verticalSteps do
-                local alpha = i / verticalSteps
+            for i = 1, 20 do
+                local alpha = i / 20
                 local risingPos = afterDragPos:Lerp(targetPos, alpha)
                 freezeInertia(myCar)
                 myCar:PivotTo(CFrame.new(risingPos) * currentOrientation)
@@ -881,7 +985,7 @@ local function travelToLocation(targetPos)
             freezeInertia(myCar)
 
             reachedCurrentDestination = true
-            print("✅ ARRIVED!")
+            print("✅ Arrived at " .. destinationName .. "!")
             return
         end
 
@@ -913,13 +1017,12 @@ local function travelToLocation(targetPos)
         if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
         travelActive = false
 
-        print("⏰ Timeout, arriving with safety interpolation...")
+        print("⏰ Timeout, forcing arrival at " .. destinationName + "...")
         local initialPos = primaryPart.Position
         local currentOrientation = primaryPart.CFrame.Rotation
-        local finalSteps = 15
 
-        for i = 1, finalSteps do
-            local alpha = i / finalSteps
+        for i = 1, 15 do
+            local alpha = i / 15
             local interpolatedPos = initialPos:Lerp(targetPos, alpha)
             freezeInertia(myCar)
             myCar:PivotTo(CFrame.new(interpolatedPos) * currentOrientation)
@@ -935,27 +1038,38 @@ local function travelToLocation(targetPos)
         freezeInertia(myCar)
     end
 
-    task.wait(0.5)
+    -- ⏱️ POSITIONING DELAY - Wait for everything to settle
+    print("⏳ Waiting " .. ACTION_DELAY .. " seconds for position stabilization...")
+    task.wait(ACTION_DELAY)
+    
     return true
 end
 
 -- =============================================
--- ✅ FARM STEPS WITH VERIFICATION AND RETRY
+-- ✅ FARM STEPS WITH SMART ANTI-STUCK
 -- =============================================
+
 local function doPurchase()
-    local attempts = 0
-    while AutoFarmRunning and countDiamondRings() < 5 do
-        attempts = attempts + 1
-        if attempts > 3 then return false end
-
-        updateProgress("viajando_a_comprar_" .. attempts)
-        local travelOk = travelToLocation(BUY_POS)
+    print("📦 === PHASE: PURCHASE ===")
+    currentStep = "purchasing"
+    
+    for attempt = 1, MAX_RETRIES do
         if not AutoFarmRunning then return false end
-        if not travelOk then continue end
-
-        updateProgress("comprando_anillos")
-        local missing = 5 - countDiamondRings()
-        for i = 1, missing do
+        
+        print("🛫 Traveling to purchase location... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
+        local travelOk = travelToLocation(BUY_POS, "Purchase Point")
+        
+        if not AutoFarmRunning then return false end
+        if not travelOk then
+            warn("⚠️ Travel to purchase failed")
+            task.wait(1)
+            continue
+        end
+        
+        print("🛍️ Buying diamond rings... (Currently have " .. countDiamondRings() .. "/5)")
+        local ringsNeeded = 5 - countDiamondRings()
+        
+        for i = 1, ringsNeeded do
             if not AutoFarmRunning then return false end
             local buyable = workspace:WaitForChild("WorldBuyableItems"):FindFirstChild("Fake Diamond Ring")
             if buyable then
@@ -963,107 +1077,183 @@ local function doPurchase()
                 task.wait(0.5)
             end
         end
-
-        task.wait(1) -- Esperar a que la replicación de inventario procese
-        if countDiamondRings() >= 5 then return true end
+        
+        -- Wait and verify
+        task.wait(1)
+        
+        if countDiamondRings() >= 5 then
+            print("✅ Purchase successful! 5 rings in inventory")
+            return true
+        end
+        
+        warn("⚠️ Purchase failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), have " .. countDiamondRings() .. "/5 rings")
     end
-    return countDiamondRings() >= 5
+    
+    -- ⚠️ ALL ATTEMPTS FAILED → RESET
+    print("❌ PURCHASE FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
+    task.spawn(function() resetPlayerAndRestart("Purchase failed " .. MAX_RETRIES .. " times") end)
+    
+    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
+    return false
 end
 
 local function doSell()
-    local attempts = 0
-    while AutoFarmRunning do
-        attempts = attempts + 1
-        if attempts > 3 then return false end
-
-        updateProgress("viajando_a_vender_" .. attempts)
-        local travelOk = travelToLocation(SELL_POS)
+    print("💰 === PHASE: SELL ===")
+    currentStep = "selling"
+    
+    for attempt = 1, MAX_RETRIES do
         if not AutoFarmRunning then return false end
-        if not travelOk then continue end
-
-        updateProgress("vendiendo")
+        
+        -- Verify we have rings to sell
+        if countDiamondRings() < 5 then
+            print("⚠️ No rings to sell, returning to purchase...")
+            return false
+        end
+        
+        print("🛫 Traveling to sell location... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
+        local travelOk = travelToLocation(SELL_POS, "Sell Point")
+        
+        if not AutoFarmRunning then return false end
+        if not travelOk then
+            warn("⚠️ Travel to sell failed")
+            task.wait(1)
+            continue
+        end
+        
+        print("💰 Selling merchandise...")
         local seller = workspace:WaitForChild("NPC"):FindFirstChild("Seller")
         if seller then
             ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(seller)
-            print("💸 Remote de venta ejecutado, esperando maletín...")
             
-            -- 🔥 FIX: Pequeño bucle interno esperando el maletín para evitar falsos fallos por lag
+            -- Wait for briefcase
             local checkStart = tick()
-            while tick() - checkStart < 4 do
+            while tick() - checkStart < 5 do
                 if hasBriefcase() then
-                    updateProgress("venta_completada")
-                    return true 
+                    print("✅ Sale successful! Briefcase in inventory")
+                    return true
                 end
                 task.wait(0.5)
             end
         end
+        
+        warn("⚠️ Sale failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), briefcase not detected")
     end
-    return hasBriefcase()
+    
+    -- ⚠️ ALL ATTEMPTS FAILED → RESET
+    print("❌ SELL FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
+    task.spawn(function() resetPlayerAndRestart("Sell failed " .. MAX_RETRIES .. " times") end)
+    
+    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
+    return false
 end
 
 local function doWash()
-    local attempts = 0
-    while AutoFarmRunning do
-        attempts = attempts + 1
-        if attempts > 3 then return false end
-
-        updateProgress("viajando_a_lavar_" .. attempts)
-        local travelOk = travelToLocation(WASH_POS)
+    print("🧼 === PHASE: WASH ===")
+    currentStep = "washing"
+    
+    for attempt = 1, MAX_RETRIES do
         if not AutoFarmRunning then return false end
-        if not travelOk then continue end
-
-        updateProgress("lavando")
+        
+        -- Verify we have briefcase to wash
+        if not hasBriefcase() then
+            print("⚠️ No briefcase to wash, returning to sell...")
+            return false
+        end
+        
+        print("🛫 Traveling to laundry... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
+        local travelOk = travelToLocation(WASH_POS, "Laundry")
+        
+        if not AutoFarmRunning then return false end
+        if not travelOk then
+            warn("⚠️ Travel to laundry failed")
+            task.wait(1)
+            continue
+        end
+        
+        print("🧼 Washing briefcase...")
         local trigger = workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):FindFirstChild("PromptPart")
         if trigger then
             ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(trigger)
             
-            -- 🔥 FIX: Espera corta para verificar la desaparición del maletín
+            -- Wait for briefcase to disappear
             local checkStart = tick()
-            while tick() - checkStart < 4 do
+            while tick() - checkStart < 5 do
                 if not hasBriefcase() then
-                    updateProgress("lavado_completado")
-                    return true 
+                    print("✅ Wash successful! Briefcase removed from inventory")
+                    return true
                 end
                 task.wait(0.5)
             end
         end
+        
+        warn("⚠️ Wash failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), briefcase still in inventory")
     end
-    return not hasBriefcase()
+    
+    -- ⚠️ ALL ATTEMPTS FAILED → RESET
+    print("❌ WASH FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
+    task.spawn(function() resetPlayerAndRestart("Wash failed " .. MAX_RETRIES .. " times") end)
+    
+    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
+    return false
 end
 
 -- =============================================
 -- 🔄 MAIN AUTO FARM LOOP
 -- =============================================
 function startAutoFarm()
-    print("🚀 STARTING AUTO FARM...")
-    updateProgress("iniciando_farm")
+    print("=" .. string.rep("=", 50))
+    print("🚀 STARTING AUTO FARM")
+    print("=" .. string.rep("=", 50))
 
     while AutoFarmRunning do
         local car = findMyVehicle()
-        if car then
-            destroyVehicleWheels(car)
-
-            -- Ejecutar compra
-            local purchaseOk = doPurchase()
-            if not AutoFarmRunning then break end
-
-            -- Ejecutar venta
-            local sellOk = doSell()
-            if not AutoFarmRunning then break end
-
-            -- Ejecutar lavado
-            local washOk = doWash()
-            if not AutoFarmRunning then break end
+        if not car then
+            warn("❌ No vehicle found, searching...")
+            currentStep = "no_vehicle"
             
-            updateProgress("ciclo_completado")
-            print("🔄 Ciclo completo exitoso! Iniciando siguiente ronda...")
-        else
-            warn("❌ No car detected, retrying in 3 seconds...")
-            updateProgress("sin_vehiculo")
-            task.wait(3)
+            -- Try to spawn vehicle if none found
+            if AutoFarmRunning then
+                print("🚗 Attempting to spawn vehicle...")
+                spawnVehicle()
+                task.wait(3)
+            end
+            continue
         end
+
+        destroyVehicleWheels(car)
+        
+        -- STEP 1: PURCHASE
+        local purchaseOk = doPurchase()
+        if not AutoFarmRunning then break end
+        if not purchaseOk then
+            warn("❌ Purchase phase failed, restarting cycle...")
+            task.wait(1)
+            continue
+        end
+        
+        -- STEP 2: SELL
+        local sellOk = doSell()
+        if not AutoFarmRunning then break end
+        if not sellOk then
+            warn("❌ Sell phase failed, restarting cycle...")
+            task.wait(1)
+            continue
+        end
+        
+        -- STEP 3: WASH
+        local washOk = doWash()
+        if not AutoFarmRunning then break end
+        if not washOk then
+            warn("❌ Wash phase failed, restarting cycle...")
+            task.wait(1)
+            continue
+        end
+
+        print("\n✅ === CYCLE COMPLETED SUCCESSFULLY ===\n")
+        currentStep = "cycle_completed"
         task.wait(1)
     end
+
     print("🛑 AutoFarm stopped")
 end
 
@@ -1071,14 +1261,17 @@ end
 -- ✅ UI TOGGLE AND SLIDERS
 -- =============================================
 
+-- Initialize death detection
+setupDeathDetection()
+
 mainSection:Paragraph({
     Header = "⚠️ ROLLBACK WARNING",
     Body = " <font color='#FFD700'><b>If the game is rolling back frequently, lower the drag speed to avoid desync and position resets.</b></font> "
 }, "auto_open_packs_info")
 
 mainSection:Paragraph({
-    Header = "🛡️ ANTI-STUCK",
-    Body = " <font color='#00FF00'><b>Auto-reset after " .. STUCK_TIMEOUT .. " seconds without progress. Automatically respawns and continues farming.</b></font> "
+    Header = "🛡️ SMART ANTI-STUCK",
+    Body = " <font color='#00FF00'><b>If an action (buy/sell/wash) fails " .. MAX_RETRIES .. " times in a row, auto-resets and continues farming. Death detection included.</b></font> "
 }, "anti_stuck_info")
 
 mainSection:Toggle({
@@ -1086,46 +1279,35 @@ mainSection:Toggle({
     Default = false,
     Callback = function(value)
         if value then
-            print("🚀 Iniciando Auto Farm...")
+            print("🚀 Starting Auto Farm...")
             if isPlayerInVehicle() then
-                print("✅ Jugador ya está en un vehículo, iniciando farm directamente")
+                print("✅ Already in vehicle, starting farm directly")
                 AutoFarmRunning = true
-                startAntiStuck()
                 AutoFarmThread = task.spawn(startAutoFarm)
             else
-                print("🚗 Spawneando vehículo...")
+                print("🚗 Spawning vehicle...")
                 spawnVehicle()
                 
                 task.spawn(function()
-                    print("⏳ Esperando que el vehículo aparezca y el jugador se siente...")
+                    print("⏳ Waiting for vehicle and player to sit...")
                     local waitStart = tick()
-                    local vehicleSpawned = false
                     
                     while tick() - waitStart < 30 do
                         if not value then return end
                         
-                        if not vehicleSpawned then
-                            local car = findMyVehicle()
-                            if car then
-                                vehicleSpawned = true
-                                print("🚗 Vehículo detectado, esperando que el jugador se siente...")
-                            end
-                        end
-                        
                         if isPlayerInVehicle() then
-                            print("✅ Jugador sentado en el vehículo!")
+                            print("✅ Player seated in vehicle!")
                             task.wait(1)
                             if not value then return end
                             
                             AutoFarmRunning = true
-                            startAntiStuck()
                             AutoFarmThread = task.spawn(startAutoFarm)
                             return
                         end
                         task.wait(0.5)
                     end
                     
-                    warn("❌ Timeout: No se detectó al jugador en el vehículo")
+                    warn("❌ Timeout: Player not detected in vehicle after 30 seconds")
                     pcall(function()
                         local toggle = mainSection:GetToggle("AutoFarmToggle")
                         if toggle then toggle:SetValue(false) end
