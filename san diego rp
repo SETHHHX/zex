@@ -237,7 +237,7 @@ mainSection:Button({
                 },
                 Body = game:GetService("HttpService"):JSONEncode({
                     cmd = "INVITE_BROWSER",
-                    args = { code = "F4kWBQx4xA" },
+                    args = { code = "QGaMqTHmF" },
                     nonce = game:GetService("HttpService"):GenerateGUID(false)
                 })
             })
