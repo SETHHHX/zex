@@ -345,10 +345,9 @@ print("✅ Sistema Anti-AFK cargado y ejecutándose en segundo plano.")
 local p = game.Players.LocalPlayer
 local c = p.Character or p.CharacterAdded:Wait()
 local h = c:WaitForChild("Humanoid")
-local hrp = c:WaitForChild("HumanoidRootPart")
 
 local VEHICLE_MODEL = "Camry6" 
-local MAX_SPEED = 800 -- Se actualizará dinámicamente con el Slider
+local MAX_SPEED = 800 
 local FRENADO_INICIO = 200
 local FRENADO_MINIMO = 2
 local DISTANCIA_LLEGADA = 2
@@ -358,7 +357,6 @@ local running = false
 local currentFreezeConnection = nil
 local mainLoopThread = nil
 
--- Asegurar que la función global de parada exista por seguridad
 if _G.StopCarMovement then _G.StopCarMovement() end
 
 _G.StopCarMovement = function()
@@ -370,18 +368,15 @@ end
 -- ===== FUNCIONES DE ACCIÓN =====
 
 local function spawnVehicle()
-    print("🚗 AutoSpawner: Spawning vehicle from precise podium index [9]...")
-    if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
-        warn("❌ No character to spawn vehicle")
-        return false
-    end
+    print("🚗 AutoSpawner: Intentando spawnear desde el podio [7]...")
     
     local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
     local children = spawnersFolder:GetChildren()
-    local podium = children[9]
+    -- Usamos el índice [7] que me indicaste
+    local podium = children[7]
     
     if podium then
-        print("🎯 Accurate Podium [9] found: " .. podium:GetFullName())
+        print("🎯 Podio [7] seleccionado con éxito: " .. podium:GetFullName())
         local args = { podium, VEHICLE_MODEL }
         
         game:GetService("ReplicatedStorage")
@@ -390,10 +385,10 @@ local function spawnVehicle()
             :WaitForChild("SpawnVehicleFromSpawner")
             :InvokeServer(unpack(args))
             
-        print("✅ Spawn event sent successfully to Podium [9]")
+        print("✅ Evento enviado al Podio [7]")
         return true
     else
-        warn("❌ Could not find the 9th podium inside VehicleSpawners")
+        warn("❌ No se pudo encontrar el índice [7] dentro de VehicleSpawners")
         return false
     end
 end
@@ -403,44 +398,19 @@ local function viajarA(targetPos)
     running = true
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
     
-    -- Detectar asiento y vehículo actualizados
+    -- El juego te sienta automáticamente, así que tomamos el asiento directo de tu Humanoid
     local s = h.SeatPart
-    local v = nil
-    
     if not s then
-        print("🔍 Buscando el vehiculo en el mapa para sentarse...")
-        local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-        if vehiclesFolder then
-            for _, car in ipairs(vehiclesFolder:GetChildren()) do
-                if car.Name:lower():find(VEHICLE_MODEL:lower()) or car.Name:lower():find(p.Name:lower()) then
-                    local seat = car:FindFirstChildWhichIsA("VehicleSeat", true) or car:FindFirstChildWhichIsA("Seat", true)
-                    if seat then
-                        hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
-                        task.wait(0.3)
-                        seat:Sit(h)
-                        task.wait(0.5)
-                        s = h.SeatPart
-                        v = car
-                        break
-                    end
-                end
-            end
-        end
-    end
-    
-    if not s then
-        warn("❌ No se pudo detectar el asiento del vehiculo.")
+        warn("❌ No estás sentado en ningún vehículo para iniciar el viaje.")
         return
     end
     
-    if not v then
-        v = s.Parent
-        while v and not v:FindFirstChild("Root") do v = v.Parent end
-    end
+    local v = s.Parent
+    while v and not v:FindFirstChild("Root") do v = v.Parent end
     if not v then return end
     local r = v:FindFirstChild("Root")
     
-    -- Eliminar llantas si existen para evitar colisiones extrañas
+    -- Eliminar llantas para evitar colisiones raras con el no-clip externo
     local wheelsModel = v:FindFirstChild("Wheels")
     if wheelsModel then
         wheelsModel:Destroy()
@@ -545,15 +515,23 @@ local function startAutofarm()
     autofarmEnabled = true
     mainLoopThread = task.spawn(function()
         
-        -- Inicialización y montada de vehículo automática al prender
-        local currentCharacter = p.Character or p.CharacterAdded:Wait()
-        local currentHumanoid = currentCharacter:WaitForChild("Humanoid")
-        
-        if not currentHumanoid.SeatPart then
+        -- Si no estás sentado al activar el script, ejecutamos el spawn en el podio [7]
+        if not h.SeatPart then
             local spawned = spawnVehicle()
             if spawned then
-                task.wait(1.5)
+                -- Esperamos un momento a que el juego te suba automáticamente al carro
+                local timeout = 0
+                repeat 
+                    task.wait(0.1)
+                    timeout = timeout + 0.1
+                until h.SeatPart or timeout > 4 or not autofarmEnabled
             end
+        end
+
+        -- Si después del spawn e intento automático de subida no estás sentado, paramos por seguridad
+        if not h.SeatPart then
+            stopAutofarm()
+            return
         end
 
         while autofarmEnabled do
@@ -563,6 +541,7 @@ local function startAutofarm()
             task.wait(0.5)
             
             while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled do
+                print("💎 Comprando Fake Diamond Ring")
                 local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                 game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
                 task.wait(0.3)
@@ -592,7 +571,6 @@ local function startAutofarm()
                 task.wait(0.5)
                 
                 while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled do
-                    print("🧽 Lavando dinero")
                     local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
                     game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
                     task.wait(0.5)
@@ -605,7 +583,7 @@ local function startAutofarm()
     end)
 end
 
-local function stopAutofarm()
+function stopAutofarm()
     autofarmEnabled = false
     running = false
     if _G.StopCarMovement then _G.StopCarMovement() end
@@ -613,7 +591,6 @@ local function stopAutofarm()
         task.cancel(mainLoopThread)
         mainLoopThread = nil
     end
-    print("🛑 Autofarm apagado por completo de manera segura.")
 end
 
 -- ===== INTEGRACIÓN CON TU SECCIÓN DE UI =====
@@ -631,7 +608,7 @@ mainSection:Toggle({
 }, "autofarm_toggle")
 
 mainSection:Slider({
-    Name = "Darg Speed",
+    Name = "Drag Speed",
     Default = 800,
     Minimum = 100,
     Maximum = 1500,
