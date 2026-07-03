@@ -592,7 +592,7 @@ local function startAutofarm()
             end
 
             -- FASE 1: COMPRA
-            viajarA(Vector3.new(6821, 17, 20))
+            viajarA(Vector3.new(6819, 9, 17))
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
             
@@ -607,7 +607,7 @@ local function startAutofarm()
             if not autofarmEnabled or h.Health <= 0 then continue end
             
             -- FASE 2: VENTA
-            viajarA(Vector3.new(214, 17, -45))
+            viajarA(Vector3.new(209, 6, -37))
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
             
@@ -626,7 +626,7 @@ local function startAutofarm()
             -- FASE 3: LAVADO
             if p.Backpack:FindFirstChild("Briefcase") then
                 print("🧼 Viajando a Lavar dinero")
-                viajarA(Vector3.new(6812, 17, -33))
+                viajarA(Vector3.new(6807, 9, -34))
                 if not autofarmEnabled or h.Health <= 0 then continue end
                 task.wait(0.5)
                 
