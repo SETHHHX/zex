@@ -341,418 +341,47 @@ print("✅ Sistema Anti-AFK cargado y ejecutándose en segundo plano.")
 
 
 
---MAIN FEATURES
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local PhysicsService = game:GetService("PhysicsService")
-local PathfindingService = game:GetService("PathfindingService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
+local p = game.Players.LocalPlayer
+local c = p.Character or p.CharacterAdded:Wait()
+local h = c:WaitForChild("Humanoid")
+local hrp = c:WaitForChild("HumanoidRootPart")
 
-local player = Players.LocalPlayer
+local VEHICLE_MODEL = "Camry6" 
+local MAX_SPEED = 800 -- Se actualizará dinámicamente con el Slider
+local FRENADO_INICIO = 200
+local FRENADO_MINIMO = 2
+local DISTANCIA_LLEGADA = 2
 
--- ✅ Values controlled by sliders
-local dragSpeed = 400
-local dragHeightOffset = 0
+local autofarmEnabled = false
+local running = false
+local currentFreezeConnection = nil
+local mainLoopThread = nil
 
--- 📍 FARM CYCLE COORDINATES
-local BUY_POS = Vector3.new(6821, 20, 17)
-local SELL_POS = Vector3.new(155, 18, 264)
-local WASH_POS = Vector3.new(6804, 17, -34)
+-- Asegurar que la función global de parada exista por seguridad
+if _G.StopCarMovement then _G.StopCarMovement() end
 
--- 🚗 VEHICLE SPAWN CONFIG
-local VEHICLE_MODEL = "Camry6"
-
--- ⏱️ DELAY CONFIG
-local ACTION_DELAY = 2 -- Seconds to wait after arriving before executing action
-
--- 🔄 MAX RETRIES PER ACTION (If it fails this many times → RESET)
-local MAX_RETRIES = 3
-
-local GROUP_NOCLIP_CAR = "NoClipTotal_CarPlayer_" .. player.UserId
-local GROUP_NOCLIP_PLAYER = "NoClipTotal_Player_" .. player.UserId
-
-local originalPlayerState = {}
-local activeMovementLoop = nil
-local travelActive = false
-local reachedCurrentDestination = false
-
-local AutoFarmRunning = false
-local AutoFarmThread = nil
-
-local currentStep = "idle"
-local stuckResetting = false
-local deathDetected = false
-
--- =============================================
--- 🛠️ PRE-DECLARATION OF CRITICAL FUNCTIONS
--- =============================================
-local stopAutoFarm
-local startAutoFarm
-local spawnVehicle
-local isPlayerInVehicle
-local resetPlayerAndRestart
-
--- =============================================
--- 🚗 VEHICLE UTILITY FUNCTIONS
--- =============================================
-
-local function findMyVehicle()
-    local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-    if not vehiclesFolder then return nil end
-    for _, vehicle in ipairs(vehiclesFolder:GetChildren()) do
-        local ownerIdProp = vehicle:FindFirstChild("OwnerUserId")
-        local ownerIdValue = ownerIdProp and (ownerIdProp:IsA("ValueObject") and ownerIdProp.Value or ownerIdProp)
-        if ownerIdValue == player.UserId or vehicle:GetAttribute("OwnerUserId") == player.UserId then
-            return vehicle
-        end
-    end
-    return nil
+_G.StopCarMovement = function()
+    running = false
+    if currentFreezeConnection then currentFreezeConnection:Disconnect() end
+    print("🛑 Movimiento del vehículo detenido")
 end
 
-local function clearForces(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            for _, child in ipairs(part:GetChildren()) do
-                if child.Name == "_DragForce" or child.Name == "_DragGyro" then
-                    child:Destroy()
-                end
-            end
-        end
-    end
-end
+-- ===== FUNCIONES DE ACCIÓN =====
 
-local function activatePlayerNoClip()
-    local character = player.Character
-    if not character then return end
-    pcall(function()
-        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_PLAYER) then
-            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_PLAYER)
-        end
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Default", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, "Players", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_PLAYER, GROUP_NOCLIP_PLAYER, false)
-    end)
-    for _, part in ipairs(character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            originalPlayerState[part] = { CollisionGroup = part.CollisionGroup, CanCollide = part.CanCollide }
-            part.CollisionGroup = GROUP_NOCLIP_PLAYER
-            part.CanCollide = false
-        end
-    end
-end
-
-local function deactivatePlayerNoClip()
-    local character = player.Character
-    if not character then return end
-    for part, data in pairs(originalPlayerState) do
-        if part and part.Parent then
-            part.CollisionGroup = data.CollisionGroup
-            part.CanCollide = data.CanCollide
-        end
-    end
-    originalPlayerState = {}
-end
-
-local function activateTotalNoClip(vehicleModel)
-    if not vehicleModel then return end
-    pcall(function()
-        if not PhysicsService:IsCollisionGroupCreated(GROUP_NOCLIP_CAR) then
-            PhysicsService:CreateCollisionGroup(GROUP_NOCLIP_CAR)
-        end
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, GROUP_NOCLIP_CAR, false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Default", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Players", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "Vehicle", false)
-        PhysicsService:CollisionGroupSetCollidable(GROUP_NOCLIP_CAR, "World", false)
-    end)
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if part:GetAttribute("OriginalCollisionGroup") == nil then
-                part:SetAttribute("OriginalCollisionGroup", part.CollisionGroup)
-            end
-            part.CollisionGroup = GROUP_NOCLIP_CAR
-            part.CanCollide = false
-            if part:IsA("MeshPart") then
-                part.Transparency = 0.3
-                part.Material = Enum.Material.SmoothPlastic
-            end
-        end
-    end
-end
-
-local function deactivateTotalNoClip(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local originalGroup = part:GetAttribute("OriginalCollisionGroup")
-            part.CollisionGroup = originalGroup or "Default"
-            part.CanCollide = true
-            if part:IsA("MeshPart") then
-                part.Transparency = 0
-                part.Material = Enum.Material.Plastic
-            end
-        end
-    end
-end
-
-function stopAutoFarm()
-    print("⏸️ Stopping AutoFarm...")
-    AutoFarmRunning = false
-    travelActive = false
-    if activeMovementLoop then
-        activeMovementLoop:Disconnect()
-        activeMovementLoop = nil
-    end
-    
-    -- 🛑 CRITICAL: Detener el hilo inmediatamente para evitar duplicados x2
-    if AutoFarmThread then
-        pcall(task.cancel, AutoFarmThread)
-        AutoFarmThread = nil
-    end
-    
-    local myCar = findMyVehicle()
-    if myCar then
-        clearForces(myCar)
-        deactivateTotalNoClip(myCar)
-        deactivatePlayerNoClip()
-    end
-    currentStep = "farm_stopped"
-end
-
--- =============================================
--- 💀 DEATH DETECTION SYSTEM
--- =============================================
-local function setupDeathDetection()
-    player.CharacterAdded:Connect(function(character)
-        if deathDetected and AutoFarmRunning then
-            print("💀 Death detected! Respawning and restarting farm...")
-            deathDetected = false
-            
-            if AutoFarmThread then
-                pcall(task.cancel, AutoFarmThread)
-                AutoFarmThread = nil
-            end
-            
-            task.wait(2) -- Wait for character to fully load
-            if not AutoFarmRunning then return end
-            
-            print("🔄 Respawning vehicle after death...")
-            local spawnAttempts = 0
-            local vehicleSpawned = false
-            
-            while spawnAttempts < 5 and not vehicleSpawned do
-                if not AutoFarmRunning then return end
-                spawnAttempts = spawnAttempts + 1
-                print("🚗 Spawn attempt " .. spawnAttempts .. "/5...")
-                
-                if spawnVehicle() then
-                    local waitStart = tick()
-                    while tick() - waitStart < 20 do
-                        if not AutoFarmRunning then return end
-                        
-                        if isPlayerInVehicle() then
-                            local car = findMyVehicle()
-                            if car then
-                                print("✅ Player in vehicle after death! Restarting farm...")
-                                vehicleSpawned = true
-                                
-                                task.wait(1)
-                                currentStep = "restarted_after_death"
-                                if AutoFarmThread then pcall(task.cancel, AutoFarmThread) end
-                                AutoFarmThread = task.spawn(startAutoFarm)
-                                return
-                            end
-                        end
-                        task.wait(0.5)
-                    end
-                end
-                
-                if not vehicleSpawned then
-                    print("⚠️ Spawn attempt " .. spawnAttempts .. " failed, retrying...")
-                    task.wait(2)
-                end
-            end
-            
-            if not vehicleSpawned then
-                warn("❌ Failed to spawn vehicle after death after 5 attempts")
-                print("🔄 Performing full reset...")
-                resetPlayerAndRestart("Death recovery failed")
-            end
-        end
-    end)
-    
-    -- Monitor health for unexpected deaths
-    task.spawn(function()
-        while true do
-            task.wait(1)
-            if AutoFarmRunning and not stuckResetting then
-                local character = player.Character
-                local humanoid = character and character:FindFirstChild("Humanoid")
-                
-                if not character or not humanoid or humanoid.Health <= 0 then
-                    if not deathDetected then
-                        deathDetected = true
-                        print("💀 WARNING: Player died unexpectedly! Waiting for respawn...")
-                        travelActive = false
-                        if activeMovementLoop then
-                            activeMovementLoop:Disconnect()
-                            activeMovementLoop = nil
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    
-    print("🛡️ Death detection system active")
-end
-
--- =============================================
--- 🔄 ANTI-STUCK SYSTEM (Reset on action failure)
--- =============================================
-
-function resetPlayerAndRestart(reason)
-    if stuckResetting then 
-        print("⚠️ Already resetting, ignoring...")
-        return 
-    end
-    
-    stuckResetting = true
-    print("=" .. string.rep("=", 50))
-    print("🔄 RESETTING DUE TO STUCK: " .. reason)
-    print("=" .. string.rep("=", 50))
-    
-    local wasRunning = AutoFarmRunning
-    
-    if wasRunning then
-        stopAutoFarm()
-        task.wait(1)
-    end
-    
-    if player.Character and player.Character:FindFirstChild("Humanoid") then
-        print("💀 Killing character for reset...")
-        player.Character.Humanoid.Health = 0
-    end
-    
-    print("⏳ Waiting for respawn...")
-    task.wait(4)
-    
-    local waitStart = tick()
-    local characterReady = false
-    
-    while tick() - waitStart < 20 do
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
-            if player.Character.Humanoid.Health > 0 then
-                print("✅ Character respawned")
-                characterReady = true
-                break
-            end
-        end
-        task.wait(0.5)
-    end
-    
-    if not characterReady then
-        warn("❌ Failed to respawn after 20 seconds")
-        stuckResetting = false
-        return
-    end
-    
-    task.wait(2)
-    
-    if wasRunning then
-        print("🔄 Restarting Auto Farm...")
-        AutoFarmRunning = true
-        
-        print("🚗 Spawning new vehicle...")
-        local spawnSuccess = spawnVehicle()
-        
-        if not spawnSuccess then
-            warn("⚠️ Retrying spawn...")
-            task.wait(2)
-            spawnVehicle()
-        end
-        
-        print("⏳ Waiting to enter vehicle...")
-        local vehicleWaitStart = tick()
-        local inVehicle = false
-        
-        while tick() - vehicleWaitStart < 35 do
-            if isPlayerInVehicle() then
-                local car = findMyVehicle()
-                if car then
-                    print("✅ In vehicle! Starting farm...")
-                    inVehicle = true
-                    break
-                end
-            end
-            
-            if tick() - vehicleWaitStart > 5 and not findMyVehicle() and tick() - vehicleWaitStart < 10 then
-                print("🔄 Retrying vehicle spawn...")
-                spawnVehicle()
-            end
-            
-            task.wait(0.5)
-        end
-        
-        if inVehicle then
-            task.wait(1)
-            currentStep = "reset_complete"
-            if AutoFarmThread then pcall(task.cancel, AutoFarmThread) end
-            AutoFarmThread = task.spawn(startAutoFarm)
-        else
-            warn("❌ Failed to get vehicle after reset")
-            AutoFarmRunning = false
-        end
-    end
-    
-    stuckResetting = false
-end
-
--- =============================================
--- 🚗 VEHICLE SPAWNER FUNCTIONS
--- =============================================
-
-local function getClosestPodium()
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return nil end
-    
-    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
-    local closestPodium = nil
-    local shortestDistance = math.huge
-    
-    for _, obj in ipairs(spawnersFolder:GetChildren()) do
-        local targetPart = nil
-        if obj:IsA("BasePart") then
-            targetPart = obj
-        elseif obj:IsA("Model") then
-            targetPart = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
-        else
-            targetPart = obj:FindFirstChildOfClass("BasePart")
-        end
-        
-        if targetPart and targetPart.Position then
-            local distance = (rootPart.Position - targetPart.Position).Magnitude
-            if distance < shortestDistance then
-                shortestDistance = distance
-                closestPodium = obj
-            end
-        end
-    end
-    return closestPodium
-end
-
-function spawnVehicle()
-    print("🚗 AutoSpawner: Searching for nearest podium...")
-    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+local function spawnVehicle()
+    print("🚗 AutoSpawner: Spawning vehicle from precise podium index [9]...")
+    if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
         warn("❌ No character to spawn vehicle")
         return false
     end
     
-    local podium = getClosestPodium()
+    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
+    local children = spawnersFolder:GetChildren()
+    local podium = children[9]
+    
     if podium then
-        print("🎯 Podium found: " .. podium:GetFullName())
+        print("🎯 Accurate Podium [9] found: " .. podium:GetFullName())
         local args = { podium, VEHICLE_MODEL }
         
         game:GetService("ReplicatedStorage")
@@ -761,571 +390,269 @@ function spawnVehicle()
             :WaitForChild("SpawnVehicleFromSpawner")
             :InvokeServer(unpack(args))
             
-        print("✅ Spawn event sent successfully")
+        print("✅ Spawn event sent successfully to Podium [9]")
         return true
     else
-        warn("❌ No podium found nearby")
+        warn("❌ Could not find the 9th podium inside VehicleSpawners")
         return false
     end
 end
 
-function isPlayerInVehicle()
-    if not player.Character then return false end
-    local humanoid = player.Character:FindFirstChild("Humanoid")
-    if not humanoid then return false end
+local function viajarA(targetPos)
+    if not autofarmEnabled then return end
+    running = true
+    if currentFreezeConnection then currentFreezeConnection:Disconnect() end
     
-    if humanoid.SeatPart then
-        local seatPart = humanoid.SeatPart
-        local vehicleModel = seatPart:FindFirstAncestorOfClass("Model")
-        if vehicleModel then
-            local vehiclesFolder = workspace:FindFirstChild("Vehicles")
-            if vehiclesFolder and vehicleModel:IsDescendantOf(vehiclesFolder) then
-                return true
+    -- Detectar asiento y vehículo actualizados
+    local s = h.SeatPart
+    local v = nil
+    
+    if not s then
+        print("🔍 Buscando el vehiculo en el mapa para sentarse...")
+        local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+        if vehiclesFolder then
+            for _, car in ipairs(vehiclesFolder:GetChildren()) do
+                if car.Name:lower():find(VEHICLE_MODEL:lower()) or car.Name:lower():find(p.Name:lower()) then
+                    local seat = car:FindFirstChildWhichIsA("VehicleSeat", true) or car:FindFirstChildWhichIsA("Seat", true)
+                    if seat then
+                        hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+                        task.wait(0.3)
+                        seat:Sit(h)
+                        task.wait(0.5)
+                        s = h.SeatPart
+                        v = car
+                        break
+                    end
+                end
             end
         end
     end
-    return false
-end
-
-local function destroyVehicleWheels(vehicleModel)
-    if not vehicleModel then return end
-    local wheelsFolder = vehicleModel:FindFirstChild("Wheels")
-    if wheelsFolder then wheelsFolder:Destroy() end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
+    
+    if not s then
+        warn("❌ No se pudo detectar el asiento del vehiculo.")
+        return
+    end
+    
+    if not v then
+        v = s.Parent
+        while v and not v:FindFirstChild("Root") do v = v.Parent end
+    end
+    if not v then return end
+    local r = v:FindFirstChild("Root")
+    
+    -- Eliminar llantas si existen para evitar colisiones extrañas
+    local wheelsModel = v:FindFirstChild("Wheels")
+    if wheelsModel then
+        wheelsModel:Destroy()
+    end
+    
+    for _, part in ipairs(v:GetDescendants()) do
         if part:IsA("BasePart") then
-            local name = part.Name:lower()
-            if name:find("wheel") or name:find("knuckle") or name:find("antiroll") or name:find("steering") then
-                part:Destroy()
+            part.Anchored = false
+            part.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            part.AssemblyAngularVelocity = Vector3.new(0,0,0)
+        end
+    end
+    if r then r.Anchored = false end
+    task.wait(0.05)
+    
+    local noclipConnection
+    noclipConnection = game:GetService("RunService").Stepped:Connect(function()
+        if not running or not autofarmEnabled then 
+            if noclipConnection then noclipConnection:Disconnect() end 
+            return 
+        end
+        
+        for _, part in ipairs(v:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+        if p.Character then
+            for _, part in ipairs(p.Character:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
             end
         end
-    end
-end
-
-local function freezeInertia(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then
-            pcall(function()
-                part.Velocity = Vector3.zero
-                part.RotVelocity = Vector3.zero
-                part.AssemblyLinearVelocity = Vector3.zero
-                part.AssemblyAngularVelocity = Vector3.zero
-            end)
-        end
-    end
-end
-
-local function getAllParts(vehicleModel)
-    local parts = {}
-    if not vehicleModel then return parts end
-    for _, part in ipairs(vehicleModel:GetDescendants()) do
-        if part:IsA("BasePart") then table.insert(parts, part) end
-    end
-    return parts
-end
-
-local function anchorVehicle(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(getAllParts(vehicleModel)) do
-        part.Anchored = true
-    end
-end
-
-local function unanchorVehicle(vehicleModel)
-    if not vehicleModel then return end
-    for _, part in ipairs(getAllParts(vehicleModel)) do
-        part.Anchored = false
-    end
-end
-
-local function calculatePathfindingRoute(startPos, endPos)
-    local path = PathfindingService:CreatePath({
-        AgentRadius = 5,
-        AgentHeight = 5,
-        AgentCanJump = false,
-    })
-    local success = pcall(function()
-        path:ComputeAsync(startPos, endPos)
     end)
-    if success and path.Status == Enum.PathStatus.Success then
-        return path:GetWaypoints()
-    else
-        return nil
-    end
+    
+    local llego = false
+    local heartbeatConnection
+    
+    heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not running or not autofarmEnabled then 
+            if heartbeatConnection then heartbeatConnection:Disconnect() end 
+            return 
+        end
+        if not r or not r.Parent then return end
+        
+        local pos = r.Position
+        local dir = targetPos - pos
+        local dist = Vector3.new(dir.X, 0, dir.Z).Magnitude
+        
+        if dist < DISTANCIA_LLEGADA then
+            running = false
+            if heartbeatConnection then heartbeatConnection:Disconnect() end
+            if noclipConnection then noclipConnection:Disconnect() end
+            
+            r.CFrame = CFrame.new(targetPos)
+            
+            currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                if running or not autofarmEnabled then 
+                    if currentFreezeConnection then currentFreezeConnection:Disconnect() end 
+                    return 
+                end
+                r.CFrame = CFrame.new(targetPos)
+                r.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                r.AssemblyAngularVelocity = Vector3.new(0,0,0)
+            end)
+            llego = true
+            return
+        end
+        
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+        raycastParams.FilterDescendantsInstances = {v, c}
+        local ray = workspace:Raycast(pos + Vector3.new(0,15,0), Vector3.new(0,-50,0), raycastParams)
+        if ray then
+            r.CFrame = CFrame.new(Vector3.new(pos.X, ray.Position.Y + 2.5, pos.Z))
+        else
+            r.CFrame = CFrame.new(Vector3.new(pos.X, math.max(pos.Y, targetPos.Y - 3), pos.Z))
+        end
+        
+        local currentSpeed = (dist > FRENADO_INICIO) and MAX_SPEED or math.max(FRENADO_MINIMO, MAX_SPEED * (dist / FRENADO_INICIO))
+        local moveDir = Vector3.new(dir.X, 0, dir.Z).Unit
+        if moveDir.Magnitude == 0 then moveDir = Vector3.new(1, 0, 0) end
+        
+        r.AssemblyLinearVelocity = moveDir * currentSpeed
+        r.CFrame = CFrame.lookAt(r.Position, r.Position + moveDir)
+        r.AssemblyAngularVelocity = Vector3.new(0,0,0)
+    end)
+    
+    repeat task.wait() until llego or not running or not autofarmEnabled
 end
 
--- =============================================
--- ✅ INVENTORY VERIFICATION
--- =============================================
-local function countDiamondRings()
+local function contarItems(nombreItem)
     local count = 0
-    local backpack = player:FindFirstChild("Backpack")
-    if backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item.Name == "Fake Diamond Ring" then count += 1 end
-        end
-    end
-    local character = player.Character
-    if character then
-        for _, item in ipairs(character:GetChildren()) do
-            if item.Name == "Fake Diamond Ring" then count += 1 end
+    if p:FindFirstChild("Backpack") then
+        for _, item in ipairs(p.Backpack:GetChildren()) do
+            if item.Name == nombreItem then count = count + 1 end
         end
     end
     return count
 end
 
-local function hasBriefcase()
-    local backpack = player:FindFirstChild("Backpack")
-    local hasInBackpack = backpack and backpack:FindFirstChild("Briefcase") ~= nil
-    local character = player.Character
-    local hasInCharacter = character and character:FindFirstChild("Briefcase") ~= nil
-    return hasInBackpack or hasInCharacter
-end
+-- ===== CONTROL DE HILOS DEL CICLO PRINCIPAL =====
 
--- =============================================
--- ✅ TRAVEL FUNCTION
--- =============================================
-local function travelToLocation(targetPos, destinationName)
-    local myCar = findMyVehicle()
-    if not myCar then
-        warn("❌ No vehicle found for travel to " .. destinationName)
-        return false
-    end
-
-    destroyVehicleWheels(myCar)
-    task.wait(0.2)
-
-    local primaryPart = myCar:FindFirstChild("Root") or myCar.PrimaryPart or myCar:FindFirstChildOfClass("VehicleSeat")
-    if not primaryPart then return false end
-
-    reachedCurrentDestination = false
-    travelActive = true
-
-    local dragTargetPos = Vector3.new(targetPos.X, targetPos.Y + dragHeightOffset, targetPos.Z)
-    local waypoints = calculatePathfindingRoute(primaryPart.Position, dragTargetPos)
-    if not waypoints or #waypoints == 0 then
-        waypoints = {{Position = primaryPart.Position}, {Position = dragTargetPos}}
-    end
-
-    clearForces(myCar)
-    unanchorVehicle(myCar)
-    activateTotalNoClip(myCar)
-    activatePlayerNoClip()
-
-    local parts = getAllParts(myCar)
-    for _, part in ipairs(parts) do
-        local bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.Name = "_DragForce"
-        bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        bodyVelocity.Velocity = Vector3.zero
-        bodyVelocity.Parent = part
-
-        local bodyGyro = Instance.new("BodyGyro")
-        bodyGyro.Name = "_DragGyro"
-        bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bodyGyro.CFrame = part.CFrame
-        bodyGyro.Parent = part
-    end
-
-    local currentWaypointIndex = 1
-    local fixedHeight = dragTargetPos.Y
-
-    if activeMovementLoop then activeMovementLoop:Disconnect() end
-    activeMovementLoop = RunService.Stepped:Connect(function()
-        if not myCar or not myCar.Parent or not travelActive or not AutoFarmRunning then
-            if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
-            return
-        end
-
-        freezeInertia(myCar)
-        local currentPosition = primaryPart.Position
-        local currentTarget = waypoints[currentWaypointIndex] or {Position = dragTargetPos}
-
-        local destinationPoint = currentTarget.Position
-        local planeDirection = Vector3.new(destinationPoint.X - currentPosition.X, 0, destinationPoint.Z - currentPosition.Z)
-
-        if planeDirection.Magnitude < 8 and currentWaypointIndex < #waypoints then
-            currentWaypointIndex = currentWaypointIndex + 1
-            return
-        end
-
-        local finalDirection = Vector3.new(dragTargetPos.X - currentPosition.X, 0, dragTargetPos.Z - currentPosition.Z)
-        if finalDirection.Magnitude < 6 or (currentWaypointIndex >= #waypoints and planeDirection.Magnitude < 6) then
-            travelActive = false
-            if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
-
-            print("🎯 Arriving at " .. destinationName .. "...")
-            local initialPos = primaryPart.Position
-            local currentOrientation = primaryPart.CFrame.Rotation
-
-            for i = 1, 15 do
-                local alpha = i / 15
-                local interpolatedPos = initialPos:Lerp(Vector3.new(targetPos.X, dragTargetPos.Y, targetPos.Z), alpha)
-                freezeInertia(myCar)
-                myCar:PivotTo(CFrame.new(interpolatedPos) * currentOrientation)
-                task.wait(1/60)
-            end
-
-            local afterDragPos = primaryPart.Position
-            for i = 1, 20 do
-                local alpha = i / 20
-                local risingPos = afterDragPos:Lerp(targetPos, alpha)
-                freezeInertia(myCar)
-                myCar:PivotTo(CFrame.new(risingPos) * currentOrientation)
-                task.wait(1/60)
-            end
-
-            clearForces(myCar)
-            freezeInertia(myCar)
-            anchorVehicle(myCar)
-            task.wait(0.05)
-
-            myCar:PivotTo(CFrame.new(targetPos) * currentOrientation)
-            task.wait(0.05)
-
-            deactivateTotalNoClip(myCar)
-            deactivatePlayerNoClip()
-            task.wait(0.05)
-            freezeInertia(myCar)
-
-            reachedCurrentDestination = true
-            print("✅ Arrived at " .. destinationName .. "!")
-            return
-        end
-
-        local speed = planeDirection.Unit * dragSpeed
-        for _, part in ipairs(parts) do
-            local bv = part:FindFirstChild("_DragForce")
-            if bv and bv:IsA("BodyVelocity") then bv.Velocity = speed end
-            local bg = part:FindFirstChild("_DragGyro")
-            if bg and bg:IsA("BodyGyro") then
-                bg.CFrame = CFrame.lookAt(currentPosition, Vector3.new(destinationPoint.X, currentPosition.Y, destinationPoint.Z))
+local function startAutofarm()
+    autofarmEnabled = true
+    mainLoopThread = task.spawn(function()
+        print("🚀 Iniciando ciclo de Autofarm...")
+        
+        -- Inicialización y montada de vehículo automática al prender
+        local currentCharacter = p.Character or p.CharacterAdded:Wait()
+        local currentHumanoid = currentCharacter:WaitForChild("Humanoid")
+        
+        if not currentHumanoid.SeatPart then
+            local spawned = spawnVehicle()
+            if spawned then
+                task.wait(1.5)
             end
         end
 
-        local currentHeight = primaryPart.Position.Y
-        local heightDifference = fixedHeight - currentHeight
-        if math.abs(heightDifference) > 0.3 then
-            local gradualCorrection = math.clamp(heightDifference, -3, 3)
-            myCar:PivotTo(CFrame.new(0, gradualCorrection, 0) * myCar:GetPivot())
+        while autofarmEnabled do
+            -- FASE 1: COMPRA
+            print("🛒 Viajando a la zona de Compra")
+            viajarA(Vector3.new(6821, 17, 20))
+            if not autofarmEnabled then break end
+            task.wait(0.5)
+            
+            while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled do
+                print("💎 Comprando Fake Diamond Ring")
+                local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
+                game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
+                task.wait(0.3)
+            end
+            if not autofarmEnabled then break end
+            print("✅ Anillos listos")
+            
+            -- FASE 2: VENTA
+            print("💵 Viajando a la zona de Venta")
+            viajarA(Vector3.new(214, 17, -45))
+            if not autofarmEnabled then break end
+            task.wait(0.5)
+            
+            print("💰 Vendiendo contrabando")
+            local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller4") }
+            game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
+            
+            local tiempoEspera = 0
+            repeat 
+                task.wait(0.2) 
+                tiempoEspera = tiempoEspera + 0.2
+            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 3 or not autofarmEnabled
+            if not autofarmEnabled then break end
+            
+            -- FASE 3: LAVADO
+            if p.Backpack:FindFirstChild("Briefcase") then
+                print("🧼 Viajando a Lavar dinero")
+                viajarA(Vector3.new(6812, 17, -33))
+                if not autofarmEnabled then break end
+                task.wait(0.5)
+                
+                while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled do
+                    print("🧽 Lavando dinero")
+                    local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
+                    game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
+                    task.wait(0.5)
+                end
+                print("✨ Ciclo de lavado completo")
+            else
+                print("⚠️ No se detecto maletin, reiniciando")
+            end
+            
+            task.wait(1)
         end
     end)
-
-    local safetyTime = 0
-    repeat
-        task.wait(0.5)
-        safetyTime = safetyTime + 0.5
-    until reachedCurrentDestination or safetyTime >= 35 or not AutoFarmRunning
-
-    if not reachedCurrentDestination and AutoFarmRunning then
-        if activeMovementLoop then activeMovementLoop:Disconnect(); activeMovementLoop = nil end
-        travelActive = false
-
-        -- 🛠️ FIX: Error de sintaxis corregido (+) por (..)
-        print("⏰ Timeout, forcing arrival at " .. destinationName .. "...")
-        local initialPos = primaryPart.Position
-        local currentOrientation = primaryPart.CFrame.Rotation
-
-        for i = 1, 15 do
-            local alpha = i / 15
-            local interpolatedPos = initialPos:Lerp(targetPos, alpha)
-            freezeInertia(myCar)
-            myCar:PivotTo(CFrame.new(interpolatedPos) * currentOrientation)
-            task.wait(1/60)
-        end
-
-        clearForces(myCar)
-        anchorVehicle(myCar)
-        myCar:PivotTo(CFrame.new(targetPos) * currentOrientation)
-        task.wait(0.1)
-        deactivateTotalNoClip(myCar)
-        deactivatePlayerNoClip()
-        freezeInertia(myCar)
-    end
-
-    print("⏳ Waiting " .. ACTION_DELAY .. " seconds for position stabilization...")
-    task.wait(ACTION_DELAY)
-    
-    return true
 end
 
--- =============================================
--- ✅ FARM STEPS WITH SMART ANTI-STUCK
--- =============================================
-
-local function doPurchase()
-    print("📦 === PHASE: PURCHASE ===")
-    currentStep = "purchasing"
-    
-    for attempt = 1, MAX_RETRIES do
-        if not AutoFarmRunning then return false end
-        
-        print("🛫 Traveling to purchase location... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
-        local travelOk = travelToLocation(BUY_POS, "Purchase Point")
-        
-        if not AutoFarmRunning then return false end
-        if not travelOk then
-            warn("⚠️ Travel to purchase failed")
-            task.wait(1)
-            continue
-        end
-        
-        print("🛍️ Buying diamond rings... (Currently have " .. countDiamondRings() .. "/5)")
-        local ringsNeeded = 5 - countDiamondRings()
-        
-        for i = 1, ringsNeeded do
-            if not AutoFarmRunning then return false end
-            local buyable = workspace:WaitForChild("WorldBuyableItems"):FindFirstChild("Fake Diamond Ring")
-            if buyable then
-                ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(buyable)
-                task.wait(0.5)
-            end
-        end
-        
-        task.wait(1)
-        
-        if countDiamondRings() >= 5 then
-            print("✅ Purchase successful! 5 rings in inventory")
-            return true
-        end
-        
-        warn("⚠️ Purchase failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), have " .. countDiamondRings() .. "/5 rings")
+local function stopAutofarm()
+    autofarmEnabled = false
+    running = false
+    if _G.StopCarMovement then _G.StopCarMovement() end
+    if mainLoopThread then
+        task.cancel(mainLoopThread)
+        mainLoopThread = nil
     end
-    
-    print("❌ PURCHASE FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
-    task.spawn(function() resetPlayerAndRestart("Purchase failed " .. MAX_RETRIES .. " times") end)
-    
-    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
-    return false
+    print("🛑 Autofarm apagado por completo de manera segura.")
 end
 
-local function doSell()
-    print("💰 === PHASE: SELL ===")
-    currentStep = "selling"
-    
-    for attempt = 1, MAX_RETRIES do
-        if not AutoFarmRunning then return false end
-        
-        if countDiamondRings() < 5 then
-            print("⚠️ No rings to sell, returning to purchase...")
-            return false
-        end
-        
-        print("🛫 Traveling to sell location... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
-        local travelOk = travelToLocation(SELL_POS, "Sell Point")
-        
-        if not AutoFarmRunning then return false end
-        if not travelOk then
-            warn("⚠️ Travel to sell failed")
-            task.wait(1)
-            continue
-        end
-        
-        print("💰 Selling merchandise...")
-        local seller = workspace:WaitForChild("NPC"):FindFirstChild("Seller")
-        if seller then
-            ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(seller)
-            
-            local checkStart = tick()
-            while tick() - checkStart < 5 do
-                if hasBriefcase() then
-                    print("✅ Sale successful! Briefcase in inventory")
-                    return true
-                end
-                task.wait(0.5)
-            end
-        end
-        
-        warn("⚠️ Sale failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), briefcase not deleted")
-    end
-    
-    print("❌ SELL FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
-    task.spawn(function() resetPlayerAndRestart("Sell failed " .. MAX_RETRIES .. " times") end)
-    
-    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
-    return false
-end
-
-local function doWash()
-    print("🧼 === PHASE: WASH ===")
-    currentStep = "washing"
-    
-    for attempt = 1, MAX_RETRIES do
-        if not AutoFarmRunning then return false end
-        
-        if not hasBriefcase() then
-            print("⚠️ No briefcase to wash, returning to sell...")
-            return false
-        end
-        
-        print("🛫 Traveling to laundry... (Attempt " .. attempt .. "/" .. MAX_RETRIES .. ")")
-        local travelOk = travelToLocation(WASH_POS, "Laundry")
-        
-        if not AutoFarmRunning then return false end
-        if not travelOk then
-            warn("⚠️ Travel to laundry failed")
-            task.wait(1)
-            continue
-        end
-        
-        print("🧼 Washing briefcase...")
-        local trigger = workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):FindFirstChild("PromptPart")
-        if trigger then
-            ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(trigger)
-            
-            local checkStart = tick()
-            while tick() - checkStart < 5 do
-                if not hasBriefcase() then
-                    print("✅ Wash successful! Briefcase removed from inventory")
-                    return true
-                end
-                task.wait(0.5)
-            end
-        end
-        
-        warn("⚠️ Wash failed (Attempt " .. attempt .. "/" .. MAX_RETRIES .. "), briefcase still in inventory")
-    end
-    
-    print("❌ WASH FAILED " .. MAX_RETRIES .. " TIMES. RESETTING...")
-    task.spawn(function() resetPlayerAndRestart("Wash failed " .. MAX_RETRIES .. " times") end)
-    
-    repeat task.wait(0.5) until not AutoFarmRunning or not stuckResetting
-    return false
-end
-
--- =============================================
--- 🔄 MAIN AUTO FARM LOOP
--- =============================================
-function startAutoFarm()
-    print("=" .. string.rep("=", 50))
-    print("🚀 STARTING AUTO FARM")
-    print("=" .. string.rep("=", 50))
-
-    while AutoFarmRunning do
-        local car = findMyVehicle()
-        if not car then
-            warn("❌ No vehicle found, searching...")
-            currentStep = "no_vehicle"
-            
-            if AutoFarmRunning then
-                print("🚗 Attempting to spawn vehicle...")
-                spawnVehicle()
-                task.wait(3)
-            end
-            continue
-        end
-
-        destroyVehicleWheels(car)
-        
-        local purchaseOk = doPurchase()
-        if not AutoFarmRunning then break end
-        if not purchaseOk then task.wait(1); continue end
-        
-        local sellOk = doSell()
-        if not AutoFarmRunning then break end
-        if not sellOk then task.wait(1); continue end
-        
-        local washOk = doWash()
-        if not AutoFarmRunning then break end
-        if not washOk then task.wait(1); continue end
-
-        print("\n✅ === CYCLE COMPLETED SUCCESSFULLY ===\n")
-        currentStep = "cycle_completed"
-        task.wait(1)
-    end
-
-    print("🛑 AutoFarm stopped")
-end
-
--- =============================================
--- ✅ UI TOGGLE AND SLIDERS
--- =============================================
-
-setupDeathDetection()
-
-mainSection:Paragraph({
-    Header = "⚠️ ROLLBACK WARNING",
-    Body = " <font color='#FFD700'><b>If the game is rolling back frequently, lower the drag speed to avoid desync and position resets.</b></font> "
-}, "auto_open_packs_info")
-
-mainSection:Paragraph({
-    Header = "🛡️ SMART ANTI-STUCK",
-    Body = " <font color='#00FF00'><b>If an action (buy/sell/wash) fails " .. MAX_RETRIES .. " times in a row, auto-resets and continues farming. Death detection included.</b></font> "
-}, "anti_stuck_info")
+-- ===== INTEGRACIÓN CON TU SECCIÓN DE UI =====
 
 mainSection:Toggle({
-    Name = "Auto Farm",
+    Name = "Auto Farm Smuggle",
     Default = false,
-    Callback = function(value)
-        if value then
-            print("🚀 Starting Auto Farm...")
-            -- Limpieza estricta de hilos previos para que no corra doble
-            if AutoFarmThread then pcall(task.cancel, AutoFarmThread) end
-            
-            if isPlayerInVehicle() then
-                print("✅ Already in vehicle, starting farm directly")
-                AutoFarmRunning = true
-                AutoFarmThread = task.spawn(startAutoFarm)
-            else
-                print("🚗 Spawning vehicle...")
-                spawnVehicle()
-                
-                task.spawn(function()
-                    print("⏳ Waiting for vehicle and player to sit...")
-                    local waitStart = tick()
-                    
-                    while tick() - waitStart < 30 do
-                        if not value then return end
-                        
-                        if isPlayerInVehicle() then
-                            print("✅ Player seated in vehicle!")
-                            task.wait(1)
-                            if not value then return end
-                            
-                            AutoFarmRunning = true
-                            if AutoFarmThread then pcall(task.cancel, AutoFarmThread) end
-                            AutoFarmThread = task.spawn(startAutoFarm)
-                            return
-                        end
-                        task.wait(0.5)
-                    end
-                    
-                    warn("❌ Timeout: Player not detected in vehicle after 30 seconds")
-                    pcall(function()
-                        local toggle = mainSection:GetToggle("AutoFarmToggle")
-                        if toggle then toggle:SetValue(false) end
-                    end)
-                end)
-            end
+    Callback = function(Value)
+        if Value then
+            startAutofarm()
         else
-            stopAutoFarm()
+            stopAutofarm()
         end
     end
-}, "AutoFarmToggle")
+}, "autofarm_toggle")
 
 mainSection:Slider({
-    Name = "Drag Speed",
-    Default = 300,
-    Minimum = 50,
-    Maximum = 300,
+    Name = "Velocidad de Viaje",
+    Default = 800,
+    Minimum = 100,
+    Maximum = 1500,
     DisplayMethod = "Value",
     Precision = 0,
-    Callback = function(value)
-        dragSpeed = value
+    Callback = function(Value)
+        MAX_SPEED = Value
+    end,
+    onInputComplete = function(Value)
+        MAX_SPEED = Value
+        print("⚡ Velocidad ajustada a: " .. Value)
     end
-}, "DragSpeedSlider")
-
-mainSection:Slider({
-    Name = "Drag Height Offset",
-    Default = 0,
-    Minimum = -1,
-    Maximum = 10,
-    DisplayMethod = "Value",
-    Precision = 0,
-    Callback = function(value)
-        dragHeightOffset = value
-    end
-}, "OffsetHeightSlider")
+}, "autofarm_speed")
 
 
 
@@ -1460,7 +787,6 @@ local function deleteVehiclesExceptMine()
     if deletingVehicles then return end
     deletingVehicles = true
     
-    print("🚗 Looking for your vehicle...")
     local myVehicle = findMyVehicle()
     
     if myVehicle then
