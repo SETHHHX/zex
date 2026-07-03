@@ -544,7 +544,6 @@ end
 local function startAutofarm()
     autofarmEnabled = true
     mainLoopThread = task.spawn(function()
-        print("🚀 Iniciando ciclo de Autofarm...")
         
         -- Inicialización y montada de vehículo automática al prender
         local currentCharacter = p.Character or p.CharacterAdded:Wait()
@@ -559,22 +558,18 @@ local function startAutofarm()
 
         while autofarmEnabled do
             -- FASE 1: COMPRA
-            print("🛒 Viajando a la zona de Compra")
             viajarA(Vector3.new(6821, 17, 20))
             if not autofarmEnabled then break end
             task.wait(0.5)
             
             while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled do
-                print("💎 Comprando Fake Diamond Ring")
                 local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                 game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
                 task.wait(0.3)
             end
             if not autofarmEnabled then break end
-            print("✅ Anillos listos")
             
             -- FASE 2: VENTA
-            print("💵 Viajando a la zona de Venta")
             viajarA(Vector3.new(214, 17, -45))
             if not autofarmEnabled then break end
             task.wait(0.5)
@@ -592,7 +587,6 @@ local function startAutofarm()
             
             -- FASE 3: LAVADO
             if p.Backpack:FindFirstChild("Briefcase") then
-                print("🧼 Viajando a Lavar dinero")
                 viajarA(Vector3.new(6812, 17, -33))
                 if not autofarmEnabled then break end
                 task.wait(0.5)
@@ -603,9 +597,7 @@ local function startAutofarm()
                     game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
                     task.wait(0.5)
                 end
-                print("✨ Ciclo de lavado completo")
             else
-                print("⚠️ No se detecto maletin, reiniciando")
             end
             
             task.wait(1)
@@ -639,7 +631,7 @@ mainSection:Toggle({
 }, "autofarm_toggle")
 
 mainSection:Slider({
-    Name = "Velocidad de Viaje",
+    Name = "Darg Speed",
     Default = 800,
     Minimum = 100,
     Maximum = 1500,
