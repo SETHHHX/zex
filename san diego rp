@@ -541,7 +541,6 @@ local function startAutofarm()
             task.wait(0.5)
             
             while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled do
-                print("💎 Comprando Fake Diamond Ring")
                 local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                 game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
                 task.wait(0.3)
@@ -553,7 +552,6 @@ local function startAutofarm()
             if not autofarmEnabled then break end
             task.wait(0.5)
             
-            print("💰 Vendiendo contrabando")
             local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller4") }
             game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
             
