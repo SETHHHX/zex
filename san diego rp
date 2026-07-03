@@ -376,21 +376,52 @@ _G.StopCarMovement = function()
     print("🛑 Movimiento del vehículo detenido")
 end
 
--- ===== FUNCIONES DE ACCIÓN =====
+-- ===== FUNCIONES DE ACCIÓN Y SPAWN (POR PROXIMIDAD) =====
+
+local function getClosestPodium()
+    local character = p.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
+    local closestPodium = nil
+    local shortestDistance = math.huge
+    
+    for _, obj in ipairs(spawnersFolder:GetChildren()) do
+        local targetPart = nil
+        if obj:IsA("BasePart") then
+            targetPart = obj
+        elseif obj:IsA("Model") then
+            targetPart = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+        else
+            targetPart = obj:FindFirstChildOfClass("BasePart")
+        end
+        
+        if targetPart and targetPart.Position then
+            local distance = (rootPart.Position - targetPart.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPodium = obj
+            end
+        end
+    end
+    return closestPodium
+end
 
 local function spawnVehicle()
     if not autofarmEnabled then return false end
-    print("🚗 AutoSpawner: Intentando spawnear desde el podio [7]...")
+    print("🚗 AutoSpawner: Buscando el podio más cercano...")
     
-    local spawnersFolder = workspace:WaitForChild("VehicleSpawners")
-    local children = spawnersFolder:GetChildren()
-    local podium = children[7]
+    if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
+        warn("❌ No character to spawn vehicle")
+        return false
+    end
     
+    local podium = getClosestPodium()
     if podium then
-        print("🎯 Podio [7] seleccionado con éxito: " .. podium:GetFullName())
+        print("🎯 Podio encontrado por proximidad: " .. podium:GetFullName())
         local args = { podium, VEHICLE_MODEL }
         
-        -- Ejecutamos la invocación al servidor de forma segura
         local success, err = pcall(function()
             game:GetService("ReplicatedStorage")
                 :WaitForChild("__remotes")
@@ -400,20 +431,16 @@ local function spawnVehicle()
         end)
             
         if success then
-            print("✅ Evento enviado al Podio [7]")
             return true
         else
-            warn("❌ Error al invocar el spawn remoto:", err)
             return false
         end
     else
-        warn("❌ No se pudo encontrar el índice [7] dentro de VehicleSpawners")
         return false
     end
 end
 
 local function viajarA(targetPos)
-    -- Actualizar referencias locales por seguridad antes de movernos
     c = p.Character or c
     h = c:FindFirstChildOfClass("Humanoid") or h
     hrp = c:FindFirstChild("HumanoidRootPart") or hrp
@@ -424,7 +451,6 @@ local function viajarA(targetPos)
     
     local s = h.SeatPart
     if not s then
-        warn("❌ No estás sentado en ningún vehículo para iniciar el viaje.")
         running = false
         return
     end
@@ -434,7 +460,6 @@ local function viajarA(targetPos)
     if not v then running = false return end
     local r = v:FindFirstChild("Root")
     
-    -- Eliminar llantas para no-clip óptimo
     local wheelsModel = v:FindFirstChild("Wheels")
     if wheelsModel then wheelsModel:Destroy() end
     
@@ -517,7 +542,6 @@ local function viajarA(targetPos)
         r.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end)
     
-    -- El bucle espera pacientemente respetando si el toggle se apaga o si el humanoid muere
     repeat 
         task.wait(0.1) 
     until llego or not running or not autofarmEnabled or (h and h.Health <= 0)
@@ -533,28 +557,24 @@ local function contarItems(nombreItem)
     return count
 end
 
--- ===== CONTROL DEL CICLO PRINCIPAL (PROCESO SEGURO) =====
+-- ===== CONTROL DEL CICLO PRINCIPAL =====
 
 local function startAutofarm()
     if autofarmEnabled then return end
     autofarmEnabled = true
     
     mainLoopThread = task.spawn(function()
-
         
         while autofarmEnabled do
-            -- Forzar verificación de vida en cada ciclo completo del bucle
             c = p.Character or p.CharacterAdded:Wait()
             h = c:WaitForChild("Humanoid")
             
             if h.Health <= 0 then
-
                 p.CharacterAdded:Wait()
                 task.wait(1)
-                continue -- Reinicia el bucle de manera segura sin romper nada
+                continue
             end
             
-            -- Si revivió o se encendió el script y no está en un carro, se genera uno
             if not h.SeatPart and autofarmEnabled then
                 local spawned = spawnVehicle()
                 if spawned then
@@ -566,14 +586,12 @@ local function startAutofarm()
                 end
             end
 
-            -- Si sigue sin estar sentado tras el spawn por algún percance, saltar verificación o reintentar
             if not h.SeatPart or h.Health <= 0 or not autofarmEnabled then
                 task.wait(1)
                 continue
             end
 
             -- FASE 1: COMPRA
-
             viajarA(Vector3.new(6821, 17, 20))
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
@@ -587,10 +605,8 @@ local function startAutofarm()
                 task.wait(0.4)
             end
             if not autofarmEnabled or h.Health <= 0 then continue end
-
             
             -- FASE 2: VENTA
-
             viajarA(Vector3.new(214, 17, -45))
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
@@ -609,22 +625,19 @@ local function startAutofarm()
             
             -- FASE 3: LAVADO
             if p.Backpack:FindFirstChild("Briefcase") then
-
+                print("🧼 Viajando a Lavar dinero")
                 viajarA(Vector3.new(6812, 17, -33))
                 if not autofarmEnabled or h.Health <= 0 then continue end
                 task.wait(0.5)
                 
                 while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled and h.Health > 0 do
-
                     pcall(function()
                         local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
                         game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
                     end)
                     task.wait(0.5)
                 end
-
             else
-
             end
             
             task.wait(1)
@@ -636,20 +649,18 @@ local function stopAutofarm()
     autofarmEnabled = false
     running = false
     
-    -- SOLUCIÓN A CAERSE DEL MAPA: Anclamos el Root de tu vehículo actual para dejarlo flotando estático al apagarlo
     if h and h.SeatPart then
         local v = h.SeatPart.Parent
         while v and not v:FindFirstChild("Root") do v = v.Parent end
         if v and v:FindFirstChild("Root") then
             v.Root.Anchored = true
             v.Root.AssemblyLinearVelocity = Vector3.new(0,0,0)
-
+            print("📌 Vehículo retenido y anclado en su última posición.")
         end
     end
 
     if _G.StopCarMovement then _G.StopCarMovement() end
-    mainLoopThread = nil -- Eliminamos la referencia del hilo sin lanzar un error destructivo de crash
-
+    mainLoopThread = nil
 end
 
 -- ===== INTEGRACIÓN CON TU SECCIÓN DE UI =====
@@ -667,7 +678,7 @@ mainSection:Toggle({
 }, "autofarm_toggle")
 
 mainSection:Slider({
-    Name = "Speed",
+    Name = "Drag Speed",
     Default = 800,
     Minimum = 100,
     Maximum = 1500,
