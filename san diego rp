@@ -1740,6 +1740,37 @@ ExtraSection:Button({
     end
 }, "ServerHopButton")
 
+ExtraSection:Spacer()
+
+
+ExtraSection:Toggle({
+    Name = "Mod Detector",
+    Default = true,
+    Callback = function(v)
+        ModDetectorEnabled = v
+
+        if v then
+            print("[Mod Detector] Enabled.")
+
+            -- Check players already in the server
+            for _, player in ipairs(Players:GetPlayers()) do
+                CheckPlayer(player)
+            end
+
+            -- Check players joining
+            PlayerAddedConnection = Players.PlayerAdded:Connect(CheckPlayer)
+
+        else
+            print("[Mod Detector] Disabled.")
+
+            if PlayerAddedConnection then
+                PlayerAddedConnection:Disconnect()
+                PlayerAddedConnection = nil
+            end
+        end
+    end
+}, "mod_detector")
+
 
 
 --COMBAT TAB
@@ -1846,10 +1877,10 @@ CombatSection:Toggle({
 
 -- 🎚️ SLIDER - Adjust fire rate
 CombatSection:Slider({
-    Name = "Fire Rate (RPM)",
-    Default = 1000,
+    Name = "Fire Rate",
+    Default = 500,
     Minimum = 100,
-    Maximum = 2000,
+    Maximum = 500,
     DisplayMethod = "Value",
     Precision = 0,
     Callback = function(value)
@@ -2312,7 +2343,7 @@ MiscSection:Toggle({
 }, "esp_bones")
 
 MiscSection:Toggle({
-    Name = "ESP Highlight (Red)",
+    Name = "ESP Highlight",
     Default = false,
     Callback = function(Value)
         ESPConfig.Highlights = Value
