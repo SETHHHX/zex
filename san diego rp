@@ -1901,7 +1901,36 @@ CombatSection:Slider({
 }, "RapidFireSpeed")
 
 
+-- ═══════════════════════════════════════════════════════════════
+--  TOGGLE CON ACTIVAR/DESACTIVAR - SIN SPREAD
+-- ═══════════════════════════════════════════════════════════════
 
+local NoSpreadEnabled = false
+
+CombatSection:Toggle({
+    Name = "No Spread",
+    Default = false,
+    Callback = function()
+        NoSpreadEnabled = not NoSpreadEnabled
+        
+        local config = require(game:GetService("ReplicatedStorage").SharedModules.Configs.GunConfig)
+        
+        for gunName, gunData in pairs(config) do
+            if gunData.Stats then
+                if NoSpreadEnabled then
+                    -- Activar: Spread = 0
+                    gunData.Stats.BulletSpreadDegrees = 0
+                    gunData.Stats.ShotgunSpreadDegrees = 0
+                else
+                    -- Desactivar: Restaurar valores originales (opcional)
+                    -- Nota: Necesitarías guardar los valores originales primero
+                end
+            end
+        end
+        
+        return NoSpreadEnabled
+    end
+}, "NoSpread")
 
 
 local Players = game:GetService("Players")
