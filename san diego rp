@@ -327,19 +327,26 @@ antiAfkConnection = player.Idled:Connect(function()
         VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-        print("🛡️ Anti-AFK: Conexión asegurada contra el kick por inactividad.")
     end)
 end)
 
-print("✅ Sistema Anti-AFK cargado y ejecutándose en segundo plano.")
 
 
 
 
 
+mainSection:Divider()
 
 
+-- Script para ejecutor - Elimina workspace.BlackMarket
+local blackMarket = workspace:FindFirstChild("BlackMarket")
 
+if blackMarket then
+    blackMarket:Destroy()
+    print("✅ BlackMarket eliminado")
+else
+    print("⚠️ BlackMarket no encontrado")
+end
 
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
@@ -607,12 +614,13 @@ local function startAutofarm()
             if not autofarmEnabled or h.Health <= 0 then continue end
             
             -- FASE 2: VENTA
-            viajarA(Vector3.new(209, 6, -37))
+            viajarA(Vector3.new(-82, 41, 433))
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
+
             
             pcall(function()
-                local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller4") }
+                local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller2") }
                 game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
             end)
             
@@ -665,6 +673,18 @@ end
 
 -- ===== INTEGRACIÓN CON TU SECCIÓN DE UI =====
 
+mainSection:Paragraph({
+    Header = "⚠️ ROLLBACK WARNING",
+    Body = " <font color='#FFD700'><b>If the game is rolling back frequently, lower the drag speed to avoid desync and position resets.</b></font> "
+}, "auto_open_packs_info")
+
+mainSection:Spacer()
+
+mainSection:Paragraph({
+    Header = "🛡️ AUTO FARM REQUEST",
+    Body = " <font color='#00FF00'><b>TO USE THE AUTO FARM U NEED ATLEAST 5.000</b></font> "
+}, "anti_stuck_info")
+
 mainSection:Toggle({
     Name = "Auto Farm Smuggle",
     Default = false,
@@ -681,7 +701,7 @@ mainSection:Slider({
     Name = "Drag Speed",
     Default = 800,
     Minimum = 100,
-    Maximum = 1500,
+    Maximum = 800,
     DisplayMethod = "Value",
     Precision = 0,
     Callback = function(Value)
@@ -689,7 +709,6 @@ mainSection:Slider({
     end,
     onInputComplete = function(Value)
         MAX_SPEED = Value
-        print("⚡ Velocidad ajustada a: " .. Value)
     end
 }, "autofarm_speed")
 
@@ -899,7 +918,7 @@ end
 -- 🎮 USER INTERFACE (Toggle with Low Graphics)
 -- =============================================================================
 mainSection:Toggle({
-    Name = "Auto Cleaner + Low Graphics",
+    Name = "Low Graphics",
     Default = false,
     Callback = function(value)
         if value then
@@ -917,7 +936,70 @@ mainSection:Toggle({
 }, "AutoCleanerToggle")
 
 
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
+local GROUP_ID = 177149320
+
+local StaffRoles = {
+    ["Moderator"] = true,
+    ["Community Manager"] = true,
+    ["Contributor"] = true,
+    ["Developer"] = true,
+    ["Sr. Developer"] = true,
+    ["Co-Owner"] = true,
+    ["Owner"] = true,
+}
+
+local ModDetectorEnabled = false
+local PlayerAddedConnection
+
+local function CheckPlayer(player)
+    if not ModDetectorEnabled then
+        return
+    end
+
+    if player == LocalPlayer then
+        return
+    end
+
+    local success, role = pcall(function()
+        return player:GetRoleInGroup(GROUP_ID)
+    end)
+
+    if success and StaffRoles[role] then
+        warn(string.format("[Mod Detector] Staff detected: %s (%s)", player.Name, role))
+        LocalPlayer:Kick(string.format("Staff detected: %s (%s)", player.Name, role))
+    end
+end
+
+mainSection:Toggle({
+    Name = "Mod Detector",
+    Default = true,
+    Callback = function(v)
+        ModDetectorEnabled = v
+
+        if v then
+            print("[Mod Detector] Enabled.")
+
+            -- Check players already in the server
+            for _, player in ipairs(Players:GetPlayers()) do
+                CheckPlayer(player)
+            end
+
+            -- Check players joining
+            PlayerAddedConnection = Players.PlayerAdded:Connect(CheckPlayer)
+
+        else
+            print("[Mod Detector] Disabled.")
+
+            if PlayerAddedConnection then
+                PlayerAddedConnection:Disconnect()
+                PlayerAddedConnection = nil
+            end
+        end
+    end
+}, "mod_detector")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
