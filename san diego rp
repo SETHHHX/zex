@@ -212,6 +212,7 @@ local CombatSection = tabs.Combat:Section({ Side = "Left" })
 local CombatSection2 = tabs.Combat:Section({ Side = "Right" })
 local ExtraSection = tabs.Main:Section({ Side = "Right" })
 local MiscSection = tabs.Visual:Section({ Side = "Left" })
+local Visual2 = tabs.Visual:Section({ Side = "Right" })
 
 -- Sección Settings (con el Slider de tamaño)
 local settingsSection = tabs.Settings:Section({ Side = "Left" })
@@ -338,15 +339,7 @@ end)
 mainSection:Divider()
 
 
--- Script para ejecutor - Elimina workspace.BlackMarket
-local blackMarket = workspace:FindFirstChild("BlackMarket")
 
-if blackMarket then
-    blackMarket:Destroy()
-    print("✅ BlackMarket eliminado")
-else
-    print("⚠️ BlackMarket no encontrado")
-end
 
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
@@ -570,6 +563,15 @@ local function startAutofarm()
     if autofarmEnabled then return end
     autofarmEnabled = true
     
+    -- El código elimina BlackMarket justo al encender el farm
+    local blackMarket = workspace:FindFirstChild("BlackMarket")
+    if blackMarket then
+        blackMarket:Destroy()
+        print("✅ BlackMarket eliminado exitosamente al iniciar Auto Farm")
+    else
+        print("⚠️ BlackMarket no encontrado o ya eliminado")
+    end
+    
     mainLoopThread = task.spawn(function()
         
         while autofarmEnabled do
@@ -604,7 +606,6 @@ local function startAutofarm()
             task.wait(0.5)
             
             while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled and h.Health > 0 do
-
                 pcall(function()
                     local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                     game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
@@ -618,7 +619,6 @@ local function startAutofarm()
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
 
-            
             pcall(function()
                 local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller2") }
                 game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
@@ -645,7 +645,6 @@ local function startAutofarm()
                     end)
                     task.wait(0.5)
                 end
-            else
             end
             
             task.wait(1)
@@ -936,70 +935,6 @@ mainSection:Toggle({
 }, "AutoCleanerToggle")
 
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
-local GROUP_ID = 177149320
-
-local StaffRoles = {
-    ["Moderator"] = true,
-    ["Community Manager"] = true,
-    ["Contributor"] = true,
-    ["Developer"] = true,
-    ["Sr. Developer"] = true,
-    ["Co-Owner"] = true,
-    ["Owner"] = true,
-}
-
-local ModDetectorEnabled = false
-local PlayerAddedConnection
-
-local function CheckPlayer(player)
-    if not ModDetectorEnabled then
-        return
-    end
-
-    if player == LocalPlayer then
-        return
-    end
-
-    local success, role = pcall(function()
-        return player:GetRoleInGroup(GROUP_ID)
-    end)
-
-    if success and StaffRoles[role] then
-        warn(string.format("[Mod Detector] Staff detected: %s (%s)", player.Name, role))
-        LocalPlayer:Kick(string.format("Staff detected: %s (%s)", player.Name, role))
-    end
-end
-
-mainSection:Toggle({
-    Name = "Mod Detector",
-    Default = true,
-    Callback = function(v)
-        ModDetectorEnabled = v
-
-        if v then
-            print("[Mod Detector] Enabled.")
-
-            -- Check players already in the server
-            for _, player in ipairs(Players:GetPlayers()) do
-                CheckPlayer(player)
-            end
-
-            -- Check players joining
-            PlayerAddedConnection = Players.PlayerAdded:Connect(CheckPlayer)
-
-        else
-            print("[Mod Detector] Disabled.")
-
-            if PlayerAddedConnection then
-                PlayerAddedConnection:Disconnect()
-                PlayerAddedConnection = nil
-            end
-        end
-    end
-}, "mod_detector")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1231,6 +1166,7 @@ mainSection:Toggle({
         end
     end
 }, "ProfitTrackerToggle")
+
 
 
 
@@ -1568,6 +1504,9 @@ task.spawn(function()
     end
 end)
 
+
+
+
 ExtraSection:Spacer()
 
 local TeleportService = game:GetService("TeleportService")
@@ -1734,6 +1673,8 @@ ExtraSection:Toggle({
     end
 }, "AutoExecuteToggle")  -- Flag
 
+
+
 ExtraSection:Spacer()
 
 local TeleportService = game:GetService("TeleportService")
@@ -1798,6 +1739,8 @@ ExtraSection:Button({
         end
     end
 }, "ServerHopButton")
+
+
 
 --COMBAT TAB
 
@@ -2204,8 +2147,6 @@ CombatSection2:Toggle({
 
 ---ESP TAB
 
-
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -2218,7 +2159,8 @@ local ESPConfig = {
     Names = false,
     Boxes = false,
     Bones = false,
-    Health = false -- NUEVO: Estado del ESP de vida
+    Health = false,
+    Highlights = false 
 }
 
 -- Estructura para almacenar los objetos Drawing de cada jugador
@@ -2247,12 +2189,15 @@ local function RemoveESP(player)
     if Cache[player] then
         if Cache[player].Box then Cache[player].Box:Remove() end
         if Cache[player].Name then Cache[player].Name:Remove() end
-        if Cache[player].HealthBar then Cache[player].HealthBar:Remove() end -- NUEVO
-        if Cache[player].HealthText then Cache[player].HealthText:Remove() end -- NUEVO
+        if Cache[player].HealthBar then Cache[player].HealthBar:Remove() end 
+        if Cache[player].HealthText then Cache[player].HealthText:Remove() end 
         if Cache[player].Bones then
             for _, line in pairs(Cache[player].Bones) do
                 line:Remove()
             end
+        end
+        if Cache[player].Highlight then 
+            Cache[player].Highlight:Destroy() 
         end
         Cache[player] = nil
     end
@@ -2277,9 +2222,10 @@ local function CreateESP(player)
     Cache[player] = {
         Box = Drawing.new("Square"),
         Name = Drawing.new("Text"),
-        HealthBar = Drawing.new("Square"), -- NUEVO
-        HealthText = Drawing.new("Text"),  -- NUEVO
-        Bones = lines
+        HealthBar = Drawing.new("Square"), 
+        HealthText = Drawing.new("Text"),  
+        Bones = lines,
+        Highlight = nil 
     }
     
     -- Configuración base de la caja
@@ -2295,12 +2241,12 @@ local function CreateESP(player)
     Cache[player].Name.Color = Color3.fromRGB(255, 255, 255)
     Cache[player].Name.Visible = false
 
-    -- NUEVO: Configuración base de la barra de vida
+    -- Configuración base de la barra de vida
     Cache[player].HealthBar.Thickness = 1
     Cache[player].HealthBar.Filled = true
     Cache[player].HealthBar.Visible = false
 
-    -- NUEVO: Configuración base del texto de vida
+    -- Configuración base del texto de vida
     Cache[player].HealthText.Size = 14
     Cache[player].HealthText.Center = true
     Cache[player].HealthText.Outline = true
@@ -2318,7 +2264,6 @@ MiscSection:Toggle({
     Callback = function(Value)
         ESPConfig.Master = Value
         if not Value then
-            -- Si se apaga el master, ocultamos todo instantáneamente
             for player, _ in pairs(Cache) do
                 RemoveESP(player)
             end
@@ -2350,7 +2295,6 @@ MiscSection:Toggle({
     end
 }, "esp_boxes")
 
--- NUEVO: Toggle para activar el Health ESP
 MiscSection:Toggle({
     Name = "ESP Health",
     Default = false,
@@ -2367,8 +2311,24 @@ MiscSection:Toggle({
     end
 }, "esp_bones")
 
+MiscSection:Toggle({
+    Name = "ESP Highlight (Red)",
+    Default = false,
+    Callback = function(Value)
+        ESPConfig.Highlights = Value
+        if not Value then
+            for player, esp in pairs(Cache) do
+                if esp.Highlight then
+                    esp.Highlight:Destroy()
+                    esp.Highlight = nil
+                end
+            end
+        end
+    end
+}, "esp_highlights")
+
 -- ==========================================
---             LOOP DE RENDERIZADO
+--           LOOP DE RENDERIZADO
 -- ==========================================
 
 RunService.RenderStepped:Connect(function()
@@ -2385,6 +2345,10 @@ RunService.RenderStepped:Connect(function()
                 Cache[player].HealthBar.Visible = false
                 Cache[player].HealthText.Visible = false
                 for _, line in pairs(Cache[player].Bones) do line.Visible = false end
+                if Cache[player].Highlight then 
+                    Cache[player].Highlight:Destroy() 
+                    Cache[player].Highlight = nil
+                end
             end
             continue
         end
@@ -2394,13 +2358,35 @@ RunService.RenderStepped:Connect(function()
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         
         if rootPart and humanoid and humanoid.Health > 0 then
+            CreateESP(player)
+            local esp = Cache[player]
+
+            -- Render de Highlight
+            if ESPConfig.Highlights and character then
+                if not esp.Highlight or esp.Highlight.Parent ~= character then
+                    if esp.Highlight then esp.Highlight:Destroy() end
+                    
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "ESP_Highlight"
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)      
+                    hl.FillTransparency = 0.5                     
+                    hl.OutlineColor = Color3.fromRGB(255, 0, 0)   
+                    hl.OutlineTransparency = 0                    
+                    hl.Adornee = character
+                    hl.Parent = character
+                    esp.Highlight = hl
+                end
+            else
+                if esp.Highlight then
+                    esp.Highlight:Destroy()
+                    esp.Highlight = nil
+                end
+            end
+
             -- Verificar si el jugador está en pantalla
             local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
             
             if onScreen then
-                CreateESP(player)
-                local esp = Cache[player]
-                
                 -- Calcular tamaño dinámico de la caja basado en la distancia
                 local scale = 1 / (screenPos.Z * 0.05) * 100
                 local boxWidth = math.clamp(scale, 10, 150)
@@ -2427,21 +2413,24 @@ RunService.RenderStepped:Connect(function()
                     esp.Name.Visible = false
                 end
                 
-                -- NUEVO: 3. Render de Health (Barra y Texto)
+                -- 3. CORREGIDO: Render de Health Seguro (Anti-Glitches/Anti-NaN)
                 if ESPConfig.Health then
-                    local healthPercent = humanoid.Health / humanoid.MaxHealth
+                    -- Evitamos divisiones por cero o valores negativos extraños
+                    local maxHealth = humanoid.MaxHealth
+                    if maxHealth <= 0 then maxHealth = 100 end 
+                    
+                    -- Forzamos que el porcentaje esté siempre entre 0 y 1 de forma estricta
+                    local healthPercent = math.clamp(humanoid.Health / maxHealth, 0, 1)
                     local barHeight = boxHeight * healthPercent
                     
-                    -- Posición de la barra a la izquierda de la Box
+                    -- Posicionar correctamente la barra sin valores NaN
                     esp.HealthBar.Size = Vector2.new(3, barHeight)
                     esp.HealthBar.Position = Vector2.new(boxX - 6, boxY + (boxHeight - barHeight))
-                    
-                    -- Interpolación de color basado en la cantidad de vida (Verde -> Amarillo -> Rojo)
                     esp.HealthBar.Color = Color3.fromHSV(healthPercent * 0.33, 1, 1)
                     esp.HealthBar.Visible = true
                     
-                    -- Texto numérico de vida
-                    esp.HealthText.Text = math.floor(humanoid.Health)
+                    -- Texto numérico de vida corregido
+                    esp.HealthText.Text = tostring(math.floor(humanoid.Health))
                     esp.HealthText.Position = Vector2.new(boxX - 22, boxY + (boxHeight - barHeight) - 2)
                     esp.HealthText.Visible = true
                 else
@@ -2476,7 +2465,7 @@ RunService.RenderStepped:Connect(function()
                 end
                 
             else
-                -- Si está vivo pero fuera de la pantalla, ocultamos sus dibujos
+                -- Si está vivo pero fuera de la pantalla, ocultamos los dibujos 2D por completo
                 if Cache[player] then
                     Cache[player].Box.Visible = false
                     Cache[player].Name.Visible = false
@@ -2486,12 +2475,388 @@ RunService.RenderStepped:Connect(function()
                 end
             end
         else
-            -- Si muere o no tiene character, limpiamos su caché de drawings
             RemoveESP(player)
         end
     end
 end)
 
+Visual2:Paragraph({
+    Header = "Wanted Level Esp",
+    Body = " <font color='#f1f504'><b>THIS SHOWS PEOPLE WITH WANTED LEVEL</b></font> "
+}, "anti_stuck_info")
+
+-- ============================================
+-- VARIABLES GLOBALES (fuera del toggle)
+-- ============================================
+local WantedESP = {
+    enabled = false,
+    espObjects = {},
+    connection = nil,
+    playersAdded = {},
+    playersRemoving = {},
+}
+
+-- ============================================
+-- FUNCIONES DEL ESP
+-- ============================================
+local function createESPForPlayer(player)
+    if player == game:GetService("Players").LocalPlayer or not player.Character then
+        return nil
+    end
+    
+    if WantedESP.espObjects[player] then
+        return WantedESP.espObjects[player]
+    end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+    
+    local wantedLevel = WantedLevelUtil.GetWantedLevelAttribute(player)
+    local wantedStage = WantedLevelUtil.GetLevel(wantedLevel)
+    
+    if wantedStage == 0 then
+        return nil
+    end
+    
+    local character = player.Character
+    if not character or not character.Parent then
+        return nil
+    end
+    
+    -- Highlight ROJO
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "WantedESP_Highlight"
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.FillTransparency = 0.35
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.15
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+    
+    local head = character:FindFirstChild("Head") or character.PrimaryPart
+    if not head then
+        highlight:Destroy()
+        return nil
+    end
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "WantedESP_Billboard"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = character
+    
+    local frame = Instance.new("Frame")
+    frame.Name = "Frame"
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    frame.Parent = billboard
+    
+    -- Estrellas ROJAS
+    local wantedLabel = Instance.new("TextLabel")
+    wantedLabel.Name = "WantedLabel"
+    wantedLabel.Size = UDim2.new(1, 0, 1, 0)
+    wantedLabel.BackgroundTransparency = 1
+    wantedLabel.Text = string.rep("⭐", wantedStage)
+    wantedLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    wantedLabel.TextScaled = true
+    wantedLabel.Font = Enum.Font.SourceSansBold
+    wantedLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    wantedLabel.TextStrokeTransparency = 0.2
+    wantedLabel.Parent = frame
+    
+    local espData = {
+        player = player,
+        character = character,
+        highlight = highlight,
+        billboard = billboard,
+        frame = frame,
+        wantedLabel = wantedLabel,
+        head = head,
+        lastStage = wantedStage
+    }
+    
+    WantedESP.espObjects[player] = espData
+    return espData
+end
+
+local function updateESP(espData)
+    if not espData or not espData.player then
+        return false
+    end
+    
+    local player = espData.player
+    if not player or not player.Parent then
+        return false
+    end
+    
+    local character = player.Character
+    if not character or not character.Parent then
+        return false
+    end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+    
+    local wantedLevel = WantedLevelUtil.GetWantedLevelAttribute(player)
+    local wantedStage = WantedLevelUtil.GetLevel(wantedLevel)
+    
+    if wantedStage == 0 then
+        return false
+    end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or character.PrimaryPart
+    if not rootPart then
+        return false
+    end
+    
+    local localRoot = LocalPlayer.Character and 
+                     (LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or LocalPlayer.Character.PrimaryPart)
+    
+    if localRoot then
+        local distance = (rootPart.Position - localRoot.Position).Magnitude
+        if distance > 10000 then
+            espData.billboard.Enabled = false
+            espData.highlight.Enabled = false
+            return true
+        else
+            espData.billboard.Enabled = true
+            espData.highlight.Enabled = true
+        end
+    end
+    
+    -- Mantener ROJO siempre
+    espData.highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    espData.wantedLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+    
+    if espData.lastStage ~= wantedStage then
+        espData.wantedLabel.Text = string.rep("⭐", wantedStage)
+        espData.lastStage = wantedStage
+    end
+    
+    if espData.highlight.Adornee ~= character then
+        espData.highlight.Adornee = character
+    end
+    
+    local head = character:FindFirstChild("Head") or character.PrimaryPart
+    if head and espData.billboard.Adornee ~= head then
+        espData.billboard.Adornee = head
+        espData.head = head
+    end
+    
+    return true
+end
+
+local function removeESP(player)
+    local espData = WantedESP.espObjects[player]
+    if not espData then
+        return
+    end
+    
+    if espData.highlight then
+        espData.highlight:Destroy()
+    end
+    if espData.billboard then
+        espData.billboard:Destroy()
+    end
+    
+    WantedESP.espObjects[player] = nil
+end
+
+local function clearAllESP()
+    for player, espData in pairs(WantedESP.espObjects) do
+        if espData.highlight then
+            espData.highlight:Destroy()
+        end
+        if espData.billboard then
+            espData.billboard:Destroy()
+        end
+    end
+    WantedESP.espObjects = {}
+end
+
+local function updateAllESP()
+    if not WantedESP.enabled then
+        return
+    end
+    
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local espData = WantedESP.espObjects[player]
+            local character = player.Character
+            
+            if not espData and character and character.Parent then
+                local wantedLevel = WantedLevelUtil.GetWantedLevelAttribute(player)
+                local wantedStage = WantedLevelUtil.GetLevel(wantedLevel)
+                if wantedStage > 0 then
+                    createESPForPlayer(player)
+                end
+            end
+            
+            if espData then
+                local keep = updateESP(espData)
+                if not keep then
+                    removeESP(player)
+                end
+            end
+        end
+    end
+    
+    local playersToRemove = {}
+    for player, espData in pairs(WantedESP.espObjects) do
+        if not player or not player.Parent then
+            table.insert(playersToRemove, player)
+        end
+    end
+    for _, player in pairs(playersToRemove) do
+        removeESP(player)
+    end
+end
+
+local function onWantedChanged(player)
+    if not WantedESP.enabled then return end
+    if player == game:GetService("Players").LocalPlayer then return end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+    
+    local wantedLevel = WantedLevelUtil.GetWantedLevelAttribute(player)
+    local wantedStage = WantedLevelUtil.GetLevel(wantedLevel)
+    local espData = WantedESP.espObjects[player]
+    
+    if wantedStage > 0 then
+        if not espData and player.Character and player.Character.Parent then
+            createESPForPlayer(player)
+        elseif espData then
+            updateESP(espData)
+        end
+    else
+        if espData then
+            removeESP(player)
+        end
+    end
+end
+
+local function onCharacterAdded(player, character)
+    if not WantedESP.enabled then return end
+    if player == game:GetService("Players").LocalPlayer then return end
+    
+    if WantedESP.espObjects[player] then
+        removeESP(player)
+    end
+    
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+    
+    local wantedLevel = WantedLevelUtil.GetWantedLevelAttribute(player)
+    local wantedStage = WantedLevelUtil.GetLevel(wantedLevel)
+    
+    if wantedStage > 0 then
+        task.wait(0.5)
+        createESPForPlayer(player)
+    end
+end
+
+-- ============================================
+-- TOGGLE
+-- ============================================
+Visual2:Toggle({
+    Name = "Wanted ESP",
+    Default = false,
+    Callback = function(Value)
+        WantedESP.enabled = Value
+        
+        if Value then
+            local Players = game:GetService("Players")
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+            local RunService = game:GetService("RunService")
+            local WantedLevelUtil = require(ReplicatedStorage.SharedModules.WantedLevelUtil)
+            local LocalPlayer = Players.LocalPlayer
+            
+            -- Conectar eventos de wanted
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    if not WantedESP.playersAdded[player] then
+                        WantedESP.playersAdded[player] = player:GetAttributeChangedSignal(WantedLevelUtil.WANTED_LEVEL_ATTRIBUTE):Connect(function()
+                            onWantedChanged(player)
+                        end)
+                    end
+                end
+            end
+            
+            -- Conectar PlayerAdded
+            if not WantedESP.playersAdded._playerAdded then
+                WantedESP.playersAdded._playerAdded = Players.PlayerAdded:Connect(function(player)
+                    if player ~= LocalPlayer then
+                        if not WantedESP.playersAdded[player] then
+                            WantedESP.playersAdded[player] = player:GetAttributeChangedSignal(WantedLevelUtil.WANTED_LEVEL_ATTRIBUTE):Connect(function()
+                                onWantedChanged(player)
+                            end)
+                        end
+                    end
+                end)
+            end
+            
+            -- Conectar eventos de character
+            local function onPlayerCharacterAdded(player)
+                if player ~= LocalPlayer then
+                    if not WantedESP.playersAdded["char_" .. player.UserId] then
+                        WantedESP.playersAdded["char_" .. player.UserId] = player.CharacterAdded:Connect(function(character)
+                            onCharacterAdded(player, character)
+                        end)
+                    end
+                end
+            end
+            
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer then
+                    onPlayerCharacterAdded(player)
+                end
+            end
+            
+            if not WantedESP.playersAdded._playerAddedChar then
+                WantedESP.playersAdded._playerAddedChar = Players.PlayerAdded:Connect(onPlayerCharacterAdded)
+            end
+            
+            -- Loop principal
+            if not WantedESP.connection then
+                WantedESP.connection = RunService.Heartbeat:Connect(function()
+                    updateAllESP()
+                end)
+            end
+            
+            task.wait(0.5)
+            updateAllESP()
+            
+        else
+            -- Desconectar eventos
+            for key, connection in pairs(WantedESP.playersAdded) do
+                if connection and type(connection) == "table" and connection.Disconnect then
+                    pcall(function() connection:Disconnect() end)
+                end
+            end
+            WantedESP.playersAdded = {}
+            
+            -- Desconectar loop
+            if WantedESP.connection then
+                pcall(function() WantedESP.connection:Disconnect() end)
+                WantedESP.connection = nil
+            end
+            
+            -- Limpiar ESPs
+            clearAllESP()
+        end
+    end
+}, nil)
 
 
 
