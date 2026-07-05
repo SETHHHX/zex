@@ -196,9 +196,9 @@ local tabGroups = {
 }
 
 local tabs = {
-    Main = tabGroups.TabGroup1:Tab({ Name = "Auto Farm", Image = "rbxassetid://89270463071386" }),
+    Main = tabGroups.TabGroup1:Tab({ Name = "Auto Farm", Image = "rbxassetid://123881359502301" }),
     Combat = tabGroups.TabGroup1:Tab({ Name = "Combat", Image = "rbxassetid://89270463071386" }),
-    Visual = tabGroups.TabGroup1:Tab({ Name = "Visuals", Image = "rbxassetid://89270463071386" }),
+    Visual = tabGroups.TabGroup1:Tab({ Name = "Visuals", Image = "rbxassetid://75584849710793" }),
     Settings = tabGroups.TabGroup1:Tab({ Name = "Settings", Image = "rbxassetid://10734950309" })
 }
 
@@ -340,7 +340,6 @@ mainSection:Divider()
 
 
 
-
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
 
@@ -354,7 +353,6 @@ p.CharacterAdded:Connect(function(newChar)
     c = newChar
     h = newChar:WaitForChild("Humanoid")
     hrp = newChar:WaitForChild("HumanoidRootPart")
-    print("♻️ Referencias del personaje actualizadas tras reaparecer.")
 end)
 
 local VEHICLE_MODEL = "Camry6" 
@@ -362,6 +360,9 @@ local MAX_SPEED = 800
 local FRENADO_INICIO = 200
 local FRENADO_MINIMO = 2
 local DISTANCIA_LLEGADA = 2
+
+-- VARIABLE DEL SLIDER
+local fakeDiamondsAmount = 5
 
 local autofarmEnabled = false
 local running = false
@@ -373,7 +374,6 @@ if _G.StopCarMovement then _G.StopCarMovement() end
 _G.StopCarMovement = function()
     running = false
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
-    print("🛑 Movimiento del vehículo detenido")
 end
 
 -- ===== FUNCIONES DE ACCIÓN Y SPAWN (POR PROXIMIDAD) =====
@@ -563,13 +563,10 @@ local function startAutofarm()
     if autofarmEnabled then return end
     autofarmEnabled = true
     
-    -- El código elimina BlackMarket justo al encender el farm
     local blackMarket = workspace:FindFirstChild("BlackMarket")
     if blackMarket then
         blackMarket:Destroy()
-        print("✅ BlackMarket eliminado exitosamente al iniciar Auto Farm")
     else
-        print("⚠️ BlackMarket no encontrado o ya eliminado")
     end
     
     mainLoopThread = task.spawn(function()
@@ -605,14 +602,29 @@ local function startAutofarm()
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
             
-            while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled and h.Health > 0 do
+            local compraTimeout = 0
+            local rollbackDetectado = false
+            
+            -- CORRECCIÓN AQUÍ: Usamos un contador numérico estricto independiente del inventario
+            local comprados = 0
+            while comprados < fakeDiamondsAmount and autofarmEnabled and h.Health > 0 do
+                if compraTimeout >= 10 then
+                    rollbackDetectado = true
+                    break
+                end
+                
                 pcall(function()
                     local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                     game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
                 end)
+                
+                comprados = comprados + 1
                 task.wait(0.4)
+                compraTimeout = compraTimeout + 0.4
             end
-            if not autofarmEnabled or h.Health <= 0 then continue end
+            
+            if rollbackDetectado or not autofarmEnabled or h.Health <= 0 then continue end
+            task.wait(0.5)
             
             -- FASE 2: VENTA
             viajarA(Vector3.new(-82, 41, 433))
@@ -628,22 +640,31 @@ local function startAutofarm()
             repeat 
                 task.wait(0.2) 
                 tiempoEspera = tiempoEspera + 0.2
-            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 3 or not autofarmEnabled or h.Health <= 0
+            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not autofarmEnabled or h.Health <= 0
+            
+            if tiempoEspera > 10 then
+                continue
+            end
             if not autofarmEnabled or h.Health <= 0 then continue end
             
             -- FASE 3: LAVADO
             if p.Backpack:FindFirstChild("Briefcase") then
-                print("🧼 Viajando a Lavar dinero")
                 viajarA(Vector3.new(6807, 9, -34))
                 if not autofarmEnabled or h.Health <= 0 then continue end
                 task.wait(0.5)
                 
+                local lavadoTimeout = 0
                 while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled and h.Health > 0 do
+                    if lavadoTimeout >= 10 then
+                        break
+                    end
+                    
                     pcall(function()
                         local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
                         game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
                     end)
                     task.wait(0.5)
+                    lavadoTimeout = lavadoTimeout + 0.5
                 end
             end
             
@@ -662,7 +683,6 @@ local function stopAutofarm()
         if v and v:FindFirstChild("Root") then
             v.Root.Anchored = true
             v.Root.AssemblyLinearVelocity = Vector3.new(0,0,0)
-            print("📌 Vehículo retenido y anclado en su última posición.")
         end
     end
 
@@ -696,6 +716,8 @@ mainSection:Toggle({
     end
 }, "autofarm_toggle")
 
+
+
 mainSection:Slider({
     Name = "Drag Speed",
     Default = 800,
@@ -710,6 +732,26 @@ mainSection:Slider({
         MAX_SPEED = Value
     end
 }, "autofarm_speed")
+
+mainSection:Paragraph({
+    Header = "FAKE DIAMONDS AMOUNT",
+    Body = " <font color='#FFD700'><b>Set the amount of Diamonds u want to sell If u dont have El capo Gamepass, use 1-5. But if u have it u can use it at 1-8.</b></font> "
+}, "Fkae_diamonds")
+
+mainSection:Slider({
+    Name = "Fake Diamonds",
+    Default = 5,
+    Minimum = 1,
+    Maximum = 8,
+    DisplayMethod = "Value",
+    Precision = 0,
+    Callback = function(Value)
+        fakeDiamondsAmount = Value
+    end,
+    onInputComplete = function(Value)
+        fakeDiamondsAmount = Value
+    end
+}, "fake_diamonds_slider")
 
 
 -- =============================================================================
@@ -1798,9 +1840,9 @@ local function CheckPlayer(player)
     end
 end
 
-mainSection:Toggle({
+ExtraSection:Toggle({
     Name = "Mod Detector",
-    Default = false,
+    Default = true,
     Callback = function(v)
         ModDetectorEnabled = v
 
