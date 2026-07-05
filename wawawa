@@ -340,6 +340,7 @@ mainSection:Divider()
 
 
 
+
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
 
@@ -562,6 +563,7 @@ local function startAutofarm()
     if autofarmEnabled then return end
     autofarmEnabled = true
     
+    -- El código elimina BlackMarket justo al encender el farm
     local blackMarket = workspace:FindFirstChild("BlackMarket")
     if blackMarket then
         blackMarket:Destroy()
@@ -603,26 +605,14 @@ local function startAutofarm()
             if not autofarmEnabled or h.Health <= 0 then continue end
             task.wait(0.5)
             
-            local compraTimeout = 0
-            local rollbackDetectado = false
-            
             while contarItems("Fake Diamond Ring") < 5 and autofarmEnabled and h.Health > 0 do
-                if compraTimeout >= 10 then
-                    warn("⏰ Timeout alcanzado en Fase de Compra (Posible Rollback). Reintentando viaje...")
-                    rollbackDetectado = true
-                    break
-                end
-                
                 pcall(function()
                     local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
                     game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
                 end)
                 task.wait(0.4)
-                compraTimeout = compraTimeout + 0.4
             end
-            
-            if rollbackDetectado or not autofarmEnabled or h.Health <= 0 then continue end
-            task.wait(0.5)
+            if not autofarmEnabled or h.Health <= 0 then continue end
             
             -- FASE 2: VENTA
             viajarA(Vector3.new(-82, 41, 433))
@@ -638,12 +628,7 @@ local function startAutofarm()
             repeat 
                 task.wait(0.2) 
                 tiempoEspera = tiempoEspera + 0.2
-            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not autofarmEnabled or h.Health <= 0
-            
-            if tiempoEspera > 10 then
-                warn("⏰ Timeout alcanzado en Fase de Venta (Posible Rollback). Reintentando viaje...")
-                continue
-            end
+            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 3 or not autofarmEnabled or h.Health <= 0
             if not autofarmEnabled or h.Health <= 0 then continue end
             
             -- FASE 3: LAVADO
@@ -653,19 +638,12 @@ local function startAutofarm()
                 if not autofarmEnabled or h.Health <= 0 then continue end
                 task.wait(0.5)
                 
-                local lavadoTimeout = 0
                 while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled and h.Health > 0 do
-                    if lavadoTimeout >= 10 then
-                        warn("⏰ Timeout alcanzado en Fase de Lavado (Posible Rollback). Reintentando viaje...")
-                        break
-                    end
-                    
                     pcall(function()
                         local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
                         game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
                     end)
                     task.wait(0.5)
-                    lavadoTimeout = lavadoTimeout + 0.5
                 end
             end
             
@@ -1765,21 +1743,74 @@ ExtraSection:Button({
 ExtraSection:Spacer()
 
 
-ExtraSection:Toggle({
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local ModDetectorEnabled = false
+local PlayerAddedConnection
+
+local StaffUsers = {
+    rainb0und = true,
+    novas_home = true,
+    Biosymelec = true,
+    Seven47007 = true,
+    Xx_nightshadow123xX = true,
+    PreacherVerse = true,
+    Frostborn_Havoc = true,
+    Unbelievably_Lazy = true,
+    SlayerOfUniverse5 = true,
+    silencefeelsloud = true,
+    PuddingTree = true,
+    TheD1amondR0blox = true,
+    WimpyDeathLord = true,
+    TotallyDaBat = true,
+
+    Budgiefy = true,
+
+    yoked = true,
+    ZednovB = true,
+    ImLukotee = true,
+
+    DisplayResolutions = true,
+    Dexur = true,
+    ExternalKinetics = true,
+
+    CarterCodes = true,
+    greasybug8221 = true,
+
+    Rae3504 = true,
+
+    Triculate = true,
+}
+
+local function CheckPlayer(player)
+    if not ModDetectorEnabled then
+        return
+    end
+
+    if player == LocalPlayer then
+        return
+    end
+
+    if StaffUsers[player.Name] then
+        warn(string.format("[Mod Detector] Staff detected: %s (@%s)", player.DisplayName, player.Name))
+        LocalPlayer:Kick(string.format("Staff detected: %s (@%s)", player.DisplayName, player.Name))
+    end
+end
+
+mainSection:Toggle({
     Name = "Mod Detector",
-    Default = true,
+    Default = false,
     Callback = function(v)
         ModDetectorEnabled = v
 
         if v then
             print("[Mod Detector] Enabled.")
 
-            -- Check players already in the server
             for _, player in ipairs(Players:GetPlayers()) do
                 CheckPlayer(player)
             end
 
-            -- Check players joining
             PlayerAddedConnection = Players.PlayerAdded:Connect(CheckPlayer)
 
         else
