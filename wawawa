@@ -339,7 +339,6 @@ end)
 mainSection:Divider()
 
 
-
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
 local c = p.Character or p.CharacterAdded:Wait()
@@ -389,7 +388,6 @@ local function guardarFisicas(modelo)
 end
 
 local function RestoreAll()
-    -- Detener todas las conexiones de física primero
     if noclipConnection then 
         noclipConnection:Disconnect() 
         noclipConnection = nil
@@ -403,7 +401,6 @@ local function RestoreAll()
         currentFreezeConnection = nil
     end
     
-    -- Detener velocidades
     if h and h.SeatPart then
         local v = h.SeatPart.Parent
         while v and not v:FindFirstChild("Root") do v = v.Parent end
@@ -418,7 +415,6 @@ local function RestoreAll()
         hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end
 
-    -- Restaurar colisiones
     for part, data in pairs(originalState) do
         if part and part.Parent then
             if data.CanCollide ~= nil then part.CanCollide = data.CanCollide end
@@ -430,6 +426,26 @@ end
 
 _G.StopCarMovement = function()
     RestoreAll()
+end
+
+local function freezeVehicleAt(targetPos)
+    if currentFreezeConnection then currentFreezeConnection:Disconnect() end
+    if h and h.SeatPart then
+        local v = h.SeatPart.Parent
+        while v and not v:FindFirstChild("Root") do v = v.Parent end
+        local r = v and v:FindFirstChild("Root")
+        if r then
+            currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                if running or not r or not r.Parent then 
+                    if currentFreezeConnection then currentFreezeConnection:Disconnect() currentFreezeConnection = nil end
+                    return 
+                end
+                r.CFrame = CFrame.new(targetPos)
+                r.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                r.AssemblyAngularVelocity = Vector3.new(0,0,0)
+            end)
+        end
+    end
 end
 
 local function getClosestPodium()
@@ -466,6 +482,7 @@ local function spawnVehicle()
     if not diamondFarmEnabled then return false end
     
     if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
+        warn("❌ No character to spawn vehicle")
         return false
     end
     
@@ -520,7 +537,6 @@ local function viajarA(targetPos)
     if not diamondFarmEnabled and not running then return false end 
     if not h then return false end
     
-    -- Limpiar conexiones anteriores
     if noclipConnection then noclipConnection:Disconnect() end
     if heartbeatConnection then heartbeatConnection:Disconnect() end
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
@@ -557,10 +573,7 @@ local function viajarA(targetPos)
     
     noclipConnection = game:GetService("RunService").Stepped:Connect(function()
         if not running or not v or not v.Parent then 
-            if noclipConnection then 
-                noclipConnection:Disconnect() 
-                noclipConnection = nil
-            end
+            if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
             return 
         end
         for _, part in ipairs(v:GetDescendants()) do
@@ -575,26 +588,15 @@ local function viajarA(targetPos)
     
     heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
         if not running or not r or not r.Parent then 
-            if heartbeatConnection then 
-                heartbeatConnection:Disconnect() 
-                heartbeatConnection = nil
-            end
+            if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
             return 
         end
         
-        -- Verificar si el jugador está en la cárcel
         if h and h.Health > 0 then
             local jail = workspace:FindFirstChild("Jail")
             if jail and h:FindFirstChild("Jailed") then
                 running = false
-                if heartbeatConnection then 
-                    heartbeatConnection:Disconnect() 
-                    heartbeatConnection = nil
-                end
-                if noclipConnection then 
-                    noclipConnection:Disconnect() 
-                    noclipConnection = nil
-                end
+                RestoreAll()
                 return
             end
         end
@@ -605,35 +607,17 @@ local function viajarA(targetPos)
         
         if dist < DISTANCIA_LLEGADA then
             running = false
-            if heartbeatConnection then 
-                heartbeatConnection:Disconnect() 
-                heartbeatConnection = nil
-            end
-            if noclipConnection then 
-                noclipConnection:Disconnect() 
-                noclipConnection = nil
-            end
+            if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
+            if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
             
             r.CFrame = CFrame.new(targetPos)
             RestoreAll()
             
-            currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                if running or not r or not r.Parent then 
-                    if currentFreezeConnection then 
-                        currentFreezeConnection:Disconnect() 
-                        currentFreezeConnection = nil
-                    end
-                    return 
-                end
-                r.CFrame = CFrame.new(targetPos)
-                r.AssemblyLinearVelocity = Vector3.new(0,0,0)
-                r.AssemblyAngularVelocity = Vector3.new(0,0,0)
-            end)
+            freezeVehicleAt(targetPos)
             llego = true
             return
         end
         
-        -- El viaje por defecto siempre calcula la superficie para no bugearse en ruta
         local raycastParams = RaycastParams.new()
         raycastParams.FilterType = Enum.RaycastFilterType.Exclude
         raycastParams.FilterDescendantsInstances = {v, c}
@@ -695,68 +679,98 @@ local function executeTruckMission(missionName)
             task.wait(0.5)
         end
         
-        local npcPos = Vector3.new(7126, 19, 227)
+        local npcPos = Vector3.new(7129, 19, 231)
         local startTime = tick()
         
-        while (hrp.Position - npcPos).Magnitude > 2 and (tick() - startTime) < 3 do
-            hrp.CFrame = CFrame.new(hrp.Position:Lerp(npcPos, 0.3))
+        while (hrp.Position - npcPos).Magnitude > 2 and (tick() - startTime) < 4 do
+            hrp.CFrame = CFrame.new(hrp.Position:Lerp(npcPos, 0.15))
             hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
             task.wait(0.05)
         end
         hrp.CFrame = CFrame.new(npcPos)
-        task.wait(0.3)
+        task.wait(0.4)
         
-        local args = { [1] = missionName, [2] = 0 }
-        game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("TruckService"):WaitForChild("StartMission"):InvokeServer(unpack(args))
+        local missionStarted = false
         
-        task.wait(1.5)
-        local truckSeatTimeout = 0
-        while h and not (h.SeatPart and h.SeatPart:IsA("VehicleSeat")) and truckSeatTimeout < 8 and truckMissionsEnabled and diamondFarmEnabled do
-            for _, veg in ipairs(workspace.Vehicles:GetChildren()) do
-                local seatPart = veg:FindFirstChildOfClass("VehicleSeat", true)
-                if seatPart and (c.HumanoidRootPart.Position - seatPart.Position).Magnitude < 40 then
-                    subirseConPrompt(veg)
+        for attempt = 1, 3 do
+            local args = { [1] = missionName, [2] = 0 }
+            game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("TruckService"):WaitForChild("StartMission"):InvokeServer(unpack(args))
+            
+            local checkTime = 0
+            while checkTime < 3.5 do
+                if h and h.SeatPart and h.SeatPart:IsA("VehicleSeat") then
+                    missionStarted = true
                     break
                 end
+                task.wait(0.5)
+                checkTime = checkTime + 0.5
             end
+            
+            if missionStarted then break end
             task.wait(0.5)
-            truckSeatTimeout = truckSeatTimeout + 0.5
         end
         
+        -- PLAN DE ESCAPE CON ARRASTRE ULTRA-SUAVE (ANTI-CHEAT)
+        if not missionStarted then
+            local podiumPos = Vector3.new(6897, 17, -36)
+            
+            local escapeNoclip = game:GetService("RunService").Stepped:Connect(function()
+                for _, part in ipairs(c:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end)
+            
+            local escapeTime = tick()
+            while (hrp.Position - podiumPos).Magnitude > 2 and (tick() - escapeTime) < 6 do
+                hrp.CFrame = CFrame.new(hrp.Position:Lerp(podiumPos, 0.08))
+                hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                task.wait(0.04)
+            end
+            
+            escapeNoclip:Disconnect()
+            hrp.CFrame = CFrame.new(podiumPos)
+            task.wait(0.5)
+            RestoreAll()
+            return false
+        end
+        
+        -- Si ya estamos montados, procedemos directo a buscar el destino de entrega
         if h.SeatPart and h.SeatPart:IsA("VehicleSeat") then
             local deliveryPoint = nil
             local timeout = 0
+            
             repeat
                 task.wait(0.5)
                 timeout = timeout + 0.5
-                for _, folder in ipairs(workspace.TruckDeliveryPoints:GetChildren()) do
-                    if folder:FindFirstChild("Part") then
-                        deliveryPoint = folder.Part
-                        break
+                
+                -- CORRECCIÓN ANTI-BUG: Evitar crash si la carpeta de entregas no se ha instanciado en el workspace todavía
+                local deliveryFolder = workspace:FindFirstChild("TruckDeliveryPoints")
+                if deliveryFolder then
+                    for _, folder in ipairs(deliveryFolder:GetChildren()) do
+                        if folder:FindFirstChild("Part") then
+                            deliveryPoint = folder.Part
+                            break
+                        end
                     end
                 end
-            until deliveryPoint or timeout > 5 or not truckMissionsEnabled or not diamondFarmEnabled
+            until deliveryPoint or timeout > 6 or not truckMissionsEnabled or not diamondFarmEnabled
             
             if deliveryPoint and truckMissionsEnabled and diamondFarmEnabled then
                 
-                -- Viaja normalmente usando la superficie para evitar romper la física en la ruta
                 local llegoDestino = viajarA(deliveryPoint.Position)
                 if llegoDestino and truckMissionsEnabled and diamondFarmEnabled then
                     
-                    -- MODIFICACIÓN CORRECTA: Ya llegamos a la posición. Ahora nos metemos debajo de la parte de entrega.
                     local s = h.SeatPart
                     local v = s and s.Parent
                     while v and not v:FindFirstChild("Root") do v = v.Parent end
                     local r = v and v:FindFirstChild("Root")
                     
                     if r then
-                        -- Forzar desconexión del freeze temporal para mover el eje Y
                         if currentFreezeConnection then currentFreezeConnection:Disconnect() end
                         
                         local undergroundDeliveryPos = deliveryPoint.Position - Vector3.new(0, 15, 0)
                         r.CFrame = CFrame.new(undergroundDeliveryPos)
                         
-                        -- Crear un freeze nuevo estricto bajo tierra durante la entrega
                         currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
                             if not r or not r.Parent then return end
                             r.CFrame = CFrame.new(undergroundDeliveryPos)
@@ -779,7 +793,6 @@ local function executeTruckMission(missionName)
                     return true
                 end
             end
-        else
         end
     end
     
@@ -827,7 +840,8 @@ local function executeDiamondFarm()
     if tiempoEspera > 10 or not diamondFarmEnabled or h.Health <= 0 then return false end
     
     if p.Backpack:FindFirstChild("Briefcase") then
-        viajarA(Vector3.new(6807, 9, -34))
+        local posLavado = Vector3.new(6807, 9, -34)
+        viajarA(posLavado)
         if not diamondFarmEnabled or h.Health <= 0 then return false end
         task.wait(0.5)
         
@@ -841,6 +855,8 @@ local function executeDiamondFarm()
             task.wait(0.5)
             lavadoTimeout = lavadoTimeout + 0.5
         end
+        
+        freezeVehicleAt(posLavado)
     end
     
     return true
@@ -936,11 +952,9 @@ local function startUnifiedFarm()
                     end
                 else
                     executeDiamondFarm()
-                    RestoreAll()
                 end
             else
                 executeDiamondFarm()
-                RestoreAll()
             end
             
             task.wait(1)
@@ -976,7 +990,6 @@ local function stopUnifiedFarm()
             task.cancel(mainLoopThread)
             mainLoopThread = nil
         end
-        print("✅ Apagado limpio completado en la superficie.")
     end)
 end
 
@@ -987,9 +1000,8 @@ mainSection:Paragraph({
     Body = "<font color='#00FFFF'><b>TIP: If you only want to run the Smuggle Farm, make sure to keep the Truck Missions toggle DISABLED. Do not turn both on unless you want the combined multi-farm loop.</b></font>"
 }, "Smuggle_Only_Info")
 
-mainSection:Spacer()
 mainSection:Toggle({
-    Name = "💎 Smuggle Farm",
+    Name = "💎 Auto Smuggle Farm",
     Default = false,
     Callback = function(Value)
         diamondFarmEnabled = Value
@@ -1007,9 +1019,8 @@ mainSection:Paragraph({
     Body = "<font color='#FF5A5A'><b>IMPORTANT: In order for the Truck Missions to work properly, you MUST have the Smuggle Farm active. If it is disabled, the truck cycle will not start.</b></font>"
 }, "Truck_Missions_Warning")
 
-mainSection:Spacer()
 mainSection:Toggle({
-    Name = "🚚 Truck Missions",
+    Name = "🚚 Truck Missions ",
     Default = false,
     Callback = function(Value)
         truckMissionsEnabled = Value
@@ -1039,7 +1050,6 @@ mainSection:Slider({
     Precision = 0,
     Callback = function(Value) fakeDiamondsAmount = Value end
 }, "fake_diamonds_slider")
-
 
 
 
