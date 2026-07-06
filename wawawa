@@ -289,7 +289,7 @@ local function setupNametag(character)
 	if playerNameLabel and rankNameLabel then
 		-- Asignar los textos
 		playerNameLabel.Text = "ZEX HUB"
-		rankNameLabel.Text = "ypkrVJE6c9"
+		rankNameLabel.Text = "gg/ypkrVJE6c9"
 		
 		-- Iniciar el ciclo de color para las etiquetas de este personaje
 		connection = RunService.RenderStepped:Connect(function()
@@ -337,7 +337,6 @@ end)
 
 
 mainSection:Divider()
-
 
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
@@ -657,7 +656,6 @@ local function getAvailableMissions()
         if missionGui then
             if not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
                 table.insert(available, missionName)
-            else
             end
         end
     end
@@ -674,10 +672,14 @@ local function executeTruckMission(missionName)
     if llegoAlLado and truckMissionsEnabled and diamondFarmEnabled then
         task.wait(0.5)
         
-        if h and h.SeatPart then
+        local checkSeatTimeout = 0
+        while h and h.SeatPart and checkSeatTimeout < 2 do
             h.Jump = true
-            task.wait(0.5)
+            task.wait(0.2)
+            checkSeatTimeout = checkSeatTimeout + 0.2
         end
+        RestoreAll()
+        task.wait(0.2)
         
         local npcPos = Vector3.new(7129, 19, 231)
         local startTime = tick()
@@ -743,7 +745,6 @@ local function executeTruckMission(missionName)
                 task.wait(0.5)
                 timeout = timeout + 0.5
                 
-                -- CORRECCIÓN ANTI-BUG: Evitar crash si la carpeta de entregas no se ha instanciado en el workspace todavía
                 local deliveryFolder = workspace:FindFirstChild("TruckDeliveryPoints")
                 if deliveryFolder then
                     for _, folder in ipairs(deliveryFolder:GetChildren()) do
@@ -781,14 +782,26 @@ local function executeTruckMission(missionName)
                     
                     task.wait(5)
                     
+                    -- CORRECCIÓN CLAVE: Viajar al podio y asegurar bajada destructiva del camión de la misión
                     local podiumPos = Vector3.new(6897, 17, -36)
                     viajarA(podiumPos)
                     task.wait(0.5)
                     
-                    if h and h.SeatPart then
+                    -- BUCLE AGRESIVO DE BAJADA FORZADA EN EL PODIO
+                    local unseatAttempts = 0
+                    while h and h.SeatPart and unseatAttempts < 15 do
+                        RestoreAll() -- Desconecta hilos de congelación y limpia velocidades
                         h.Jump = true
-                        task.wait(0.5)
+                        task.wait(0.15)
+                        unseatAttempts = unseatAttempts + 1
                     end
+                    
+                    -- Pequeña seguridad extra: Mover el HumanoidRootPart levemente a pie fuera del rango del camión viejo
+                    if hrp then
+                        hrp.CFrame = CFrame.new(podiumPos + Vector3.new(0, 2, 4))
+                        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                    end
+                    task.wait(0.5)
                     
                     return true
                 end
@@ -799,6 +812,20 @@ local function executeTruckMission(missionName)
     return false
 end
 
+-- ===== FUNCIÓN PARA CONTAR ANILLOS EN EL BACKPACK =====
+local function getFakeDiamondsCount()
+    local count = 0
+    for _, item in ipairs(p.Backpack:GetChildren()) do
+        if item.Name == "Fake Diamond Ring" then
+            count = count + 1
+        end
+    end
+    if c and c:FindFirstChild("Fake Diamond Ring") then
+        count = count + 1
+    end
+    return count
+end
+
 -- ===== FUNCIÓN PARA EJECUTAR EL FARM DE DIAMANTES =====
 local function executeDiamondFarm()
     
@@ -806,17 +833,22 @@ local function executeDiamondFarm()
     if not diamondFarmEnabled or h.Health <= 0 then return false end
     task.wait(0.5)
     
-    local comprados = 0
     local compraTimeout = 0
-    while comprados < fakeDiamondsAmount and diamondFarmEnabled and h.Health > 0 do
-        if compraTimeout >= 10 then break end
+    local maxTimeout = 12 
+    
+    while getFakeDiamondsCount() < fakeDiamondsAmount and diamondFarmEnabled and h.Health > 0 do
+        if compraTimeout >= maxTimeout then 
+            warn("⚠️ Timeout alcanzado al comprar los anillos falsos. Procediendo con lo que se tenga.")
+            break 
+        end
+        
         pcall(function()
             local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
             game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
         end)
-        comprados = comprados + 1
-        task.wait(0.4)
-        compraTimeout = compraTimeout + 0.4
+        
+        task.wait(0.45) 
+        compraTimeout = compraTimeout + 0.45
     end
     
     if not diamondFarmEnabled or h.Health <= 0 then return false end
@@ -897,6 +929,7 @@ local function startUnifiedFarm()
                 continue
             end
             
+            -- Intento de spawnear y subirse al carro si estamos a pie
             if not h.SeatPart and diamondFarmEnabled then
                 RestoreAll()
                 
@@ -923,32 +956,34 @@ local function startUnifiedFarm()
             end
 
             if not h.SeatPart or h.Health <= 0 or not diamondFarmEnabled then
+                warn("⚠️ Forzando espera: No se pudo subir al vehículo spaneado. Reintentando...")
                 task.wait(1)
                 continue
             end
 
+            -- Ciclo de ejecución normal con coche asegurado
             if truckMissionsEnabled then
                 local availableMissions = getAvailableMissions()
                 
                 if #availableMissions > 0 then
-                    for _, missionName in ipairs(availableMissions) do
-                        if not truckMissionsEnabled or not diamondFarmEnabled then break end
-                        
-                        local stillAvailable = false
-                        local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
-                            and p.PlayerGui.TruckShopGui.Frame.TruckList
-                        if truckList then
-                            local missionGui = truckList:FindFirstChild(missionName)
-                            if missionGui and not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
-                                stillAvailable = true
-                            end
+                    local missionName = availableMissions[1]
+                    
+                    local stillAvailable = false
+                    local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
+                        and p.PlayerGui.TruckShopGui.Frame.TruckList
+                    if truckList then
+                        local missionGui = truckList:FindFirstChild(missionName)
+                        if missionGui and not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
+                            stillAvailable = true
                         end
-                        
-                        if stillAvailable then
-                            executeTruckMission(missionName)
-                            task.wait(0.5)
-                            RestoreAll()
-                        end
+                    end
+                    
+                    if stillAvailable and truckMissionsEnabled and diamondFarmEnabled then
+                        executeTruckMission(missionName)
+                        task.wait(0.5)
+                        RestoreAll()
+                    else
+                        executeDiamondFarm()
                     end
                 else
                     executeDiamondFarm()
