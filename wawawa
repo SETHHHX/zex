@@ -289,7 +289,7 @@ local function setupNametag(character)
 	if playerNameLabel and rankNameLabel then
 		-- Asignar los textos
 		playerNameLabel.Text = "ZEX HUB"
-		rankNameLabel.Text = "gg/F4kWBQx4xA"
+		rankNameLabel.Text = "ypkrVJE6c9"
 		
 		-- Iniciar el ciclo de color para las etiquetas de este personaje
 		connection = RunService.RenderStepped:Connect(function()
