@@ -359,10 +359,13 @@ local FRENADO_MINIMO = 2
 local DISTANCIA_LLEGADA = 3
 
 local fakeDiamondsAmount = 5
-local multifarmEnabled = false
+local truckMissionsEnabled = false
+local diamondFarmEnabled = false
 local running = false
 local currentFreezeConnection = nil
 local mainLoopThread = nil
+local noclipConnection = nil
+local heartbeatConnection = nil
 
 -- Lista de todas las misiones de camión disponibles
 local MISSION_LIST = {"CarParts", "FoodSupplies", "GymEquipment", "Cement", "Petrol", "LumberSupplies", "SupermarketGoods"}
@@ -386,6 +389,21 @@ local function guardarFisicas(modelo)
 end
 
 local function RestoreAll()
+    -- Detener todas las conexiones de física primero
+    if noclipConnection then 
+        noclipConnection:Disconnect() 
+        noclipConnection = nil
+    end
+    if heartbeatConnection then 
+        heartbeatConnection:Disconnect() 
+        heartbeatConnection = nil
+    end
+    if currentFreezeConnection then 
+        currentFreezeConnection:Disconnect() 
+        currentFreezeConnection = nil
+    end
+    
+    -- Detener velocidades
     if h and h.SeatPart then
         local v = h.SeatPart.Parent
         while v and not v:FindFirstChild("Root") do v = v.Parent end
@@ -400,17 +418,17 @@ local function RestoreAll()
         hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end
 
+    -- Restaurar colisiones
     for part, data in pairs(originalState) do
         if part and part.Parent then
             if data.CanCollide ~= nil then part.CanCollide = data.CanCollide end
         end
     end
     table.clear(originalState)
+    running = false
 end
 
 _G.StopCarMovement = function()
-    running = false
-    if currentFreezeConnection then currentFreezeConnection:Disconnect() end
     RestoreAll()
 end
 
@@ -445,7 +463,7 @@ local function getClosestPodium()
 end
 
 local function spawnVehicle()
-    if not multifarmEnabled then return false end
+    if not diamondFarmEnabled then return false end
     
     if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
         return false
@@ -499,16 +517,28 @@ local function viajarA(targetPos)
     h = c:FindFirstChildOfClass("Humanoid") or h
     hrp = c:FindFirstChild("HumanoidRootPart") or hrp
 
-    if not multifarmEnabled or not h then return false end
-    running = true
+    if not diamondFarmEnabled and not running then return false end 
+    if not h then return false end
+    
+    -- Limpiar conexiones anteriores
+    if noclipConnection then noclipConnection:Disconnect() end
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
     
+    running = true
+    
     local s = h.SeatPart
-    if not s then running = false return false end
+    if not s then 
+        running = false 
+        return false 
+    end
     
     local v = s.Parent
     while v and not v:FindFirstChild("Root") do v = v.Parent end
-    if not v then running = false return false end
+    if not v then 
+        running = false 
+        return false 
+    end
     local r = v:FindFirstChild("Root")
     
     limpiarLlantas(v)
@@ -525,10 +555,12 @@ local function viajarA(targetPos)
     if r then r.Anchored = false end
     task.wait(0.05)
     
-    local noclipConnection
     noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-        if not running or not multifarmEnabled or not v or not v.Parent then 
-            if noclipConnection then noclipConnection:Disconnect() end 
+        if not running or not v or not v.Parent then 
+            if noclipConnection then 
+                noclipConnection:Disconnect() 
+                noclipConnection = nil
+            end
             return 
         end
         for _, part in ipairs(v:GetDescendants()) do
@@ -540,12 +572,31 @@ local function viajarA(targetPos)
     end)
     
     local llego = false
-    local heartbeatConnection
     
     heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if not running or not multifarmEnabled or not r or not r.Parent then 
-            if heartbeatConnection then heartbeatConnection:Disconnect() end 
+        if not running or not r or not r.Parent then 
+            if heartbeatConnection then 
+                heartbeatConnection:Disconnect() 
+                heartbeatConnection = nil
+            end
             return 
+        end
+        
+        -- Verificar si el jugador está en la cárcel
+        if h and h.Health > 0 then
+            local jail = workspace:FindFirstChild("Jail")
+            if jail and h:FindFirstChild("Jailed") then
+                running = false
+                if heartbeatConnection then 
+                    heartbeatConnection:Disconnect() 
+                    heartbeatConnection = nil
+                end
+                if noclipConnection then 
+                    noclipConnection:Disconnect() 
+                    noclipConnection = nil
+                end
+                return
+            end
         end
         
         local pos = r.Position
@@ -554,15 +605,24 @@ local function viajarA(targetPos)
         
         if dist < DISTANCIA_LLEGADA then
             running = false
-            if heartbeatConnection then heartbeatConnection:Disconnect() end
-            if noclipConnection then noclipConnection:Disconnect() end
+            if heartbeatConnection then 
+                heartbeatConnection:Disconnect() 
+                heartbeatConnection = nil
+            end
+            if noclipConnection then 
+                noclipConnection:Disconnect() 
+                noclipConnection = nil
+            end
             
             r.CFrame = CFrame.new(targetPos)
             RestoreAll()
             
             currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                if running or not multifarmEnabled or not r or not r.Parent then 
-                    if currentFreezeConnection then currentFreezeConnection:Disconnect() end 
+                if running or not r or not r.Parent then 
+                    if currentFreezeConnection then 
+                        currentFreezeConnection:Disconnect() 
+                        currentFreezeConnection = nil
+                    end
                     return 
                 end
                 r.CFrame = CFrame.new(targetPos)
@@ -573,6 +633,7 @@ local function viajarA(targetPos)
             return
         end
         
+        -- El viaje por defecto siempre calcula la superficie para no bugearse en ruta
         local raycastParams = RaycastParams.new()
         raycastParams.FilterType = Enum.RaycastFilterType.Exclude
         raycastParams.FilterDescendantsInstances = {v, c}
@@ -592,7 +653,10 @@ local function viajarA(targetPos)
         r.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end)
     
-    repeat task.wait(0.1) until llego or not running or not multifarmEnabled or (h and h.Health <= 0)
+    repeat 
+        task.wait(0.1) 
+    until llego or not running or (h and h.Health <= 0)
+    
     return llego
 end
 
@@ -607,7 +671,6 @@ local function getAvailableMissions()
     for _, missionName in ipairs(MISSION_LIST) do
         local missionGui = truckList:FindFirstChild(missionName)
         if missionGui then
-            -- Verificar si la misión está disponible (sin Overlay ni Cooldown)
             if not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
                 table.insert(available, missionName)
             else
@@ -621,27 +684,34 @@ end
 -- ===== FUNCIÓN PARA EJECUTAR UNA MISIÓN ESPECÍFICA =====
 local function executeTruckMission(missionName)
     
-    -- 1. Viajar directo a la posición del NPC
-    local npcPos = Vector3.new(7126, 19, 227)
-    local llegoAlNpc = viajarA(npcPos)
+    local safeSidePos = Vector3.new(7107, 17, 191)
+    local llegoAlLado = viajarA(safeSidePos)
     
-    if llegoAlNpc and multifarmEnabled then
+    if llegoAlLado and truckMissionsEnabled and diamondFarmEnabled then
         task.wait(0.5)
         
-        -- 2. Forzar bajada limpia del coche base
         if h and h.SeatPart then
-            print("🏃 Bajando del coche base...")
             h.Jump = true
             task.wait(0.5)
         end
         
+        local npcPos = Vector3.new(7126, 19, 227)
+        local startTime = tick()
+        
+        while (hrp.Position - npcPos).Magnitude > 2 and (tick() - startTime) < 3 do
+            hrp.CFrame = CFrame.new(hrp.Position:Lerp(npcPos, 0.3))
+            hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            task.wait(0.05)
+        end
+        hrp.CFrame = CFrame.new(npcPos)
+        task.wait(0.3)
+        
         local args = { [1] = missionName, [2] = 0 }
         game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("TruckService"):WaitForChild("StartMission"):InvokeServer(unpack(args))
         
-        -- 4. Abordar el nuevo camión aparecido
         task.wait(1.5)
         local truckSeatTimeout = 0
-        while h and not (h.SeatPart and h.SeatPart:IsA("VehicleSeat")) and truckSeatTimeout < 8 and multifarmEnabled do
+        while h and not (h.SeatPart and h.SeatPart:IsA("VehicleSeat")) and truckSeatTimeout < 8 and truckMissionsEnabled and diamondFarmEnabled do
             for _, veg in ipairs(workspace.Vehicles:GetChildren()) do
                 local seatPart = veg:FindFirstChildOfClass("VehicleSeat", true)
                 if seatPart and (c.HumanoidRootPart.Position - seatPart.Position).Magnitude < 40 then
@@ -653,7 +723,6 @@ local function executeTruckMission(missionName)
             truckSeatTimeout = truckSeatTimeout + 0.5
         end
         
-        -- 5. Ejecutar la ruta de entrega si se abordó correctamente
         if h.SeatPart and h.SeatPart:IsA("VehicleSeat") then
             local deliveryPoint = nil
             local timeout = 0
@@ -666,14 +735,38 @@ local function executeTruckMission(missionName)
                         break
                     end
                 end
-            until deliveryPoint or timeout > 5 or not multifarmEnabled
+            until deliveryPoint or timeout > 5 or not truckMissionsEnabled or not diamondFarmEnabled
             
-            if deliveryPoint and multifarmEnabled then
+            if deliveryPoint and truckMissionsEnabled and diamondFarmEnabled then
+                
+                -- Viaja normalmente usando la superficie para evitar romper la física en la ruta
                 local llegoDestino = viajarA(deliveryPoint.Position)
-                if llegoDestino and multifarmEnabled then
-                    task.wait(8)
+                if llegoDestino and truckMissionsEnabled and diamondFarmEnabled then
                     
-                    -- 6. Regresar al podium y limpiar
+                    -- MODIFICACIÓN CORRECTA: Ya llegamos a la posición. Ahora nos metemos debajo de la parte de entrega.
+                    local s = h.SeatPart
+                    local v = s and s.Parent
+                    while v and not v:FindFirstChild("Root") do v = v.Parent end
+                    local r = v and v:FindFirstChild("Root")
+                    
+                    if r then
+                        -- Forzar desconexión del freeze temporal para mover el eje Y
+                        if currentFreezeConnection then currentFreezeConnection:Disconnect() end
+                        
+                        local undergroundDeliveryPos = deliveryPoint.Position - Vector3.new(0, 15, 0)
+                        r.CFrame = CFrame.new(undergroundDeliveryPos)
+                        
+                        -- Crear un freeze nuevo estricto bajo tierra durante la entrega
+                        currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                            if not r or not r.Parent then return end
+                            r.CFrame = CFrame.new(undergroundDeliveryPos)
+                            r.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                            r.AssemblyAngularVelocity = Vector3.new(0,0,0)
+                        end)
+                    end
+                    
+                    task.wait(5)
+                    
                     local podiumPos = Vector3.new(6897, 17, -36)
                     viajarA(podiumPos)
                     task.wait(0.5)
@@ -696,14 +789,13 @@ end
 -- ===== FUNCIÓN PARA EJECUTAR EL FARM DE DIAMANTES =====
 local function executeDiamondFarm()
     
-    -- FASE 1: COMPRA DIAL
     viajarA(Vector3.new(6819, 9, 17))
-    if not multifarmEnabled or h.Health <= 0 then return false end
+    if not diamondFarmEnabled or h.Health <= 0 then return false end
     task.wait(0.5)
     
     local comprados = 0
     local compraTimeout = 0
-    while comprados < fakeDiamondsAmount and multifarmEnabled and h.Health > 0 do
+    while comprados < fakeDiamondsAmount and diamondFarmEnabled and h.Health > 0 do
         if compraTimeout >= 10 then break end
         pcall(function()
             local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
@@ -714,12 +806,11 @@ local function executeDiamondFarm()
         compraTimeout = compraTimeout + 0.4
     end
     
-    if not multifarmEnabled or h.Health <= 0 then return false end
+    if not diamondFarmEnabled or h.Health <= 0 then return false end
     task.wait(0.5)
     
-    -- FASE 2: VENTA EN CONTRABANDO
     viajarA(Vector3.new(-82, 41, 433))
-    if not multifarmEnabled or h.Health <= 0 then return false end
+    if not diamondFarmEnabled or h.Health <= 0 then return false end
     task.wait(0.5)
 
     pcall(function()
@@ -731,18 +822,17 @@ local function executeDiamondFarm()
     repeat 
         task.wait(0.2) 
         tiempoEspera = tiempoEspera + 0.2
-    until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not multifarmEnabled or h.Health <= 0
+    until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not diamondFarmEnabled or h.Health <= 0
     
-    if tiempoEspera > 10 or not multifarmEnabled or h.Health <= 0 then return false end
+    if tiempoEspera > 10 or not diamondFarmEnabled or h.Health <= 0 then return false end
     
-    -- FASE 3: LAVADO DEL MALETÍN
     if p.Backpack:FindFirstChild("Briefcase") then
         viajarA(Vector3.new(6807, 9, -34))
-        if not multifarmEnabled or h.Health <= 0 then return false end
+        if not diamondFarmEnabled or h.Health <= 0 then return false end
         task.wait(0.5)
         
         local lavadoTimeout = 0
-        while p.Backpack:FindFirstChild("Briefcase") and multifarmEnabled and h.Health > 0 do
+        while p.Backpack:FindFirstChild("Briefcase") and diamondFarmEnabled and h.Health > 0 do
             if lavadoTimeout >= 10 then break end
             pcall(function()
                 local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
@@ -756,104 +846,179 @@ local function executeDiamondFarm()
     return true
 end
 
+-- ===== FUNCIÓN PARA VERIFICAR SI EL JUGADOR ESTÁ EN LA CÁRCEL =====
+local function isPlayerJailed()
+    local jail = workspace:FindFirstChild("Jail")
+    if not jail then return false end
+    if h and h:FindFirstChild("Jailed") then
+        return true
+    end
+    return false
+end
+
 -- ===== CONTROL DEL CICLO MULTI-FARM UNIFICADO =====
-local function startMultifarm()
-    if multifarmEnabled then return end
-    multifarmEnabled = true
+local function startUnifiedFarm()
+    if mainLoopThread then return end
     
     local blackMarket = workspace:FindFirstChild("BlackMarket")
     if blackMarket then blackMarket:Destroy() end
     
     mainLoopThread = task.spawn(function()
-        while multifarmEnabled do
+        while diamondFarmEnabled do 
             c = p.Character or p.CharacterAdded:Wait()
             h = c:WaitForChild("Humanoid")
             
-            if h.Health <= 0 then
-                p.CharacterAdded:Wait()
-                task.wait(1)
+            if isPlayerJailed() then
+                RestoreAll()
+                task.wait(5)
                 continue
             end
             
-            -- ASEGURAR QUE ESTAMOS EN UN VEHÍCULO BASE
-            if not h.SeatPart and multifarmEnabled then
+            if h.Health <= 0 then
+                RestoreAll()
+                p.CharacterAdded:Wait()
+                task.wait(2)
+                continue
+            end
+            
+            if not h.SeatPart and diamondFarmEnabled then
+                RestoreAll()
+                
                 local spawned = spawnVehicle()
                 if spawned then
                     local timeout = 0
                     repeat 
                         for _, veg in ipairs(workspace.Vehicles:GetChildren()) do
-                            if (c.HumanoidRootPart.Position - veg:GetPivot().Position).Magnitude < 35 then
-                                subirseConPrompt(veg)
+                            if veg:FindFirstChild("Body") then
+                                local rootPart = veg:FindFirstChild("Root") or veg:FindFirstChild("HumanoidRootPart")
+                                if rootPart and c.HumanoidRootPart then
+                                    local dist = (c.HumanoidRootPart.Position - rootPart.Position).Magnitude
+                                    if dist < 35 then
+                                        subirseConPrompt(veg)
+                                        break
+                                    end
+                                end
                             end
                         end
                         task.wait(0.5)
                         timeout = timeout + 0.5
-                    until h.SeatPart or timeout > 5 or not multifarmEnabled or h.Health <= 0
+                    until h.SeatPart or timeout > 5 or not diamondFarmEnabled or h.Health <= 0
                 end
             end
 
-            if not h.SeatPart or h.Health <= 0 or not multifarmEnabled then
+            if not h.SeatPart or h.Health <= 0 or not diamondFarmEnabled then
                 task.wait(1)
                 continue
             end
 
-            -- ===== LÓGICA INTELIGENTE: DETECTAR MISIONES DISPONIBLES =====
-            local availableMissions = getAvailableMissions()
-            
-            if #availableMissions > 0 then
-                -- Ejecutar cada misión disponible en orden
-                for _, missionName in ipairs(availableMissions) do
-                    if not multifarmEnabled then break end
-                    
-                    -- Verificar que la misión siga disponible antes de ejecutarla
-                    local stillAvailable = false
-                    local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
-                        and p.PlayerGui.TruckShopGui.Frame.TruckList
-                    if truckList then
-                        local missionGui = truckList:FindFirstChild(missionName)
-                        if missionGui and not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
-                            stillAvailable = true
+            if truckMissionsEnabled then
+                local availableMissions = getAvailableMissions()
+                
+                if #availableMissions > 0 then
+                    for _, missionName in ipairs(availableMissions) do
+                        if not truckMissionsEnabled or not diamondFarmEnabled then break end
+                        
+                        local stillAvailable = false
+                        local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
+                            and p.PlayerGui.TruckShopGui.Frame.TruckList
+                        if truckList then
+                            local missionGui = truckList:FindFirstChild(missionName)
+                            if missionGui and not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
+                                stillAvailable = true
+                            end
+                        end
+                        
+                        if stillAvailable then
+                            executeTruckMission(missionName)
+                            task.wait(0.5)
+                            RestoreAll()
                         end
                     end
-                    
-                    if stillAvailable then
-                        executeTruckMission(missionName)
-                        task.wait(0.5) -- Pequeña pausa entre misiones
-                    end
+                else
+                    executeDiamondFarm()
+                    RestoreAll()
                 end
             else
-                -- ===== NO HAY MISIONES DISPONIBLES: FARM DE DIAMANTES =====
                 executeDiamondFarm()
+                RestoreAll()
             end
             
-            -- Pequeña pausa al final del ciclo para evitar bucles muy rápidos
             task.wait(1)
         end
+        
+        mainLoopThread = nil
     end)
 end
 
-local function stopMultifarm()
-    multifarmEnabled = false
+local function stopUnifiedFarm()
+    truckMissionsEnabled = false
+    diamondFarmEnabled = false
     running = false
-    if _G.StopCarMovement then _G.StopCarMovement() end
-    mainLoopThread = nil
+    
+    task.spawn(function()
+        local posSalidaSegura = Vector3.new(6881, 17, -31)
+        running = true 
+        viajarA(posSalidaSegura)
+        task.wait(0.2)
+        
+        if h and h.SeatPart then
+            h.Jump = true
+            task.wait(0.5)
+        end
+        
+        if noclipConnection then noclipConnection:Disconnect() noclipConnection = nil end
+        if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
+        if currentFreezeConnection then currentFreezeConnection:Disconnect() currentFreezeConnection = nil end
+        
+        RestoreAll()
+        
+        if mainLoopThread then
+            task.cancel(mainLoopThread)
+            mainLoopThread = nil
+        end
+        print("✅ Apagado limpio completado en la superficie.")
+    end)
 end
 
 -- ===== INTEGRACIÓN SECCIÓN DE INTERFAZ (UI) =====
 
--- ELIMINADO EL DROPDOWN DE SELECCIÓN DE MISIÓN
+mainSection:Paragraph({
+    Header = "🛡️ Auto Smuggle Farm Note",
+    Body = "<font color='#00FFFF'><b>TIP: If you only want to run the Smuggle Farm, make sure to keep the Truck Missions toggle DISABLED. Do not turn both on unless you want the combined multi-farm loop.</b></font>"
+}, "Smuggle_Only_Info")
 
+mainSection:Spacer()
 mainSection:Toggle({
-    Name = "Auto Farm",
+    Name = "💎 Smuggle Farm",
     Default = false,
     Callback = function(Value)
+        diamondFarmEnabled = Value
         if Value then
-            startMultifarm()
+            startUnifiedFarm()
         else
-            stopMultifarm()
+            stopUnifiedFarm()
         end
     end
-}, "multifarm_toggle")
+}, "diamond_farm_toggle")
+
+mainSection:Spacer()
+mainSection:Paragraph({
+    Header = "⚠️ TRUCK MISSIONS WARNING",
+    Body = "<font color='#FF5A5A'><b>IMPORTANT: In order for the Truck Missions to work properly, you MUST have the Smuggle Farm active. If it is disabled, the truck cycle will not start.</b></font>"
+}, "Truck_Missions_Warning")
+
+mainSection:Spacer()
+mainSection:Toggle({
+    Name = "🚚 Truck Missions",
+    Default = false,
+    Callback = function(Value)
+        truckMissionsEnabled = Value
+        if not diamondFarmEnabled and Value then
+            print("⚠️ ¡Activa primero el Diamond Farm para usar Truck Missions!")
+            truckMissionsEnabled = false
+        end
+    end
+}, "truck_missions_toggle")
 
 mainSection:Slider({
     Name = "Drag Speed",
