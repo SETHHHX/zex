@@ -342,13 +342,10 @@ mainSection:Divider()
 
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
-
--- Variables dinámicas que se actualizarán automáticamente en cada iteración
 local c = p.Character or p.CharacterAdded:Wait()
 local h = c:WaitForChild("Humanoid")
 local hrp = c:WaitForChild("HumanoidRootPart")
 
--- Escuchar cuando el jugador reaparece (Reset / Muerte)
 p.CharacterAdded:Connect(function(newChar)
     c = newChar
     h = newChar:WaitForChild("Humanoid")
@@ -359,24 +356,63 @@ local VEHICLE_MODEL = "Camry6"
 local MAX_SPEED = 800 
 local FRENADO_INICIO = 200
 local FRENADO_MINIMO = 2
-local DISTANCIA_LLEGADA = 2
+local DISTANCIA_LLEGADA = 3
 
--- VARIABLE DEL SLIDER
 local fakeDiamondsAmount = 5
-
-local autofarmEnabled = false
+local multifarmEnabled = false
 local running = false
 local currentFreezeConnection = nil
 local mainLoopThread = nil
 
+-- Lista de todas las misiones de camión disponibles
+local MISSION_LIST = {"CarParts", "FoodSupplies", "GymEquipment", "Cement", "Petrol", "LumberSupplies", "SupermarketGoods"}
+
 if _G.StopCarMovement then _G.StopCarMovement() end
+
+-- ===== FUNCIONES DE AYUDA Y RESTAURACIÓN FISICA =====
+
+local originalState = {}
+local function guardarFisicas(modelo)
+    if not modelo then return end
+    for _, part in ipairs(modelo:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if originalState[part] == nil then
+                originalState[part] = {
+                    CanCollide = part.CanCollide
+                }
+            end
+        end
+    end
+end
+
+local function RestoreAll()
+    if h and h.SeatPart then
+        local v = h.SeatPart.Parent
+        while v and not v:FindFirstChild("Root") do v = v.Parent end
+        if v and v:FindFirstChild("Root") then
+            v.Root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            v.Root.AssemblyAngularVelocity = Vector3.new(0,0,0)
+        end
+    end
+    
+    if hrp then
+        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+    end
+
+    for part, data in pairs(originalState) do
+        if part and part.Parent then
+            if data.CanCollide ~= nil then part.CanCollide = data.CanCollide end
+        end
+    end
+    table.clear(originalState)
+end
 
 _G.StopCarMovement = function()
     running = false
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
+    RestoreAll()
 end
-
--- ===== FUNCIONES DE ACCIÓN Y SPAWN (POR PROXIMIDAD) =====
 
 local function getClosestPodium()
     local character = p.Character
@@ -409,34 +445,52 @@ local function getClosestPodium()
 end
 
 local function spawnVehicle()
-    if not autofarmEnabled then return false end
-    print("🚗 AutoSpawner: Buscando el podio más cercano...")
+    if not multifarmEnabled then return false end
     
     if not p.Character or not p.Character:FindFirstChild("HumanoidRootPart") then
-        warn("❌ No character to spawn vehicle")
         return false
     end
     
     local podium = getClosestPodium()
     if podium then
-        print("🎯 Podio encontrado por proximidad: " .. podium:GetFullName())
         local args = { podium, VEHICLE_MODEL }
         
         local success, err = pcall(function()
-            game:GetService("ReplicatedStorage")
+            return game:GetService("ReplicatedStorage")
                 :WaitForChild("__remotes")
                 :WaitForChild("VehicleSpawnerService")
                 :WaitForChild("SpawnVehicleFromSpawner")
                 :InvokeServer(unpack(args))
         end)
-            
-        if success then
-            return true
-        else
-            return false
-        end
+        return success
+    end
+    return false
+end
+
+local function subirseConPrompt(vehiculo)
+    if not vehiculo then return false end
+    local body = vehiculo:FindFirstChild("Body")
+    local seats = body and body:FindFirstChild("Seats")
+    local seat = seats and seats:FindFirstChild("VehicleSeat")
+    local prompt = seat and seat:FindFirstChildOfClass("ProximityPrompt")
+    
+    if not prompt then
+        prompt = vehiculo:FindFirstChildOfClass("ProximityPrompt", true)
+    end
+    
+    if prompt then
+        fireproximityprompt(prompt, 1)
+        return true
+    end
+    return false
+end
+
+local function limpiarLlantas(vehiculo)
+    if vehiculo and vehiculo:FindFirstChild("Wheels") then
+        vehiculo.Wheels:Destroy()
     else
-        return false
+        local wheelsFolder = vehiculo and vehiculo:FindFirstChild("Wheels", true)
+        if wheelsFolder then wheelsFolder:Destroy() end
     end
 end
 
@@ -445,23 +499,21 @@ local function viajarA(targetPos)
     h = c:FindFirstChildOfClass("Humanoid") or h
     hrp = c:FindFirstChild("HumanoidRootPart") or hrp
 
-    if not autofarmEnabled or not h then return end
+    if not multifarmEnabled or not h then return false end
     running = true
     if currentFreezeConnection then currentFreezeConnection:Disconnect() end
     
     local s = h.SeatPart
-    if not s then
-        running = false
-        return
-    end
+    if not s then running = false return false end
     
     local v = s.Parent
     while v and not v:FindFirstChild("Root") do v = v.Parent end
-    if not v then running = false return end
+    if not v then running = false return false end
     local r = v:FindFirstChild("Root")
     
-    local wheelsModel = v:FindFirstChild("Wheels")
-    if wheelsModel then wheelsModel:Destroy() end
+    limpiarLlantas(v)
+    guardarFisicas(c)
+    guardarFisicas(v)
     
     for _, part in ipairs(v:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -475,18 +527,15 @@ local function viajarA(targetPos)
     
     local noclipConnection
     noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-        if not running or not autofarmEnabled or not v or not v.Parent then 
+        if not running or not multifarmEnabled or not v or not v.Parent then 
             if noclipConnection then noclipConnection:Disconnect() end 
             return 
         end
-        
         for _, part in ipairs(v:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
         end
-        if p.Character then
-            for _, part in ipairs(p.Character:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
-            end
+        for _, part in ipairs(c:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end)
     
@@ -494,7 +543,7 @@ local function viajarA(targetPos)
     local heartbeatConnection
     
     heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if not running or not autofarmEnabled or not r or not r.Parent then 
+        if not running or not multifarmEnabled or not r or not r.Parent then 
             if heartbeatConnection then heartbeatConnection:Disconnect() end 
             return 
         end
@@ -509,9 +558,10 @@ local function viajarA(targetPos)
             if noclipConnection then noclipConnection:Disconnect() end
             
             r.CFrame = CFrame.new(targetPos)
+            RestoreAll()
             
             currentFreezeConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                if running or not autofarmEnabled or not r or not r.Parent then 
+                if running or not multifarmEnabled or not r or not r.Parent then 
                     if currentFreezeConnection then currentFreezeConnection:Disconnect() end 
                     return 
                 end
@@ -542,36 +592,180 @@ local function viajarA(targetPos)
         r.AssemblyAngularVelocity = Vector3.new(0,0,0)
     end)
     
-    repeat 
-        task.wait(0.1) 
-    until llego or not running or not autofarmEnabled or (h and h.Health <= 0)
+    repeat task.wait(0.1) until llego or not running or not multifarmEnabled or (h and h.Health <= 0)
+    return llego
 end
 
-local function contarItems(nombreItem)
-    local count = 0
-    if p:FindFirstChild("Backpack") then
-        for _, item in ipairs(p.Backpack:GetChildren()) do
-            if item.Name == nombreItem then count = count + 1 end
+-- ===== FUNCIÓN INTELIGENTE PARA DETECTAR MISIONES DISPONIBLES =====
+local function getAvailableMissions()
+    local available = {}
+    local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
+        and p.PlayerGui.TruckShopGui.Frame.TruckList
+    
+    if not truckList then return available end
+    
+    for _, missionName in ipairs(MISSION_LIST) do
+        local missionGui = truckList:FindFirstChild(missionName)
+        if missionGui then
+            -- Verificar si la misión está disponible (sin Overlay ni Cooldown)
+            if not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
+                table.insert(available, missionName)
+            else
+            end
         end
     end
-    return count
+    
+    return available
 end
 
--- ===== CONTROL DEL CICLO PRINCIPAL =====
-
-local function startAutofarm()
-    if autofarmEnabled then return end
-    autofarmEnabled = true
+-- ===== FUNCIÓN PARA EJECUTAR UNA MISIÓN ESPECÍFICA =====
+local function executeTruckMission(missionName)
     
-    local blackMarket = workspace:FindFirstChild("BlackMarket")
-    if blackMarket then
-        blackMarket:Destroy()
-    else
+    -- 1. Viajar directo a la posición del NPC
+    local npcPos = Vector3.new(7126, 19, 227)
+    local llegoAlNpc = viajarA(npcPos)
+    
+    if llegoAlNpc and multifarmEnabled then
+        task.wait(0.5)
+        
+        -- 2. Forzar bajada limpia del coche base
+        if h and h.SeatPart then
+            print("🏃 Bajando del coche base...")
+            h.Jump = true
+            task.wait(0.5)
+        end
+        
+        local args = { [1] = missionName, [2] = 0 }
+        game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("TruckService"):WaitForChild("StartMission"):InvokeServer(unpack(args))
+        
+        -- 4. Abordar el nuevo camión aparecido
+        task.wait(1.5)
+        local truckSeatTimeout = 0
+        while h and not (h.SeatPart and h.SeatPart:IsA("VehicleSeat")) and truckSeatTimeout < 8 and multifarmEnabled do
+            for _, veg in ipairs(workspace.Vehicles:GetChildren()) do
+                local seatPart = veg:FindFirstChildOfClass("VehicleSeat", true)
+                if seatPart and (c.HumanoidRootPart.Position - seatPart.Position).Magnitude < 40 then
+                    subirseConPrompt(veg)
+                    break
+                end
+            end
+            task.wait(0.5)
+            truckSeatTimeout = truckSeatTimeout + 0.5
+        end
+        
+        -- 5. Ejecutar la ruta de entrega si se abordó correctamente
+        if h.SeatPart and h.SeatPart:IsA("VehicleSeat") then
+            local deliveryPoint = nil
+            local timeout = 0
+            repeat
+                task.wait(0.5)
+                timeout = timeout + 0.5
+                for _, folder in ipairs(workspace.TruckDeliveryPoints:GetChildren()) do
+                    if folder:FindFirstChild("Part") then
+                        deliveryPoint = folder.Part
+                        break
+                    end
+                end
+            until deliveryPoint or timeout > 5 or not multifarmEnabled
+            
+            if deliveryPoint and multifarmEnabled then
+                local llegoDestino = viajarA(deliveryPoint.Position)
+                if llegoDestino and multifarmEnabled then
+                    task.wait(8)
+                    
+                    -- 6. Regresar al podium y limpiar
+                    local podiumPos = Vector3.new(6897, 17, -36)
+                    viajarA(podiumPos)
+                    task.wait(0.5)
+                    
+                    if h and h.SeatPart then
+                        h.Jump = true
+                        task.wait(0.5)
+                    end
+                    
+                    return true
+                end
+            end
+        else
+        end
     end
     
-    mainLoopThread = task.spawn(function()
+    return false
+end
+
+-- ===== FUNCIÓN PARA EJECUTAR EL FARM DE DIAMANTES =====
+local function executeDiamondFarm()
+    
+    -- FASE 1: COMPRA DIAL
+    viajarA(Vector3.new(6819, 9, 17))
+    if not multifarmEnabled or h.Health <= 0 then return false end
+    task.wait(0.5)
+    
+    local comprados = 0
+    local compraTimeout = 0
+    while comprados < fakeDiamondsAmount and multifarmEnabled and h.Health > 0 do
+        if compraTimeout >= 10 then break end
+        pcall(function()
+            local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
+            game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
+        end)
+        comprados = comprados + 1
+        task.wait(0.4)
+        compraTimeout = compraTimeout + 0.4
+    end
+    
+    if not multifarmEnabled or h.Health <= 0 then return false end
+    task.wait(0.5)
+    
+    -- FASE 2: VENTA EN CONTRABANDO
+    viajarA(Vector3.new(-82, 41, 433))
+    if not multifarmEnabled or h.Health <= 0 then return false end
+    task.wait(0.5)
+
+    pcall(function()
+        local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller2") }
+        game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
+    end)
+    
+    local tiempoEspera = 0
+    repeat 
+        task.wait(0.2) 
+        tiempoEspera = tiempoEspera + 0.2
+    until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not multifarmEnabled or h.Health <= 0
+    
+    if tiempoEspera > 10 or not multifarmEnabled or h.Health <= 0 then return false end
+    
+    -- FASE 3: LAVADO DEL MALETÍN
+    if p.Backpack:FindFirstChild("Briefcase") then
+        viajarA(Vector3.new(6807, 9, -34))
+        if not multifarmEnabled or h.Health <= 0 then return false end
+        task.wait(0.5)
         
-        while autofarmEnabled do
+        local lavadoTimeout = 0
+        while p.Backpack:FindFirstChild("Briefcase") and multifarmEnabled and h.Health > 0 do
+            if lavadoTimeout >= 10 then break end
+            pcall(function()
+                local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
+                game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
+            end)
+            task.wait(0.5)
+            lavadoTimeout = lavadoTimeout + 0.5
+        end
+    end
+    
+    return true
+end
+
+-- ===== CONTROL DEL CICLO MULTI-FARM UNIFICADO =====
+local function startMultifarm()
+    if multifarmEnabled then return end
+    multifarmEnabled = true
+    
+    local blackMarket = workspace:FindFirstChild("BlackMarket")
+    if blackMarket then blackMarket:Destroy() end
+    
+    mainLoopThread = task.spawn(function()
+        while multifarmEnabled do
             c = p.Character or p.CharacterAdded:Wait()
             h = c:WaitForChild("Humanoid")
             
@@ -581,142 +775,85 @@ local function startAutofarm()
                 continue
             end
             
-            if not h.SeatPart and autofarmEnabled then
+            -- ASEGURAR QUE ESTAMOS EN UN VEHÍCULO BASE
+            if not h.SeatPart and multifarmEnabled then
                 local spawned = spawnVehicle()
                 if spawned then
                     local timeout = 0
                     repeat 
-                        task.wait(0.1)
-                        timeout = timeout + 0.1
-                    until h.SeatPart or timeout > 5 or not autofarmEnabled or h.Health <= 0
+                        for _, veg in ipairs(workspace.Vehicles:GetChildren()) do
+                            if (c.HumanoidRootPart.Position - veg:GetPivot().Position).Magnitude < 35 then
+                                subirseConPrompt(veg)
+                            end
+                        end
+                        task.wait(0.5)
+                        timeout = timeout + 0.5
+                    until h.SeatPart or timeout > 5 or not multifarmEnabled or h.Health <= 0
                 end
             end
 
-            if not h.SeatPart or h.Health <= 0 or not autofarmEnabled then
+            if not h.SeatPart or h.Health <= 0 or not multifarmEnabled then
                 task.wait(1)
                 continue
             end
 
-            -- FASE 1: COMPRA
-            viajarA(Vector3.new(6819, 9, 17))
-            if not autofarmEnabled or h.Health <= 0 then continue end
-            task.wait(0.5)
+            -- ===== LÓGICA INTELIGENTE: DETECTAR MISIONES DISPONIBLES =====
+            local availableMissions = getAvailableMissions()
             
-            local compraTimeout = 0
-            local rollbackDetectado = false
-            
-            -- CORRECCIÓN AQUÍ: Usamos un contador numérico estricto independiente del inventario
-            local comprados = 0
-            while comprados < fakeDiamondsAmount and autofarmEnabled and h.Health > 0 do
-                if compraTimeout >= 10 then
-                    rollbackDetectado = true
-                    break
-                end
-                
-                pcall(function()
-                    local args = { workspace:WaitForChild("WorldBuyableItems"):WaitForChild("Fake Diamond Ring") }
-                    game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("WorldBuyableItemService"):WaitForChild("PurchaseWorldBuyableItem"):FireServer(unpack(args))
-                end)
-                
-                comprados = comprados + 1
-                task.wait(0.4)
-                compraTimeout = compraTimeout + 0.4
-            end
-            
-            if rollbackDetectado or not autofarmEnabled or h.Health <= 0 then continue end
-            task.wait(0.5)
-            
-            -- FASE 2: VENTA
-            viajarA(Vector3.new(-82, 41, 433))
-            if not autofarmEnabled or h.Health <= 0 then continue end
-            task.wait(0.5)
-
-            pcall(function()
-                local argsVenta = { workspace:WaitForChild("NPC"):WaitForChild("Seller2") }
-                game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("SellSmuggledGoods"):FireServer(unpack(argsVenta))
-            end)
-            
-            local tiempoEspera = 0
-            repeat 
-                task.wait(0.2) 
-                tiempoEspera = tiempoEspera + 0.2
-            until (p.Backpack:FindFirstChild("Briefcase")) or tiempoEspera > 10 or not autofarmEnabled or h.Health <= 0
-            
-            if tiempoEspera > 10 then
-                continue
-            end
-            if not autofarmEnabled or h.Health <= 0 then continue end
-            
-            -- FASE 3: LAVADO
-            if p.Backpack:FindFirstChild("Briefcase") then
-                viajarA(Vector3.new(6807, 9, -34))
-                if not autofarmEnabled or h.Health <= 0 then continue end
-                task.wait(0.5)
-                
-                local lavadoTimeout = 0
-                while p.Backpack:FindFirstChild("Briefcase") and autofarmEnabled and h.Health > 0 do
-                    if lavadoTimeout >= 10 then
-                        break
+            if #availableMissions > 0 then
+                -- Ejecutar cada misión disponible en orden
+                for _, missionName in ipairs(availableMissions) do
+                    if not multifarmEnabled then break end
+                    
+                    -- Verificar que la misión siga disponible antes de ejecutarla
+                    local stillAvailable = false
+                    local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
+                        and p.PlayerGui.TruckShopGui.Frame.TruckList
+                    if truckList then
+                        local missionGui = truckList:FindFirstChild(missionName)
+                        if missionGui and not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
+                            stillAvailable = true
+                        end
                     end
                     
-                    pcall(function()
-                        local argsLavado = { workspace:WaitForChild("LaunderPrompts"):WaitForChild("LaunderTrigger"):WaitForChild("PromptPart") }
-                        game:GetService("ReplicatedStorage"):WaitForChild("__remotes"):WaitForChild("SmuggleService"):WaitForChild("LaunderBriefcase"):FireServer(unpack(argsLavado))
-                    end)
-                    task.wait(0.5)
-                    lavadoTimeout = lavadoTimeout + 0.5
+                    if stillAvailable then
+                        executeTruckMission(missionName)
+                        task.wait(0.5) -- Pequeña pausa entre misiones
+                    end
                 end
+            else
+                -- ===== NO HAY MISIONES DISPONIBLES: FARM DE DIAMANTES =====
+                executeDiamondFarm()
             end
             
+            -- Pequeña pausa al final del ciclo para evitar bucles muy rápidos
             task.wait(1)
         end
     end)
 end
 
-local function stopAutofarm()
-    autofarmEnabled = false
+local function stopMultifarm()
+    multifarmEnabled = false
     running = false
-    
-    if h and h.SeatPart then
-        local v = h.SeatPart.Parent
-        while v and not v:FindFirstChild("Root") do v = v.Parent end
-        if v and v:FindFirstChild("Root") then
-            v.Root.Anchored = true
-            v.Root.AssemblyLinearVelocity = Vector3.new(0,0,0)
-        end
-    end
-
     if _G.StopCarMovement then _G.StopCarMovement() end
     mainLoopThread = nil
 end
 
--- ===== INTEGRACIÓN CON TU SECCIÓN DE UI =====
+-- ===== INTEGRACIÓN SECCIÓN DE INTERFAZ (UI) =====
 
-mainSection:Paragraph({
-    Header = "⚠️ ROLLBACK WARNING",
-    Body = " <font color='#FFD700'><b>If the game is rolling back frequently, lower the drag speed to avoid desync and position resets.</b></font> "
-}, "auto_open_packs_info")
-
-mainSection:Spacer()
-
-mainSection:Paragraph({
-    Header = "🛡️ AUTO FARM REQUEST",
-    Body = " <font color='#00FF00'><b>TO USE THE AUTO FARM U NEED ATLEAST 5.000</b></font> "
-}, "anti_stuck_info")
+-- ELIMINADO EL DROPDOWN DE SELECCIÓN DE MISIÓN
 
 mainSection:Toggle({
-    Name = "Auto Farm Smuggle",
+    Name = "Auto Farm",
     Default = false,
     Callback = function(Value)
         if Value then
-            startAutofarm()
+            startMultifarm()
         else
-            stopAutofarm()
+            stopMultifarm()
         end
     end
-}, "autofarm_toggle")
-
-
+}, "multifarm_toggle")
 
 mainSection:Slider({
     Name = "Drag Speed",
@@ -725,18 +862,8 @@ mainSection:Slider({
     Maximum = 800,
     DisplayMethod = "Value",
     Precision = 0,
-    Callback = function(Value)
-        MAX_SPEED = Value
-    end,
-    onInputComplete = function(Value)
-        MAX_SPEED = Value
-    end
+    Callback = function(Value) MAX_SPEED = Value end
 }, "autofarm_speed")
-
-mainSection:Paragraph({
-    Header = "FAKE DIAMONDS AMOUNT",
-    Body = " <font color='#FFD700'><b>Set the amount of Diamonds u want to sell If u dont have El capo Gamepass, use 1-5. But if u have it u can use it at 1-8.</b></font> "
-}, "Fkae_diamonds")
 
 mainSection:Slider({
     Name = "Fake Diamonds",
@@ -745,13 +872,12 @@ mainSection:Slider({
     Maximum = 8,
     DisplayMethod = "Value",
     Precision = 0,
-    Callback = function(Value)
-        fakeDiamondsAmount = Value
-    end,
-    onInputComplete = function(Value)
-        fakeDiamondsAmount = Value
-    end
+    Callback = function(Value) fakeDiamondsAmount = Value end
 }, "fake_diamonds_slider")
+
+
+
+
 
 
 -- =============================================================================
