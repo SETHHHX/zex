@@ -200,6 +200,7 @@ local tabs = {
     Combat = tabGroups.TabGroup1:Tab({ Name = "Combat", Image = "rbxassetid://89270463071386" }),
     Visual = tabGroups.TabGroup1:Tab({ Name = "Visuals", Image = "rbxassetid://75584849710793" }),
     Vehicles = tabGroups.TabGroup1:Tab({ Name = "Vehicles Mod", Image = "rbxassetid://89270463071386" }),
+    Police = tabGroups.TabGroup1:Tab({ Name = "XP Farm", Image = "rbxassetid://98193142158939" }),
     Settings = tabGroups.TabGroup1:Tab({ Name = "Settings", Image = "rbxassetid://10734950309" })
 }
 
@@ -215,6 +216,7 @@ local ExtraSection = tabs.Main:Section({ Side = "Right" })
 local MiscSection = tabs.Visual:Section({ Side = "Left" })
 local Visual2 = tabs.Visual:Section({ Side = "Right" })
 local Vehiclesmod = tabs.Vehicles:Section({ Side = "Left" })
+local PoliceXp = tabs.Police:Section({ Side = "Left" })
 
 -- Sección Settings (con el Slider de tamaño)
 local settingsSection = tabs.Settings:Section({ Side = "Left" })
@@ -3567,6 +3569,231 @@ task.spawn(function()
         end
     }, "SteeringForceSlider")
 end)
+
+
+
+
+
+
+
+
+
+do -- BLOQUE AISLADO PARA LIBERAR REGISTROS (Evita el límite de 200 locales)
+    local Config = {
+        RADIUS = 200, -- Se actualizará dinámicamente con el Slider
+        RETURN_POSITION = Vector3.new(2816, 18, 108),
+        TWEEN_SPEED = 300
+    }
+
+    local Services = {
+        Players = game:GetService("Players"),
+        RunService = game:GetService("RunService"),
+        ReplicatedStorage = game:GetService("ReplicatedStorage"),
+        TweenService = game:GetService("TweenService"),
+        Teams = game:GetService("Teams")
+    }
+
+    local State = {
+        isTweening = false,
+        loopConnection = nil
+    }
+
+    local LocalPlayer = Services.Players.LocalPlayer
+    local BorderService = Services.ReplicatedStorage:WaitForChild("__remotes"):WaitForChild("BorderAuthorisationService")
+    local GrantRemote = BorderService:WaitForChild("GrantEntry")
+    local InspectionRemote = BorderService:WaitForChild("SendToInspection")
+
+    local VisualCircle = Instance.new("CylinderHandleAdornment")
+    VisualCircle.Color3 = Color3.fromRGB(0, 255, 120)
+    VisualCircle.Transparency = 0.7
+    VisualCircle.Radius = Config.RADIUS
+    VisualCircle.Height = 0.2
+    VisualCircle.CFrame = CFrame.Angles(math.rad(90), 0, 0)
+    VisualCircle.AlwaysOnTop = false
+    VisualCircle.Parent = workspace
+
+    local Funcs = {}
+
+    function Funcs.isGranted(player) return player:GetAttribute("Granted") == true end
+    function Funcs.isBeingInspected(player) return player:GetAttribute("InspectionActive") == true end
+    function Funcs.isFromMexico(player) return player:GetAttribute("FromMexico") == true end
+    function Funcs.isWantedBorderStampAllowed(player) return player:GetAttribute("WantedBorderStampAllowed") == true end
+    
+    function Funcs.hasWantedLevel(player)
+        local wantedLevel = player:GetAttribute("WantedLevel")
+        return typeof(wantedLevel) == "number" and wantedLevel > 0
+    end
+
+    function Funcs.isStampReady(player)
+        local lastStamped = player:GetAttribute("LastStamped")
+        if type(lastStamped) == "number" then return (os.clock() - lastStamped) >= 3 end
+        return true
+    end
+
+    function Funcs.canGrantEntry(player)
+        if player.Team == Services.Teams.Civilian and not Funcs.hasWantedLevel(player) and Funcs.isStampReady(player) then
+            return not Funcs.isGranted(player) and (Funcs.isFromMexico(player) or (Funcs.isBeingInspected(player) or Funcs.isWantedBorderStampAllowed(player)))
+        end
+        return false
+    end
+
+    function Funcs.canSendToInspection(player)
+        if player.Team == Services.Teams.Civilian and not Funcs.hasWantedLevel(player) and Funcs.isStampReady(player) then
+            if Funcs.isGranted(player) then return false end
+            return not Funcs.isBeingInspected(player) and (Funcs.isFromMexico(player) or Funcs.isWantedBorderStampAllowed(player))
+        end
+        return false
+    end
+
+    function Funcs.equipStamp()
+        local character = LocalPlayer.Character
+        if not character then return false end
+        if character:FindFirstChild("Stamp") then return true end
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            local stamp = backpack:FindFirstChild("Stamp")
+            if stamp then stamp.Parent = character return true end
+        end
+        return false
+    end
+
+    function Funcs.tweenCharacter(targetCFrame)
+        local character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local distance = (hrp.Position - targetCFrame.Position).Magnitude
+        local duration = distance / Config.TWEEN_SPEED
+        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+        local tween = Services.TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+        tween:Play()
+        tween.Completed:Wait()
+    end
+
+    function Funcs.checkPlayersInRadius()
+        if State.isTweening then return end
+        local character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        VisualCircle.Adornee = hrp
+        VisualCircle.Radius = Config.RADIUS
+        VisualCircle.CFrame = CFrame.new(0, -3.2, 0) * CFrame.Angles(math.rad(90), 0, 0)
+        
+        for _, player in ipairs(Services.Teams.Civilian:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetHrp = player.Character.HumanoidRootPart
+                local distance = (hrp.Position - targetHrp.Position).Magnitude
+                
+                if distance <= Config.RADIUS then
+                    if Funcs.hasWantedLevel(player) or not Funcs.isStampReady(player) then continue end
+                    local isGrantable = Funcs.canGrantEntry(player)
+                    local isInspectable = Funcs.canSendToInspection(player)
+                    
+                    if isGrantable or isInspectable then
+                        local equipped = Funcs.equipStamp()
+                        if not equipped then continue end
+                        
+                        State.isTweening = true
+                        player:SetAttribute("LastStamped", os.clock())
+                        
+                        local targetPos = targetHrp.CFrame * CFrame.new(0, 0, 2)
+                        Funcs.tweenCharacter(targetPos)
+                        task.wait(0.05)
+                        
+                        pcall(function()
+                            if isGrantable then GrantRemote:InvokeServer(player)
+                            elseif isInspectable then InspectionRemote:InvokeServer(player) end
+                        end)
+                        
+                        Funcs.tweenCharacter(CFrame.new(Config.RETURN_POSITION))
+                        task.wait(0.2)
+                        State.isTweening = false
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    LocalPlayer.CharacterRemoving:Connect(function()
+        VisualCircle.Adornee = nil
+        State.isTweening = false
+    end)
+
+
+
+
+    PoliceXp:Paragraph({
+    Header = "AUTO STAMP SYSTEM",
+    Body = "<font color='#00FF7F'><b>Automatically equips your Stamp and scans for eligible civilian players within your custom radius.</b></font> "
+}, "AutoStampDescription")
+
+
+    -- Slider para configurar el Rango/Tamaño
+    PoliceXp:Slider({
+        Name = "Scan Radius",
+        Default = 200,
+        Minimum = 10,
+        Maximum = 300,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(Value)
+            Config.RADIUS = Value
+            -- Actualizar el tamaño visual al instante si el círculo está activo
+            if VisualCircle.Adornee then
+                VisualCircle.Radius = Value
+            end
+        end,
+        onInputComplete = function(Value)
+            Config.RADIUS = Value
+        end
+    }, "StampRadiusSlider")
+
+
+
+    
+    -- Ejecución del Toggle
+    PoliceXp:Toggle({
+        Name = "Auto Stamp",
+        Default = false,
+        Callback = function(Value)
+            if Value then
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - Config.RETURN_POSITION).Magnitude > 2 then
+                    State.isTweening = true
+                    Funcs.tweenCharacter(CFrame.new(Config.RETURN_POSITION))
+                    State.isTweening = false
+                end
+
+                if State.loopConnection then State.loopConnection:Disconnect() end
+                State.loopConnection = Services.RunService.Heartbeat:Connect(function()
+                    Funcs.checkPlayersInRadius()
+                end)
+            else
+                if State.loopConnection then
+                    State.loopConnection:Disconnect()
+                    State.loopConnection = nil
+                end
+                VisualCircle.Adornee = nil
+                State.isTweening = false
+            end
+        end
+    }, "AutoStampToggle")
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 local UserInputService = game:GetService("UserInputService")
