@@ -2313,7 +2313,7 @@ CombatSection:Slider({
     Name = "Fire Rate",
     Default = 500,
     Minimum = 100,
-    Maximum = 500,
+    Maximum = 1000,
     DisplayMethod = "Value",
     Precision = 0,
     Callback = function(value)
