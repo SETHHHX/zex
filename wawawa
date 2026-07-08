@@ -199,6 +199,7 @@ local tabs = {
     Main = tabGroups.TabGroup1:Tab({ Name = "Auto Farm", Image = "rbxassetid://123881359502301" }),
     Combat = tabGroups.TabGroup1:Tab({ Name = "Combat", Image = "rbxassetid://89270463071386" }),
     Visual = tabGroups.TabGroup1:Tab({ Name = "Visuals", Image = "rbxassetid://75584849710793" }),
+    Vehicles = tabGroups.TabGroup1:Tab({ Name = "Vehicles Mod", Image = "rbxassetid://89270463071386" }),
     Settings = tabGroups.TabGroup1:Tab({ Name = "Settings", Image = "rbxassetid://10734950309" })
 }
 
@@ -213,6 +214,7 @@ local CombatSection2 = tabs.Combat:Section({ Side = "Right" })
 local ExtraSection = tabs.Main:Section({ Side = "Right" })
 local MiscSection = tabs.Visual:Section({ Side = "Left" })
 local Visual2 = tabs.Visual:Section({ Side = "Right" })
+local Vehiclesmod = tabs.Vehicles:Section({ Side = "Left" })
 
 -- Sección Settings (con el Slider de tamaño)
 local settingsSection = tabs.Settings:Section({ Side = "Left" })
@@ -3349,6 +3351,222 @@ Visual2:Toggle({
     end
 }, nil)
 
+
+-- ENTORNO AISLADO PARA EVITAR EXCESO DE REGISTROS LUAU
+task.spawn(function()
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+
+    local CONFIG = {
+        MAX_SPEED = 350,
+        MAX_REVERSE_SPEED = 150,
+        TURBO_FORCE = 20000,
+        REVERSE_FORCE = 10000,
+        STEERING_SPEED = 4,
+        STEERING_FORCE = 2000,
+        STEERING_DAMPING = 0.92,
+        MAX_ANGULAR_VEL = 3,
+    }
+
+    -- Independent Toggles
+    local speedEnabled = false
+    local turboEnabled = false
+    local steeringEnabled = false
+
+    local vehicle, root = nil, nil
+    local throttle, reverse, steerLeft, steerRight = false, false, false, false
+
+    local function GetVehicle()
+        local char = LocalPlayer.Character
+        if not char then return nil end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return nil end
+        local seat = hum.SeatPart
+        if not seat then return nil end
+        
+        local current = seat
+        while current do
+            if current:IsA("Model") then
+                local rootPart = current:FindFirstChild("Root")
+                if rootPart and rootPart:IsA("BasePart") then
+                    return current, rootPart
+                end
+            end
+            current = current.Parent
+        end
+        return nil
+    end
+
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.W then throttle = true reverse = false
+        elseif input.KeyCode == Enum.KeyCode.S then reverse = true throttle = false
+        elseif input.KeyCode == Enum.KeyCode.A then steerLeft = true
+        elseif input.KeyCode == Enum.KeyCode.D then steerRight = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.W then throttle = false
+        elseif input.KeyCode == Enum.KeyCode.S then reverse = false
+        elseif input.KeyCode == Enum.KeyCode.A then steerLeft = false
+        elseif input.KeyCode == Enum.KeyCode.D then steerRight = false
+        end
+    end)
+
+    RunService.Heartbeat:Connect(function(dt)
+        if not speedEnabled and not turboEnabled and not steeringEnabled then return end
+        
+        if not root or root.Parent == nil then
+            vehicle, root = GetVehicle()
+            if not root then return end
+        end
+        
+        local vel = root.AssemblyLinearVelocity
+        local speed = vel.Magnitude
+        local cframe = root.CFrame
+        
+        -- === STEERING SECTION ===
+        if steeringEnabled then
+            local steerVal = 0
+            if steerLeft then steerVal = -1 end
+            if steerRight then steerVal = 1 end
+            
+            if steerVal ~= 0 then
+                root:ApplyImpulse(cframe.RightVector * steerVal * CONFIG.STEERING_FORCE * dt * 60)
+                root.AssemblyAngularVelocity = root.AssemblyAngularVelocity + Vector3.new(0, steerVal * CONFIG.STEERING_SPEED * dt * 3, 0)
+                
+                local angVel = root.AssemblyAngularVelocity
+                if math.abs(angVel.Y) > CONFIG.MAX_ANGULAR_VEL then
+                    root.AssemblyAngularVelocity = Vector3.new(angVel.X, math.sign(angVel.Y) * CONFIG.MAX_ANGULAR_VEL, angVel.Z)
+                end
+                
+                if speed < 15 then
+                    root:ApplyImpulse(cframe.LookVector * steerVal * CONFIG.STEERING_FORCE * 0.12 * dt * 60)
+                end
+            else
+                local angVel = root.AssemblyAngularVelocity
+                root.AssemblyAngularVelocity = Vector3.new(angVel.X, angVel.Y * CONFIG.STEERING_DAMPING, angVel.Z)
+            end
+        end
+        
+        -- === TURBO SECTION ===
+        if turboEnabled then
+            if throttle then
+                root:ApplyImpulse(cframe.LookVector * CONFIG.TURBO_FORCE * dt * 60)
+            end
+            if reverse then
+                root:ApplyImpulse(-cframe.LookVector * CONFIG.REVERSE_FORCE * dt * 60)
+            end
+        end
+        
+        -- === MAX SPEED SECTION ===
+        if speedEnabled then
+            if speed > CONFIG.MAX_SPEED and throttle then
+                root.AssemblyLinearVelocity = vel.Unit * CONFIG.MAX_SPEED
+            end
+            if reverse and speed > CONFIG.MAX_REVERSE_SPEED then
+                root.AssemblyLinearVelocity = vel.Unit * CONFIG.MAX_REVERSE_SPEED
+            end
+        end
+        
+        -- Default stability
+        if math.abs(vel.Y) > 30 then
+            root.AssemblyLinearVelocity = Vector3.new(vel.X, vel.Y * 0.3, vel.Z)
+        end
+    end)
+
+    -- ==========================================
+    -- INTERFAZ DE USUARIO CON EXPLICACIONES (UI)
+    -- ==========================================
+
+    --- MODULE 1: MAX SPEED ---
+    Vehiclesmod:Paragraph({
+        Header = "MAX SPEED SYSTEM",
+        Body = "<font color='#FFD700'><b>Toggle this feature to enforce a strict velocity boundary.</b></font> "
+    }, "MaxSpeedParagraph")
+
+    Vehiclesmod:Toggle({
+        Name = "Enable Max Speed Limit",
+        Default = false,
+        Callback = function(Value)
+            speedEnabled = Value
+        end
+    }, "SpeedToggle")
+
+    Vehiclesmod:Slider({
+        Name = "Max Speed Value",
+        Default = 350,
+        Minimum = 10,
+        Maximum = 1000,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(Value)
+            CONFIG.MAX_SPEED = Value
+        end
+    }, "MaxSpeedSlider")
+
+    --- MODULE 2: ACCELERATION / TURBO ---
+    Vehiclesmod:Paragraph({
+        Header = "TURBO ACCELERATION",
+        Body = "<font color='#FFD700'><b>Adds extra vector impulse forces when pressing forward or backward.</b></font> "
+    }, "TurboParagraph")
+
+    Vehiclesmod:Toggle({
+        Name = "Enable Turbo Acceleration",
+        Default = false,
+        Callback = function(Value)
+            turboEnabled = Value
+            if not Value then
+                throttle, reverse = false, false
+            end
+        end
+    }, "TurboToggle")
+
+    Vehiclesmod:Slider({
+        Name = "Acceleration Force",
+        Default = 20000,
+        Minimum = 1000,
+        Maximum = 20000,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(Value)
+            CONFIG.TURBO_FORCE = Value
+        end
+    }, "TurboForceSlider")
+
+    --- MODULE 3: STEERING ---
+    Vehiclesmod:Paragraph({
+        Header = "PERFECT STEERING",
+        Body = "<font color='#FFD700'><b>Forces precision handling dynamics relative to the vehicle orientation.</b></font> "
+    }, "SteeringParagraph")
+
+    Vehiclesmod:Toggle({
+        Name = "Enable Perfect Steering",
+        Default = false,
+        Callback = function(Value)
+            steeringEnabled = Value
+            if not Value then
+                steerLeft, steerRight = false, false
+            end
+        end
+    }, "SteeringToggle")
+
+    Vehiclesmod:Slider({
+        Name = "Steering Force",
+        Default = 2000,
+        Minimum = 100,
+        Maximum = 2000,
+        DisplayMethod = "Value",
+        Precision = 0,
+        Callback = function(Value)
+            CONFIG.STEERING_FORCE = Value
+        end
+    }, "SteeringForceSlider")
+end)
 
 
 local UserInputService = game:GetService("UserInputService")
