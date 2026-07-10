@@ -373,7 +373,7 @@ local currentFreezeConnection = nil
 local mainLoopThread = nil
 local noclipConnection = nil
 local heartbeatConnection = nil
-end
+
 
 -- Lista de todas las misiones de camión disponibles
 local MISSION_LIST = {"CarParts", "FoodSupplies", "GymEquipment", "Cement", "Petrol", "LumberSupplies", "SupermarketGoods"}
@@ -1095,7 +1095,7 @@ mainSection:Slider({
     Precision = 0,
     Callback = function(Value) fakeDiamondsAmount = Value end
 }, "fake_diamonds_slider")
-
+end
 
 
 
