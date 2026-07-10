@@ -2774,6 +2774,7 @@ do
     end
 
     --// Bucle principal del aimbot
+--// Bucle principal del aimbot (CORREGIDO PARA MOBILE)
     local function startAimlock()
         if aimlockLoop then 
             aimlockLoop:Disconnect() 
@@ -2781,7 +2782,6 @@ do
         end
 
         aimlockLoop = RunService.RenderStepped:Connect(function()
-            -- Si el interruptor general de la UI está apagado o el candado está abierto, no hacer nada
             if not aimbotMasterEnabled or not aimlockEnabled then return end
             
             if not aimlockTarget or not isAlive(aimlockTarget) then
@@ -2802,20 +2802,19 @@ do
             end
 
             local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
-            local center = getScreenCenter()
             
             if not isInFOV(targetScreen) then
                 aimlockTarget = getClosestPlayerInFOV()
                 return
             end
             
-            local delta = targetScreen - center
-            if delta.Magnitude < 2 then return end
-
-            mousemoverel(
-                delta.X * smoothness, 
-                delta.Y * smoothness
-            )
+            -- En vez de usar mousemoverel, calculamos la rotación que debe tener la cámara
+            -- Usamos CFrame.lookAt para apuntar directo a la parte del objetivo
+            local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, part.Position)
+            
+            -- Aplicamos el suavizado usando :Lerp() directo en la cámara del jugador
+            -- Nota: como smoothness suele ser bajo (ej: 0.15), el Lerp dará un movimiento súper fluido en Mobile
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, smoothness)
         end)
     end
 
