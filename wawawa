@@ -2679,17 +2679,17 @@ do
     local fovLoop = nil
     local fovCircle = nil
 
-    --// Variables para el botón móvil
+    --// Variables para el botón móvil (Arrastre por Touch)
     local isDragging = false
     local dragStart = nil
     local startPos = nil
 
-    --// Elementos de la GUI del Botón
+    --// Elementos de la GUI del Botón Touch
     local ScreenGui = Instance.new("ScreenGui")
     local LockButton = Instance.new("TextButton")
     local LockCorner = Instance.new("UICorner")
 
-    --// Funciones auxiliares
+    --// Funciones auxiliares (Filtros de vida, equipos y objetivos)
     local function isEnemy(p)
         if not teamCheck then return true end
         return p.Team ~= player.Team
@@ -2708,15 +2708,17 @@ do
         return char:FindFirstChild(aimlockPart) or char:FindFirstChild("Head")
     end
 
+    -- Obtiene el centro exacto de la pantalla del dispositivo móvil
     local function getScreenCenter()
         return Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     end
 
+    -- Comprueba el rango usando vectores de pantalla táctil bidimensionales
     local function isInFOV(screenPos)
         return (screenPos - getScreenCenter()).Magnitude <= fovSize
     end
 
-    --// Obtener el jugador más cercano en el FOV
+    --// Obtener el jugador más cercano en el FOV radial
     local function getClosestPlayerInFOV()
         local closest = nil
         local closestDist = math.huge
@@ -2744,7 +2746,7 @@ do
         return closest
     end
 
-    --// Crear círculo FOV
+    --// Crear círculo FOV (Librería Drawing nativa de ejecutores móviles)
     local function createFOVCircle()
         if fovCircle then return end
         if not Drawing then return end
@@ -2760,21 +2762,19 @@ do
         fovCircle.Position = getScreenCenter()
     end
 
-    --// Bucle FOV
+    --// Bucle de renderizado para el círculo FOV
     local function startFOVLoop()
         if fovLoop then fovLoop:Disconnect() end
         fovLoop = RunService.RenderStepped:Connect(function()
             if fovCircle then
                 fovCircle.Radius = fovSize
                 fovCircle.Position = getScreenCenter()
-                -- Solo se ve si el Master de la UI está encendido, mostrar FOV es true, y el candado está activo
                 fovCircle.Visible = showFOV and aimbotMasterEnabled and aimlockEnabled
             end
         end)
     end
 
-    --// Bucle principal del aimbot
---// Bucle principal del aimbot (CORREGIDO PARA MOBILE)
+    --// Bucle principal del aimbot (100% CFrame e interpolación móvil)
     local function startAimlock()
         if aimlockLoop then 
             aimlockLoop:Disconnect() 
@@ -2802,23 +2802,29 @@ do
             end
 
             local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
-            
             if not isInFOV(targetScreen) then
                 aimlockTarget = getClosestPlayerInFOV()
                 return
             end
             
-            -- En vez de usar mousemoverel, calculamos la rotación que debe tener la cámara
-            -- Usamos CFrame.lookAt para apuntar directo a la parte del objetivo
+            -- 1. Rotación fluida de la cámara usando CFrame Lerp (Soporta 1ra y 3ra persona)
             local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, part.Position)
-            
-            -- Aplicamos el suavizado usando :Lerp() directo en la cámara del jugador
-            -- Nota: como smoothness suele ser bajo (ej: 0.15), el Lerp dará un movimiento súper fluido en Mobile
             Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, smoothness)
+            
+            -- 2. Corrección de rotación física del personaje para 3ra persona móvil
+            local myChar = player.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            
+            if myRoot then
+                local lookVector = (part.Position - myRoot.Position).Unit
+                -- Limpiamos el eje Y para que el torso no se deforme o se incline verticalmente
+                local targetCharCFrame = CFrame.new(myRoot.Position, Vector3.new(myRoot.Position.X + lookVector.X, myRoot.Position.Y, myRoot.Position.Z + lookVector.Z))
+                myRoot.CFrame = myRoot.CFrame:Lerp(targetCharCFrame, smoothness)
+            end
         end)
     end
 
-    --// Detener aimbot
+    --// Detener fijación
     local function stopAimlock()
         if aimlockLoop then 
             aimlockLoop:Disconnect() 
@@ -2827,9 +2833,8 @@ do
         aimlockTarget = nil
     end
 
-    --// Función para el botón del Candado (Mobile)
+    --// Función nativa para el interruptor del Candado Móvil
     local function ToggleAimlock()
-        -- Si el script está apagado desde el menú, el botón no hace nada
         if not aimbotMasterEnabled then return end
 
         aimlockEnabled = not aimlockEnabled
@@ -2850,20 +2855,19 @@ do
         end
     end
 
-    --// Ocultar/Mostrar el botón móvil por completo basado en el menú
+    --// Visibilidad de los componentes táctiles en pantalla
     local function SetButtonVisibility(visible)
         ScreenGui.Enabled = visible
         if not visible and aimlockEnabled then
-            -- Si apagan el script desde el menú, forzamos el apagado del bloqueo activo
             ToggleAimlock()
         end
     end
 
-    --// ========== CREAR GUI DEL BOTÓN ==========
+    --// ========== GUI DEL BOTÓN MÓVIL ==========
     ScreenGui.Name = "MobileAimbot"
     ScreenGui.Parent = CoreGui or player:WaitForChild("PlayerGui")
     ScreenGui.ResetOnSpawn = false
-    ScreenGui.Enabled = false -- Apagado por defecto hasta que se active en la UI
+    ScreenGui.Enabled = false 
 
     LockButton.Name = "LockButton"
     LockButton.Parent = ScreenGui
@@ -2880,7 +2884,7 @@ do
     LockCorner.CornerRadius = UDim.new(0, 25)
     LockCorner.Parent = LockButton
 
-    --// ========== FUNCIONES DE ARRASTRE ==========
+    --// ========== CONTROL EXCLUSIVO POR GESTOS TOUCH ==========
     LockButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             isDragging = true
@@ -2909,18 +2913,10 @@ do
 
     LockButton.MouseButton1Click:Connect(ToggleAimlock)
 
-    --// ========== CONEXIÓN CON TU LIBRERÍA DE UI ==========
-
-    -- 1. Toggle Principal: Prende/Apaga el sistema y muestra/oculta el botón físico
-
-MobAimbot:Paragraph({
-    Header = "MOBILE AIMBOT INFO",
-    Body = "<font color='#FF4500'><b>This Aimbot is exclusive to Mobile players.</b></font><br/><br/>To use it, first turn on the <b>'Enable Aimbot'</b> toggle in this menu to reveal the lock button on your screen. While playing, simply tap the 🔓 button to lock onto the closest enemy inside your FOV radius (it will turn into 🔒). Tap it again anytime to unlock."
-}, "Aimbot_mobile_info")
-
+    --// ========== ACOPLAMIENTO DE MÉTODOS DE LA UI ==========
 
     MobAimbot:Toggle({
-        Name = "Enable AImbot",
+        Name = "Enable Aimbot",
         Default = false,
         Callback = function(value)
             aimbotMasterEnabled = value
@@ -2928,7 +2924,6 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_master_toggle")
 
-    -- 2. Toggle para mostrar u ocultar el círculo visual
     MobAimbot:Toggle({
         Name = "Show Fov",
         Default = true,
@@ -2937,7 +2932,6 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_show_fov")
 
-    -- 3. Toggle para el filtro de equipos
     MobAimbot:Toggle({
         Name = "Team Check",
         Default = false,
@@ -2947,7 +2941,6 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_team_check")
 
-    -- 4. Slider para el tamaño del círculo
     MobAimbot:Slider({
         Name = "Fov Size",
         Default = 150,
@@ -2963,11 +2956,10 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_fov_size")
 
-    -- 5. Slider para la velocidad de la cámara
     MobAimbot:Slider({
-        Name = "Smoothness",
+        Name = "Smoothness)",
         Default = 100,
-        Minimum = 90,
+        Minimum = 100,
         Maximum = 100,
         DisplayMethod = "Percent",
         Precision = 0,
@@ -2979,7 +2971,6 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_smoothness")
 
-    -- 6. Dropdown para la zona de impacto
     MobAimbot:Dropdown({
         Name = "Target Part",
         Search = false,
@@ -2993,15 +2984,14 @@ MobAimbot:Paragraph({
         end
     }, "aimbot_target_part")
 
-    --// ========== LIMPIEZA ==========
+    --// ========== COLD RESET ON RESPAWN ==========
     player.CharacterAdded:Connect(function()
         aimlockTarget = nil
         if aimlockEnabled then
-            ToggleAimlock() -- Resetea el candado al morir para evitar fijados raros
+            ToggleAimlock()
         end
     end)
 end
-
 ---ESP TAB
 
 local Players = game:GetService("Players")
