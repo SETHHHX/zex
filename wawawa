@@ -2966,8 +2966,8 @@ MobAimbot:Paragraph({
     -- 5. Slider para la velocidad de la cámara
     MobAimbot:Slider({
         Name = "Smoothness",
-        Default = 15,
-        Minimum = 1,
+        Default = 100,
+        Minimum = 90,
         Maximum = 100,
         DisplayMethod = "Percent",
         Precision = 0,
