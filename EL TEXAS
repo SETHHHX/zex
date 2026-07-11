@@ -255,6 +255,68 @@ mainSection:Button({
 --MAIN FEATURES
 
 
+-- =============================================================================
+-- 🌟 ZEX HUB - OVERHEAD CUSTOMIZER (ANTI-RESET / AUTOMÁTICO)
+-- =============================================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local userName = LocalPlayer.Name
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Variable global para controlar que no se dupliquen los bucles RGB al revivir
+local currentRgbLoop = nil
+
+-- Función principal que aplica los cambios y el efecto RGB
+local function aplicarOverheadZexHub()
+    -- Detener el bucle anterior si existía para no causar lag de hilos
+    if currentRgbLoop then 
+        task.cancel(currentRgbLoop) 
+        currentRgbLoop = nil
+    end
+
+    -- Esperar a que aparezca la nueva carpeta del Overhead tras el reset
+    local overheadNameFolder = playerGui:WaitForChild("Overhead_" .. userName, 10)
+    if not overheadNameFolder then return end
+    
+    local playerNameLabel = overheadNameFolder:WaitForChild("PlayerName", 5)
+    local playerTeamLabel = overheadNameFolder:WaitForChild("PlayerTeam", 5)
+
+    -- 1. Aplicar el link de Discord al Equipo
+    if playerTeamLabel and playerTeamLabel:IsA("TextLabel") then
+        playerTeamLabel.Text = "discord.gg/zexhub"
+    end
+
+    -- 2. Aplicar "Zex Hub" y arrancar el ciclo RGB
+    if playerNameLabel and playerNameLabel:IsA("TextLabel") then
+        playerNameLabel.Text = "Zex Hub"
+        
+        -- Guardar el nuevo hilo para poder apagarlo en el próximo reset
+        currentRgbLoop = task.spawn(function()
+            local h = 0
+            while true do
+                h = h + 0.005
+                if h >= 1 then h = 0 end
+                
+                playerNameLabel.TextColor3 = Color3.fromHSV(h, 1, 1)
+                RunService.RenderStepped:Wait()
+            end
+        end)
+    end
+end
+
+-- 1. Ejecutar la primera vez al iniciar el script
+aplicarOverheadZexHub()
+
+-- 2. Escuchar cada vez que el jugador se resetea / muere y vuelve a aparecer
+LocalPlayer.CharacterAdded:Connect(function()
+    -- Le damos un pequeño tiempo de espera para asegurar que la interfaz cargue bien
+    task.wait(0.5) 
+    aplicarOverheadZexHub()
+end)
+
 
 
 local Players = game:GetService("Players")
@@ -992,62 +1054,76 @@ MiscSection2:Toggle({
 
 
 local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 
 local antiAfkEnabled = false
 local antiAfkThread = nil
+local conexionIdled = nil
 
-MiscSection2:Toggle({
+mainSection:Toggle({
     Name = "Anti-AFK",
     Default = false,
     Callback = function(Value)
         antiAfkEnabled = Value
         
         if Value then
-            -- Iniciar el bucle en un hilo separado
-            antiAfkThread = task.spawn(function()
-                
-                while antiAfkEnabled do
-                    local character = LocalPlayer.Character
-                    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-                    
-                    -- Si estás usando el farm en vehículo, NO queremos mover al personaje a pie porque rompería el asiento.
-                    -- Por lo tanto, si está sentado, simulamos una pequeña rotación de cámara.
-                    if humanoid and humanoid.Health > 0 then
-                        if humanoid.Sit then
-                            -- Simulación de cámara para cuando estás en el carro de farm
-                            local camera = workspace.CurrentCamera
-                            if camera then
-                                pcall(function()
-                                    -- Genera un micro-movimiento aleatorio e imperceptible en la cámara
-                                    local aleatorioX = math.random(-10, 10) / 1000
-                                    local aleatorioY = math.random(-10, 10) / 1000
-                                    camera.CFrame = camera.CFrame * CFrame.Angles(aleatorioX, aleatorioY, 0)
-                                end)
-                            end
-                        else
-                            -- Si estás de pie por cualquier razón, hacemos que el personaje salte o de un paso
-                            pcall(function()
-                                humanoid.Jump = true
-                            end)
+            
+            -- MÉTODO 1: Bloquear el evento IDLED nativo de Roblox antes de que Adonis lo audite
+            pcall(function()
+                -- Si tu ejecutor tiene 'getconnections', rompemos el enlace para siempre
+                local getConnections = getconnections or get_signal_cons
+                if getConnections then
+                    for _, con in ipairs(getConnections(LocalPlayer.Idled)) do
+                        if con.Disable then
+                            con:Disable()
+                        elseif con.Disconnect then
+                            con:Disconnect()
                         end
                     end
-                    
-                    -- Espera un tiempo aleatorio entre 60 y 120 segundos para que no sea un patrón fijo
-                    local tiempoEspera = math.random(60, 120)
-                    task.wait(tiempoEspera)
                 end
             end)
+
+            -- MÉTODO 2: Bucle seguro usando la interfaz del Core de Roblox (GuiService)
+            -- Adonis NO puede banear ni revisar el GuiService porque rompería los menús del propio juego.
+            antiAfkThread = task.spawn(function()
+                while antiAfkEnabled do
+                    pcall(function()
+                        -- Simulamos que abres y cierras un elemento invisible de la UI del sistema
+                        -- Esto le dice al motor: "El usuario sigue interactuando con la pantalla"
+                        GuiService.SelectedObject = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChildOfClass("ScreenGui")
+                        task.wait(0.1)
+                        GuiService.SelectedObject = nil
+                    end)
+                    
+                    -- Espera rápida y aleatoria (entre 15 y 30 segundos) para mantener el contador siempre en 0
+                    task.wait(math.random(15, 30))
+                end
+            end)
+            
+            -- MÉTODO 3: Respaldo por si acaso el método 1 no es soportado por tu ejecutor
+            conexionIdled = LocalPlayer.Idled:Connect(function()
+                pcall(function()
+                    -- Si el juego intenta mandarte a AFK, forzamos un estado de UI para despertarlo
+                    GuiService.SelectedObject = LocalPlayer.PlayerGui:FindFirstChildOfClass("ScreenGui")
+                    task.wait(0.1)
+                    GuiService.SelectedObject = nil
+                end)
+            end)
+
         else
-            -- Apagar el sistema y limpiar el hilo
             antiAfkEnabled = false
             if antiAfkThread then
                 task.cancel(antiAfkThread)
                 antiAfkThread = nil
             end
+            if conexionIdled then
+                conexionIdled:Disconnect()
+                conexionIdled = nil
+            end
         end
     end
-}, "anti_afk_toggle_flag")
+}, "anti_afk_adonis_godmode")
 
 
 local Players = game:GetService("Players")
