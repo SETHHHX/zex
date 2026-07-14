@@ -342,7 +342,6 @@ end)
 
 mainSection:Divider()
 
-
 do
 -- ===== CONFIGURACIÓN INICIAL DE VARIABLES =====
 local p = game.Players.LocalPlayer
@@ -371,9 +370,12 @@ local mainLoopThread = nil
 local noclipConnection = nil
 local heartbeatConnection = nil
 
-
 -- Lista de todas las misiones de camión disponibles
 local MISSION_LIST = {"CarParts", "FoodSupplies", "GymEquipment", "Cement", "Petrol", "LumberSupplies", "SupermarketGoods"}
+
+-- Variable para almacenar las misiones seleccionadas por el usuario
+-- Por defecto se inicia con todas activadas ("All Missions")
+local selectedMissions = { ["All Missions"] = true }
 
 if _G.StopCarMovement then _G.StopCarMovement() end
 
@@ -650,7 +652,7 @@ local function viajarA(targetPos)
     return llego
 end
 
--- ===== FUNCIÓN INTELIGENTE PARA DETECTAR MISIONES DISPONIBLES =====
+-- ===== FUNCIÓN INTELIGENTE PARA DETECTAR MISIONES DISPONIBLES (CON FILTRO DE SELECCIONADAS) =====
 local function getAvailableMissions()
     local available = {}
     local truckList = p.PlayerGui:FindFirstChild("TruckShopGui") 
@@ -659,10 +661,13 @@ local function getAvailableMissions()
     if not truckList then return available end
     
     for _, missionName in ipairs(MISSION_LIST) do
-        local missionGui = truckList:FindFirstChild(missionName)
-        if missionGui then
-            if not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
-                table.insert(available, missionName)
+        -- Filtrar: Solo procesar la misión si "All Missions" está activado o si la misión específica está marcada en el dropdown
+        if selectedMissions["All Missions"] or selectedMissions[missionName] then
+            local missionGui = truckList:FindFirstChild(missionName)
+            if missionGui then
+                if not missionGui:FindFirstChild("Overlay") and not missionGui:FindFirstChild("Cooldown") then
+                    table.insert(available, missionName)
+                end
             end
         end
     end
@@ -1062,7 +1067,7 @@ mainSection:Paragraph({
 }, "Truck_Missions_Warning")
 
 mainSection:Toggle({
-    Name = "🚚 Truck Missions ",
+    Name = "🚚 Truck Missions",
     Default = false,
     Callback = function(Value)
         truckMissionsEnabled = Value
@@ -1072,6 +1077,20 @@ mainSection:Toggle({
         end
     end
 }, "truck_missions_toggle")
+
+-- ===== DROPDOWN DE SELECCIÓN DE MISIONES =====
+mainSection:Dropdown({
+    Name = "Select Truck Missions",
+    Search = false,
+    Multi = true,
+    Required = true,
+    Options = {"All Missions", "CarParts", "FoodSupplies", "GymEquipment", "Cement", "Petrol", "LumberSupplies", "SupermarketGoods"},
+    Default = {"All Missions"},
+    Callback = function(Selected)
+        -- Selected nos devuelve una tabla donde las llaves activadas son igual a true: {"Option 1" = true}
+        selectedMissions = Selected
+    end
+}, "truck_missions_selection")
 
 mainSection:Slider({
     Name = "Drag Speed",
@@ -1093,7 +1112,6 @@ mainSection:Slider({
     Callback = function(Value) fakeDiamondsAmount = Value end
 }, "fake_diamonds_slider")
 end
-
 
 
 
@@ -2134,8 +2152,10 @@ local LocalPlayer = Players.LocalPlayer
 local ModDetectorEnabled = false
 local PlayerAddedConnection
 
+-- Tabla de Staff actualizada (Se agregó "M101karim_1" que faltaba)
 local StaffUsers = {
     rainb0und = true,
+    wthmedium = true,
     novas_home = true,
     Biosymelec = true,
     Seven47007 = true,
@@ -2149,6 +2169,7 @@ local StaffUsers = {
     TheD1amondR0blox = true,
     WimpyDeathLord = true,
     TotallyDaBat = true,
+    M101karim_1 = true, -- Agregado (Fe4rrr)
 
     Budgiefy = true,
 
@@ -2183,31 +2204,46 @@ local function CheckPlayer(player)
     end
 end
 
-ExtraSection:Toggle({
-    Name = "Mod Detector",
-    Default = true,
-    Callback = function(v)
-        ModDetectorEnabled = v
+-- Función para encender y apagar el detector de manera interna
+local function ToggleModDetector(state)
+    ModDetectorEnabled = state
 
-        if v then
-            print("[Mod Detector] Enabled.")
+    if state then
+        print("[Mod Detector] Enabled.")
 
-            for _, player in ipairs(Players:GetPlayers()) do
-                CheckPlayer(player)
-            end
+        -- Escaneo inicial de jugadores en el servidor
+        for _, player in ipairs(Players:GetPlayers()) do
+            CheckPlayer(player)
+        end
 
+        -- Conectar evento para nuevos jugadores que entren
+        if not PlayerAddedConnection then
             PlayerAddedConnection = Players.PlayerAdded:Connect(CheckPlayer)
+        end
+    else
+        print("[Mod Detector] Disabled.")
 
-        else
-            print("[Mod Detector] Disabled.")
-
-            if PlayerAddedConnection then
-                PlayerAddedConnection:Disconnect()
-                PlayerAddedConnection = nil
-            end
+        if PlayerAddedConnection then
+            PlayerAddedConnection:Disconnect()
+            PlayerAddedConnection = nil
         end
     end
+end
+
+-- ===== INTEGRACIÓN CON TU UI =====
+ExtraSection:Toggle({
+    Name = "Mod Detector",
+    Default = true, -- El visual en tu librería inicia activado
+    Callback = function(v)
+        ToggleModDetector(v)
+    end
 }, "mod_detector")
+
+-- ===== AUTO-ARRANQUE AUTOMÁTICO =====
+-- Esto hace que empiece a funcionar inmediatamente al ejecutar el script sin esperar clics.
+task.spawn(function()
+    ToggleModDetector(true)
+end)
 
 
 
