@@ -321,7 +321,7 @@ local function processAutoBuy()
                     hrp.CFrame = cube.CFrame * CFrame.new(0, 3, 0)
                     
                     -- ⏳ Esperar 2 segundos tras llegar
-                    task.wait(2)
+                    task.wait(0.5)
 
                     -- 3. Intentar comprar si aún no ha sido comprada
                     local attempts = 0
