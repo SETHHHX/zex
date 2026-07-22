@@ -249,6 +249,24 @@ mainSection:Button({
 
 --MAIN FEATURES
 
+-- =============================================================================
+-- 🔒 SISTEMA ANTI-AFK (PREVENCIÓN DE DESCONEXIÓN)
+-- =============================================================================
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+
+local player = Players.LocalPlayer
+
+-- Conectar al evento Idled (se dispara cuando el jugador no registra inputs)
+local antiAfkConnection
+antiAfkConnection = player.Idled:Connect(function()
+    pcall(function()
+        -- Simula un click/interacción en la ventana del juego de forma interna
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end)
+end)
 
 
 
