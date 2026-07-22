@@ -1,0 +1,482 @@
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+
+
+
+local Window = MacLib:Window({
+    Title = "ZEX HUB",
+    Subtitle = "Paid | V3.12",
+    Size = UDim2.fromOffset(760, 560),
+    DragStyle = 2,
+    DisabledWindowControls = {},
+    ShowUserInfo = false,
+    Keybind = Enum.KeyCode.RightControl,
+    AcrylicBlur = true,
+})
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+
+-- 🔥 SI YA EXISTE, BORRAR (ANTI DUPLICADO)
+local old = CoreGui:FindFirstChild("MaclibToggle")
+if old then
+    old:Destroy()
+end
+
+-- 🔥 USAR COREGUI (CLAVE)
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "MaclibToggle"
+ToggleGui.Parent = CoreGui
+ToggleGui.ResetOnSpawn = false
+ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Global -- 🔥 IMPORTANTE
+ToggleGui.DisplayOrder = 999999999 -- 🔥 MÁS ALTO
+
+-- 🔥 TAMAÑOS
+local BASE_SIZE = 60
+local CLICK_SIZE = 50
+local HOVER_SIZE = 65
+
+-- BOTÓN
+local Button = Instance.new("ImageButton")
+Button.Parent = ToggleGui
+Button.Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+Button.Position = UDim2.new(0.5, -BASE_SIZE/2, 0, 20)
+Button.BackgroundTransparency = 0.5
+Button.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Button.Image = "rbxassetid://130655920174103"
+Button.Active = true
+Button.Draggable = true
+Button.ZIndex = 999999999 -- 🔥 ULTRA ALTO
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1,0)
+UICorner.Parent = Button
+
+-------------------------------------------------
+-- ANIMACIONES
+-------------------------------------------------
+
+local function ClickAnimation(button)
+    local shrink = TweenService:Create(button, TweenInfo.new(0.05), {
+        Size = UDim2.fromOffset(CLICK_SIZE, CLICK_SIZE)
+    })
+
+    local expand = TweenService:Create(button, TweenInfo.new(0.1, Enum.EasingStyle.Back), {
+        Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+    })
+
+    shrink:Play()
+    shrink.Completed:Connect(function()
+        expand:Play()
+    end)
+end
+
+local function RippleEffect(button)
+    local ripple = Instance.new("Frame")
+    ripple.Parent = button
+    ripple.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+    ripple.BackgroundTransparency = 0.4
+    ripple.Size = UDim2.fromOffset(0,0)
+    ripple.AnchorPoint = Vector2.new(0.5,0.5)
+    ripple.Position = UDim2.new(0.5,0,0.5,0)
+    ripple.ZIndex = button.ZIndex + 1
+
+    Instance.new("UICorner", ripple).CornerRadius = UDim.new(1,0)
+
+    local tween = TweenService:Create(ripple, TweenInfo.new(0.3), {
+        Size = UDim2.fromOffset(BASE_SIZE * 2, BASE_SIZE * 2),
+        BackgroundTransparency = 1
+    })
+
+    tween:Play()
+    tween.Completed:Connect(function()
+        ripple:Destroy()
+    end)
+end
+
+local function FlashEffect(button)
+    local tween = TweenService:Create(button, TweenInfo.new(0.08), {
+        BackgroundTransparency = 0.2
+    })
+
+    local back = TweenService:Create(button, TweenInfo.new(0.15), {
+        BackgroundTransparency = 0.5
+    })
+
+    tween:Play()
+    tween.Completed:Connect(function()
+        back:Play()
+    end)
+end
+
+local function RotateAnimation(button)
+    TweenService:Create(button, TweenInfo.new(0.15), {
+        Rotation = button.Rotation + 15
+    }):Play()
+end
+
+local function ColorPulse(button)
+    local tween = TweenService:Create(button, TweenInfo.new(0.12), {
+        BackgroundColor3 = Color3.fromRGB(60, 0, 80)
+    })
+
+    local back = TweenService:Create(button, TweenInfo.new(0.12), {
+        BackgroundColor3 = Color3.fromRGB(30,30,30)
+    })
+
+    tween:Play()
+    tween.Completed:Connect(function()
+        back:Play()
+    end)
+end
+
+-- GLOW
+local glow = Instance.new("UIStroke")
+glow.Parent = Button
+glow.Thickness = 2
+glow.Color = Color3.fromRGB(140, 0, 255)
+glow.Transparency = 0.5
+
+task.spawn(function()
+    while Button.Parent do
+        TweenService:Create(glow, TweenInfo.new(0.6), {
+            Transparency = 0.1
+        }):Play()
+        task.wait(0.6)
+
+        TweenService:Create(glow, TweenInfo.new(0.6), {
+            Transparency = 0.6
+        }):Play()
+        task.wait(0.6)
+    end
+end)
+
+-------------------------------------------------
+-- HOVER
+-------------------------------------------------
+
+Button.MouseEnter:Connect(function()
+    TweenService:Create(Button, TweenInfo.new(0.1), {
+        Size = UDim2.fromOffset(HOVER_SIZE, HOVER_SIZE)
+    }):Play()
+end)
+
+Button.MouseLeave:Connect(function()
+    TweenService:Create(Button, TweenInfo.new(0.1), {
+        Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+    }):Play()
+end)
+
+-------------------------------------------------
+-- TOGGLE
+-------------------------------------------------
+
+local Open = true
+
+Button.MouseButton1Click:Connect(function()
+    task.spawn(function() ClickAnimation(Button) end)
+    task.spawn(function() FlashEffect(Button) end)
+    task.spawn(function() ColorPulse(Button) end)
+
+    RippleEffect(Button)
+    RotateAnimation(Button)
+
+    Open = not Open
+    if Window then
+        Window:SetState(Open)
+    end
+end)
+
+
+-- // Tabs y Secciones //
+local tabGroups = {
+    TabGroup1 = Window:TabGroup()
+}
+
+local tabs = {
+    Main = tabGroups.TabGroup1:Tab({ Name = "Main", Image = "rbxassetid://89270463071386" }),
+    Settings = tabGroups.TabGroup1:Tab({ Name = "Settings", Image = "rbxassetid://10734950309" })
+}
+
+
+
+
+
+-- Sección Main
+local mainSection = tabs.Main:Section({ Side = "Left" })
+local MiscSection = tabs.Main:Section({ Side = "Right" })
+-- Sección Settings (con el Slider de tamaño)
+local settingsSection = tabs.Settings:Section({ Side = "Left" })
+
+
+mainSection:Button({
+    Name = "Join Discord",
+    Callback = function()
+        -- 1. Copiar al portapapeles (el método infalible)
+        local link = "https://discord.gg/F4kWBQx4xA"
+        setclipboard(link)
+        
+        -- 2. Intentar abrir automáticamente
+        local request = request or http_request or syn.request
+        
+        if request then
+            request({
+                Url = "http://127.0.0.1:6463/rpc?v=1",
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                    ["Origin"] = "https://discord.com"
+                },
+                Body = game:GetService("HttpService"):JSONEncode({
+                    cmd = "INVITE_BROWSER",
+                    args = { code = "F4kWBQx4xA" },
+                    nonce = game:GetService("HttpService"):GenerateGUID(false)
+                })
+            })
+        end
+
+        -- 3. Notificación informativa
+        Window:Notify({
+            Title = "Zex Hub",
+            Description = "Discord link copied & opening invite!", -- Aviso de ambas acciones
+            Lifetime = 5
+        })
+    end,
+})
+
+
+--MAIN FEATURES
+
+
+
+
+
+-- Services
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- UI Framework variables
+local SelectedSheeps = { ["WhiteSheep"] = true } -- Tabla para manejar Multi-Dropdown
+local AutoBuyEnabled = false
+
+-- Lista de Ovejas
+local SheepOptions = {
+    "WhiteSheep", "BlackSheep", "BrownSheep", "BlackHeadSheep", 
+    "SolognotSheep", "ScottishSheep", "JacobSheep", "ArapawaSheep", 
+    "IslandSheep", "LoaghtanSheep", "IcelandicSheep", "SpeedSheep", 
+    "RackaSheep", "ShadowSheep", "GiantSheep", "PinkSheep", 
+    "VolcanicSheep", "GlacierSheep", "UnicornSheep", "LightningSheep", 
+    "GoldSheep", "SolarSheep", "AlienSheep", "PhoenixSheep", 
+    "IceSheep", "AncestralSheep", "StormSheep", "GiantGoldSheep", 
+    "ErosSheep", "EclipseSheep", "DiabloSheep", "AngelicSheep"
+}
+
+-- Función auxiliar para verificar si el Owner cambió (confirmación de compra)
+local function getOwner(cube)
+    local ownerValue = cube:GetAttribute("Owner") 
+        or (cube:FindFirstChild("Owner") and cube.Owner.Value)
+    
+    if not ownerValue then
+        pcall(function() ownerValue = cube.Owner end)
+    end
+    return ownerValue
+end
+
+-- Función principal de Auto Buy
+local function processAutoBuy()
+    local sheepFolder = Workspace:FindFirstChild("CubeSheep")
+    if not sheepFolder then return end
+
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    for _, cube in pairs(sheepFolder:GetChildren()) do
+        if not AutoBuyEnabled then break end
+        
+        if cube:IsA("BasePart") and cube.Name == "Cube" then
+            
+            -- Obtener 'SheepName'
+            local sheepName = cube:GetAttribute("SheepName") 
+                or (cube:FindFirstChild("SheepName") and cube.SheepName.Value)
+            
+            if not sheepName then
+                pcall(function() sheepName = cube.SheepName end)
+            end
+
+            local currentOwner = getOwner(cube)
+
+            -- Validar si la oveja está seleccionada en el Multi Dropdown y le pertenece al "Market"
+            if SelectedSheeps[sheepName] and currentOwner == "Market" then
+                local prompt = cube:FindFirstChildOfClass("ProximityPrompt") or cube:FindFirstChild("ProximityPrompt")
+                
+                if prompt then
+                    -- 1. Guardar posición original antes de mover al personaje
+                    local originalCFrame = hrp.CFrame
+
+                    -- 2. TP a la oveja
+                    hrp.CFrame = cube.CFrame * CFrame.new(0, 3, 0)
+                    
+                    -- ⏳ Esperar 2 segundos tras llegar
+                    task.wait(2)
+
+                    -- 3. Intentar comprar si aún no ha sido comprada
+                    local attempts = 0
+                    while AutoBuyEnabled and getOwner(cube) == "Market" and attempts < 5 do
+                        if prompt.Enabled then
+                            fireproximityprompt(prompt)
+                        end
+                        task.wait(0.3) -- Pequeño intervalo de reintento si falla
+                        attempts = attempts + 1
+                    end
+
+                    -- ⏳ Esperar 2 segundos después de intentar comprar
+                    task.wait(2)
+
+                    -- 4. Regresar a la posición inicial
+                    if character and character:FindFirstChild("HumanoidRootPart") then
+                        character.HumanoidRootPart.CFrame = originalCFrame
+                    end
+                    
+                    task.wait(0.5) -- Pausa rápida de seguridad antes de ir por la siguiente oveja
+                end
+            end
+        end
+    end
+end
+
+-- UI Components setup
+
+-- 1. Multi Dropdown
+mainSection:Dropdown({
+    Name = "Select Sheeps",
+    Search = true,
+    Multi = true,
+    Required = true,
+    Options = SheepOptions,
+    Default = { "WhiteSheep" }, -- En Multi Dropdown pasas una tabla con las opciones activas por defecto
+    Callback = function(Value)
+        -- 'Value' en Multi Dropdown devuelve una tabla del tipo: { ["WhiteSheep"] = true, ["BlackSheep"] = true }
+        SelectedSheeps = Value
+    end
+}, "SheepDropdownFlag")
+
+-- 2. Toggle
+mainSection:Toggle({
+    Name = "Auto Buy Sheep",
+    Default = false,
+    Callback = function(Value)
+        AutoBuyEnabled = Value
+        
+        if AutoBuyEnabled then
+            task.spawn(function()
+                while AutoBuyEnabled do
+                    processAutoBuy()
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+}, "AutoBuySheepToggleFlag")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local UserInputService = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+-- Detectar mobile (incluye emulador)
+local isMobile = UserInputService.TouchEnabled 
+    or UserInputService.GamepadEnabled 
+    or (camera and camera.ViewportSize.X < 900)
+
+local defaultScale = isMobile and 0.6 or 1
+
+-- Slider
+settingsSection:Slider({
+    Name = "UI Size",
+    Default = defaultScale,
+    Minimum = 0.3,
+    Maximum = 1.5,
+    DisplayMethod = "Percent",
+    Callback = function(Value)
+        Window:SetScale(Value)
+    end,
+}, "UIScaleSlider")
+
+-- Aplicar después de que cargue TODO (clave)
+task.spawn(function()
+    for i = 1, 10 do
+        Window:SetScale(defaultScale)
+        task.wait(0.1)
+    end
+end)
+-- // Configuración final y Limpieza //
+MacLib:SetFolder("Maclib")
+tabs.Settings:InsertConfigSection("Left")
+
+-- Función para limpiar el icono cuando se destruye la UI
+Window.onUnloaded(function()
+    print("Unloaded! Limpiando icono...")
+    if ToggleGui then
+        ToggleGui:Destroy()
+    end
+end)
+
+tabs.Main:Select()
+MacLib:LoadAutoLoadConfig()
+
+local globalSettings = {
+	UIBlurToggle = Window:GlobalSetting({
+		Name = "UI Blur",
+		Default = Window:GetAcrylicBlurState(),
+		Callback = function(bool)
+			Window:SetAcrylicBlurState(bool)
+			Window:Notify({
+				Title = Window.Settings.Title,
+				Description = (bool and "Enabled" or "Disabled") .. " UI Blur",
+				Lifetime = 5
+			})
+		end,
+	}),
+	NotificationToggler = Window:GlobalSetting({
+		Name = "Notifications",
+		Default = Window:GetNotificationsState(),
+		Callback = function(bool)
+			Window:SetNotificationsState(bool)
+			Window:Notify({
+				Title = Window.Settings.Title,
+				Description = (bool and "Enabled" or "Disabled") .. " Notifications",
+				Lifetime = 5
+			})
+		end,
+	}),
+	ShowUserInfo = Window:GlobalSetting({
+		Name = "Show User Info",
+		Default = Window:GetUserInfoState(),
+		Callback = function(bool)
+			Window:SetUserInfoState(bool)
+			Window:Notify({
+				Title = Window.Settings.Title,
+				Description = (bool and "Showing" or "Redacted") .. " User Info",
+				Lifetime = 5
+			})
+		end,
+	})
+}
