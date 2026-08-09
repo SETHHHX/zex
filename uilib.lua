@@ -984,7 +984,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftSection.Name = 'LeftSection'
         LeftSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         LeftSection.ScrollBarThickness = 0
-        LeftSection.Size = UDim2.new(0, 243, 0, 410)
+        LeftSection.Size = UDim2.new(0, 243, 0, 420)
         LeftSection.Selectable = false
         LeftSection.AnchorPoint = Vector2.new(0, 0.5)
         LeftSection.ScrollBarImageTransparency = 1
@@ -1011,7 +1011,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         RightSection.Name = 'RightSection'
         RightSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         RightSection.ScrollBarThickness = 0
-        RightSection.Size = UDim2.new(0, 243, 0, 410)
+        RightSection.Size = UDim2.new(0, 243, 0, 420)
         RightSection.Selectable = false
         RightSection.AnchorPoint = Vector2.new(0, 0.5)
         RightSection.ScrollBarImageTransparency = 1
@@ -1276,8 +1276,8 @@ Keybind.Active = true
 
     -- Options always stay visible. Only the master toggle visual changes.
     -- Keep module expanded with all options
-    local targetSize = 93 + self._size + self._multiplier
-    if targetSize < 93 then targetSize = 93 end
+    local targetSize = 100 + self._size + self._multiplier
+    if targetSize < 100 then targetSize = 100 end
     TweenService:Create(Module, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         Size = UDim2.fromOffset(241, targetSize)
     }):Play()
@@ -1459,10 +1459,10 @@ end
                     self._size = 11
                 end
 
-                self._size += settings.customScale or 55
+                self._size += settings.customScale or 65
 
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Paragraph = Instance.new('Frame')
                 Paragraph.BackgroundColor3 = Color3.fromRGB(28, 22, 40)
@@ -1557,9 +1557,9 @@ end
             
                 self._size += settings.customScale or 50 
             
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
             
-                Options.Size = UDim2.fromOffset(241, self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
             
               
                 local TextFrame = Instance.new('Frame')
@@ -1635,9 +1635,9 @@ end
             
                 self._size += 32
             
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
             
-                Options.Size = UDim2.fromOffset(241, self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
             
                 local Label = Instance.new('TextLabel')
                 Label.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
@@ -1702,11 +1702,11 @@ end
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 20
+                self._size += 24
             
                 -- Always show options (modules stay expanded)
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
             
                 local Checkbox = Instance.new("TextButton")
 Checkbox.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
@@ -1742,31 +1742,85 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TitleLabel.Parent = Checkbox
 
-                local KeybindBox = Instance.new("Frame")
+                -- Small keybind button next to checkbox (left click to set)
+                local KeybindBox = Instance.new("TextButton")
                 KeybindBox.Name = "KeybindBox"
-                KeybindBox.Size = UDim2.fromOffset(14, 14)
-                KeybindBox.Position = UDim2.new(1, -35, 0.5, 0)
+                KeybindBox.Size = UDim2.fromOffset(28, 16)
+                KeybindBox.Position = UDim2.new(1, -42, 0.5, 0)
                 KeybindBox.AnchorPoint = Vector2.new(0, 0.5)
-                KeybindBox.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
+                KeybindBox.BackgroundColor3 = Color3.fromRGB(45, 32, 70)
+                KeybindBox.BackgroundTransparency = 0.15
                 KeybindBox.BorderSizePixel = 0
+                KeybindBox.Text = ""
+                KeybindBox.AutoButtonColor = false
                 KeybindBox.Parent = Checkbox
             
                 local KeybindCorner = Instance.new("UICorner")
                 KeybindCorner.CornerRadius = UDim.new(0, 4)
                 KeybindCorner.Parent = KeybindBox
+
+                local KeybindStroke = Instance.new("UIStroke")
+                KeybindStroke.Color = Color3.fromRGB(120, 70, 200)
+                KeybindStroke.Transparency = 0.5
+                KeybindStroke.Thickness = 1
+                KeybindStroke.Parent = KeybindBox
             
                 local KeybindLabel = Instance.new("TextLabel")
                 KeybindLabel.Name = "KeybindLabel"
                 KeybindLabel.Size = UDim2.new(1, 0, 1, 0)
                 KeybindLabel.BackgroundTransparency = 1
-                KeybindLabel.TextColor3 = Color3.fromRGB(90, 50, 140)
+                KeybindLabel.TextColor3 = Color3.fromRGB(200, 185, 230)
                 KeybindLabel.TextScaled = false
-                KeybindLabel.TextSize = 10
-                KeybindLabel.Font = Enum.Font.SourceSans
+                KeybindLabel.TextSize = 9
+                KeybindLabel.Font = Enum.Font.Gotham
                 KeybindLabel.Text = Library._config._keybinds[settings.flag] 
                     and string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "") 
-                    or "..."
+                    or "Key"
                 KeybindLabel.Parent = KeybindBox
+
+                KeybindBox.MouseButton1Click:Connect(function()
+                    if Library._choosing_keybind then return end
+                    Library._choosing_keybind = true
+                    KeybindLabel.Text = "..."
+                    local chooseConnection
+                    chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
+                        if processed then return end
+                        if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                        if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
+
+                        if keyInput.KeyCode == Enum.KeyCode.Backspace or keyInput.KeyCode == Enum.KeyCode.Escape then
+                            Library._config._keybinds[settings.flag] = nil
+                            Config:save(game.GameId, Library._config)
+                            KeybindLabel.Text = "Key"
+                            if Connections[settings.flag .. "_keybind"] then
+                                Connections[settings.flag .. "_keybind"]:Disconnect()
+                                Connections[settings.flag .. "_keybind"] = nil
+                            end
+                            if chooseConnection then chooseConnection:Disconnect() end
+                            Library._choosing_keybind = false
+                            return
+                        end
+
+                        Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
+                        Config:save(game.GameId, Library._config)
+
+                        if Connections[settings.flag .. "_keybind"] then
+                            Connections[settings.flag .. "_keybind"]:Disconnect()
+                            Connections[settings.flag .. "_keybind"] = nil
+                        end
+
+                        Connections[settings.flag .. "_keybind"] = UserInputService.InputBegan:Connect(function(input, process)
+                            if process then return end
+                            if tostring(input.KeyCode) ~= Library._config._keybinds[settings.flag] then return end
+                            CheckboxManager:change_state(not CheckboxManager._state)
+                        end)
+
+                        local keyStr = string.gsub(tostring(keyInput.KeyCode), "Enum.KeyCode.", "")
+                        KeybindLabel.Text = keyStr
+                        if chooseConnection then chooseConnection:Disconnect() end
+                        Library._choosing_keybind = false
+                    end)
+                end)
             
                 local Box = Instance.new("Frame")
                 Box.BorderColor3 = Color3.fromRGB(90, 50, 140)
@@ -1891,9 +1945,9 @@ Checkbox.LayoutOrder = LayoutOrderModule
                     self._size = 11
                 end
             
-                self._size += 27
+                self._size += 32
             
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
 
                 local dividerHeight = 1
                 local dividerWidth = 207 
@@ -1978,11 +2032,11 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
 
-                self._size += 27
+                self._size += 32
 
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
 
-                Options.Size = UDim2.fromOffset(241, self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Slider = Instance.new('TextButton')
                 Slider.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal);
@@ -2178,12 +2232,12 @@ if not settings or settings and not settings.disableline then
                         self._size = 11
                     end
 
-                    self._size += 44
+                    self._size += 52
                 end;
 
                 if not settings.Order then
-                    Module.Size = UDim2.fromOffset(241, 93 + self._size)
-                    Options.Size = UDim2.fromOffset(241, self._size)
+                    Module.Size = UDim2.fromOffset(241, 100 + self._size)
+                    Options.Size = UDim2.fromOffset(241, self._size + 8)
                 end
 
                 local Dropdown = Instance.new('TextButton')
@@ -2573,9 +2627,9 @@ if not settings or settings and not settings.disableline then
             
                 self._size += 20
             
-                Module.Size = UDim2.fromOffset(241, 93 + self._size)
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
             
-                Options.Size = UDim2.fromOffset(241, self._size);
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
             
                 local FeatureContainer = Instance.new("Frame")
                 FeatureContainer.Size = UDim2.new(0, 207, 0, 16)
