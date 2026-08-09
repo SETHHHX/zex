@@ -1914,6 +1914,227 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 return CheckboxManager
             end
 
+
+            function ModuleManager:create_toggle(settings: any)
+                settings = settings or {}
+                settings.callback = settings.callback or function() end
+                settings.flag = settings.flag or ("Toggle_" .. tostring(math.random(10000, 99999)))
+
+                LayoutOrderModule = LayoutOrderModule + 1
+                local ToggleManager = { _state = false }
+
+                if self._size == 0 then
+                    self._size = 11
+                end
+                self._size += 26
+
+                Module.Size = UDim2.fromOffset(241, 100 + self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
+
+                local Row = Instance.new("TextButton")
+                Row.Name = "Toggle"
+                Row.Size = UDim2.new(0, 207, 0, 20)
+                Row.BackgroundTransparency = 1
+                Row.BorderSizePixel = 0
+                Row.Text = ""
+                Row.AutoButtonColor = false
+                Row.Parent = Options
+                Row.LayoutOrder = LayoutOrderModule
+
+                local TitleLabel = Instance.new("TextLabel")
+                TitleLabel.Name = "Title"
+                TitleLabel.BackgroundTransparency = 1
+                TitleLabel.Size = UDim2.new(1, -55, 1, 0)
+                TitleLabel.Position = UDim2.new(0, 0, 0, 0)
+                TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                TitleLabel.TextSize = 11
+                TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                TitleLabel.TextTransparency = 0.15
+                TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+                TitleLabel.Text = settings.title or "Toggle"
+                TitleLabel.Parent = Row
+
+                -- Switch track
+                local Track = Instance.new("Frame")
+                Track.Name = "Track"
+                Track.Size = UDim2.fromOffset(40, 20)
+                Track.Position = UDim2.new(1, 0, 0.5, 0)
+                Track.AnchorPoint = Vector2.new(1, 0.5)
+                Track.BackgroundColor3 = Color3.fromRGB(35, 28, 50)
+                Track.BorderSizePixel = 0
+                Track.Parent = Row
+
+                local TrackCorner = Instance.new("UICorner")
+                TrackCorner.CornerRadius = UDim.new(1, 0)
+                TrackCorner.Parent = Track
+
+                local TrackStroke = Instance.new("UIStroke")
+                TrackStroke.Color = Color3.fromRGB(90, 55, 150)
+                TrackStroke.Transparency = 0.55
+                TrackStroke.Thickness = 1
+                TrackStroke.Parent = Track
+
+                -- Circle knob
+                local Knob = Instance.new("Frame")
+                Knob.Name = "Knob"
+                Knob.Size = UDim2.fromOffset(16, 16)
+                Knob.Position = UDim2.new(0, 2, 0.5, 0)
+                Knob.AnchorPoint = Vector2.new(0, 0.5)
+                Knob.BackgroundColor3 = Color3.fromRGB(180, 170, 200)
+                Knob.BorderSizePixel = 0
+                Knob.Parent = Track
+
+                local KnobCorner = Instance.new("UICorner")
+                KnobCorner.CornerRadius = UDim.new(1, 0)
+                KnobCorner.Parent = Knob
+
+                function ToggleManager:change_state(state: boolean)
+                    self._state = state and true or false
+                    if self._state then
+                        TweenService:Create(Track, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                            BackgroundColor3 = Color3.fromRGB(130, 70, 220)
+                        }):Play()
+                        TweenService:Create(Knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                            Position = UDim2.new(1, -18, 0.5, 0),
+                            BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                        }):Play()
+                        TweenService:Create(TrackStroke, TweenInfo.new(0.25), {
+                            Color = Color3.fromRGB(160, 100, 255),
+                            Transparency = 0.25
+                        }):Play()
+                    else
+                        TweenService:Create(Track, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                            BackgroundColor3 = Color3.fromRGB(35, 28, 50)
+                        }):Play()
+                        TweenService:Create(Knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                            Position = UDim2.new(0, 2, 0.5, 0),
+                            BackgroundColor3 = Color3.fromRGB(180, 170, 200)
+                        }):Play()
+                        TweenService:Create(TrackStroke, TweenInfo.new(0.25), {
+                            Color = Color3.fromRGB(90, 55, 150),
+                            Transparency = 0.55
+                        }):Play()
+                    end
+                    Library._config._flags[settings.flag] = self._state
+                    Config:save(game.GameId, Library._config)
+                    settings.callback(self._state)
+                end
+
+                function ToggleManager:Get()
+                    return self._state
+                end
+
+                function ToggleManager:Set(state)
+                    self:change_state(state and true or false)
+                end
+
+                -- Optional keybind (same API as checkbox)
+                function ToggleManager:AddKeybind()
+                    if self._keybindAdded then return self end
+                    self._keybindAdded = true
+
+                    Track.Position = UDim2.new(1, 0, 0.5, 0)
+
+                    local KeybindBox = Instance.new("TextButton")
+                    KeybindBox.Name = "KeybindBox"
+                    KeybindBox.Size = UDim2.fromOffset(32, 16)
+                    KeybindBox.Position = UDim2.new(1, -48, 0.5, 0)
+                    KeybindBox.AnchorPoint = Vector2.new(1, 0.5)
+                    KeybindBox.BackgroundColor3 = Color3.fromRGB(45, 32, 70)
+                    KeybindBox.BackgroundTransparency = 0.1
+                    KeybindBox.BorderSizePixel = 0
+                    KeybindBox.Text = ""
+                    KeybindBox.AutoButtonColor = false
+                    KeybindBox.ZIndex = 5
+                    KeybindBox.Parent = Row
+
+                    local KeybindCorner = Instance.new("UICorner")
+                    KeybindCorner.CornerRadius = UDim.new(0, 4)
+                    KeybindCorner.Parent = KeybindBox
+
+                    local KeybindStroke = Instance.new("UIStroke")
+                    KeybindStroke.Color = Color3.fromRGB(120, 70, 200)
+                    KeybindStroke.Transparency = 0.45
+                    KeybindStroke.Thickness = 1
+                    KeybindStroke.Parent = KeybindBox
+
+                    local KeybindLabel = Instance.new("TextLabel")
+                    KeybindLabel.Size = UDim2.new(1, 0, 1, 0)
+                    KeybindLabel.BackgroundTransparency = 1
+                    KeybindLabel.TextColor3 = Color3.fromRGB(200, 185, 230)
+                    KeybindLabel.TextSize = 9
+                    KeybindLabel.Font = Enum.Font.Gotham
+                    KeybindLabel.Text = Library._config._keybinds[settings.flag]
+                        and string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "")
+                        or "Key"
+                    KeybindLabel.Parent = KeybindBox
+
+                    local function bind_key_listener()
+                        if Connections[settings.flag .. "_keypress"] then
+                            Connections[settings.flag .. "_keypress"]:Disconnect()
+                            Connections[settings.flag .. "_keypress"] = nil
+                        end
+                        local stored = Library._config._keybinds[settings.flag]
+                        if not stored then return end
+                        Connections[settings.flag .. "_keypress"] = UserInputService.InputBegan:Connect(function(input, process)
+                            if process then return end
+                            if tostring(input.KeyCode) == stored then
+                                ToggleManager:change_state(not ToggleManager._state)
+                            end
+                        end)
+                    end
+                    bind_key_listener()
+
+                    KeybindBox.MouseButton1Click:Connect(function()
+                        if Library._choosing_keybind then return end
+                        Library._choosing_keybind = true
+                        KeybindLabel.Text = "..."
+                        local chooseConnection
+                        chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
+                            if processed then return end
+                            if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                            if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
+                            if keyInput.KeyCode == Enum.KeyCode.Backspace or keyInput.KeyCode == Enum.KeyCode.Escape then
+                                Library._config._keybinds[settings.flag] = nil
+                                Config:save(game.GameId, Library._config)
+                                KeybindLabel.Text = "Key"
+                                if Connections[settings.flag .. "_keypress"] then
+                                    Connections[settings.flag .. "_keypress"]:Disconnect()
+                                    Connections[settings.flag .. "_keypress"] = nil
+                                end
+                                if chooseConnection then chooseConnection:Disconnect() end
+                                Library._choosing_keybind = false
+                                return
+                            end
+                            Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
+                            Config:save(game.GameId, Library._config)
+                            KeybindLabel.Text = string.gsub(tostring(keyInput.KeyCode), "Enum.KeyCode.", "")
+                            bind_key_listener()
+                            if chooseConnection then chooseConnection:Disconnect() end
+                            Library._choosing_keybind = false
+                        end)
+                    end)
+
+                    return self
+                end
+
+                if Library:flag_type(settings.flag, "boolean") then
+                    ToggleManager:change_state(Library._config._flags[settings.flag])
+                elseif settings.default ~= nil then
+                    ToggleManager:change_state(settings.default)
+                end
+
+                Row.MouseButton1Click:Connect(function()
+                    ToggleManager:change_state(not ToggleManager._state)
+                end)
+
+                if settings.keybind then
+                    ToggleManager:AddKeybind()
+                end
+
+                return ToggleManager
+            end
+
             function ModuleManager:create_divider(settings: any)
                 
                 LayoutOrderModule = LayoutOrderModule + 1;
