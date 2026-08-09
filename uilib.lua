@@ -562,11 +562,11 @@ function Library:create_ui()
     Tabs.ScrollBarImageTransparency = 1
     Tabs.ScrollBarThickness = 0
     Tabs.Name = 'Tabs'
-    Tabs.Size = UDim2.new(0, 129, 0, 401)
+    Tabs.Size = UDim2.new(0, 129, 0, 380)
     Tabs.Selectable = false
     Tabs.AutomaticCanvasSize = Enum.AutomaticSize.XY
     Tabs.BackgroundTransparency = 1
-    Tabs.Position = UDim2.new(0.026097271591424942, 0, 0.1111111119389534, 0)
+    Tabs.Position = UDim2.new(0.026, 0, 0.13, 0)
     Tabs.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Tabs.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Tabs.BorderSizePixel = 0
@@ -642,9 +642,9 @@ function Library:create_ui()
     local Divider = Instance.new('Frame')
     Divider.Name = 'Divider'
     Divider.BackgroundTransparency = 0.4
-    Divider.Position = UDim2.new(0.23499999940395355, 0, 0, 0)
+    Divider.Position = UDim2.new(0.235, 0, 0, 42)
     Divider.BorderColor3 = Color3.fromRGB(90, 50, 140)
-    Divider.Size = UDim2.new(0, 1, 0, 479)
+    Divider.Size = UDim2.new(0, 1, 0, 437)
     Divider.BorderSizePixel = 0
     Divider.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
     Divider.Parent = Handler
@@ -668,7 +668,17 @@ function Library:create_ui()
     Minimize.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Minimize.Parent = Handler
 
-    -- Close button (X) - top right of the whole window
+    -- Top bar strip (space for logo area + close button, keeps X out of content)
+    local TopBar = Instance.new('Frame')
+    TopBar.Name = 'TopBar'
+    TopBar.BackgroundTransparency = 1
+    TopBar.BorderSizePixel = 0
+    TopBar.Size = UDim2.new(1, 0, 0, 42)
+    TopBar.Position = UDim2.new(0, 0, 0, 0)
+    TopBar.ZIndex = 40
+    TopBar.Parent = Container
+
+    -- Close button (X) inside top bar, far right
     local CloseBtn = Instance.new('TextButton')
     CloseBtn.Name = 'Close'
     CloseBtn.Text = '×'
@@ -677,21 +687,21 @@ function Library:create_ui()
     CloseBtn.TextColor3 = Color3.fromRGB(200, 190, 220)
     CloseBtn.AutoButtonColor = false
     CloseBtn.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
-    CloseBtn.BackgroundTransparency = 0.2
+    CloseBtn.BackgroundTransparency = 0.15
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-    CloseBtn.Position = UDim2.new(1, -14, 0, 14)
-    CloseBtn.AnchorPoint = Vector2.new(1, 0)
+    CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+    CloseBtn.Position = UDim2.new(1, -12, 0.5, 0)
+    CloseBtn.AnchorPoint = Vector2.new(1, 0.5)
     CloseBtn.ZIndex = 50
-    CloseBtn.Parent = Container
+    CloseBtn.Parent = TopBar
 
     local CloseCorner = Instance.new('UICorner')
-    CloseCorner.CornerRadius = UDim.new(0, 8)
+    CloseCorner.CornerRadius = UDim.new(0, 7)
     CloseCorner.Parent = CloseBtn
 
     local CloseStroke = Instance.new('UIStroke')
     CloseStroke.Color = Color3.fromRGB(130, 80, 200)
-    CloseStroke.Transparency = 0.6
+    CloseStroke.Transparency = 0.55
     CloseStroke.Thickness = 1
     CloseStroke.Parent = CloseBtn
 
@@ -703,7 +713,7 @@ function Library:create_ui()
         }):Play()
         TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
             Color = Color3.fromRGB(220, 80, 120),
-            Transparency = 0.2
+            Transparency = 0.15
         }):Play()
     end)
 
@@ -711,11 +721,11 @@ function Library:create_ui()
         TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
             BackgroundColor3 = Color3.fromRGB(40, 30, 55),
             TextColor3 = Color3.fromRGB(200, 190, 220),
-            BackgroundTransparency = 0.2
+            BackgroundTransparency = 0.15
         }):Play()
         TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
             Color = Color3.fromRGB(130, 80, 200),
-            Transparency = 0.6
+            Transparency = 0.55
         }):Play()
     end)
     
@@ -974,12 +984,12 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftSection.Name = 'LeftSection'
         LeftSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         LeftSection.ScrollBarThickness = 0
-        LeftSection.Size = UDim2.new(0, 243, 0, 445)
+        LeftSection.Size = UDim2.new(0, 243, 0, 410)
         LeftSection.Selectable = false
         LeftSection.AnchorPoint = Vector2.new(0, 0.5)
         LeftSection.ScrollBarImageTransparency = 1
         LeftSection.BackgroundTransparency = 1
-        LeftSection.Position = UDim2.new(0.2594326436519623, 0, 0.5, 0)
+        LeftSection.Position = UDim2.new(0.2594326436519623, 0, 0.53, 0)
         LeftSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
         LeftSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         LeftSection.BorderSizePixel = 0
@@ -1001,12 +1011,12 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         RightSection.Name = 'RightSection'
         RightSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         RightSection.ScrollBarThickness = 0
-        RightSection.Size = UDim2.new(0, 243, 0, 445)
+        RightSection.Size = UDim2.new(0, 243, 0, 410)
         RightSection.Selectable = false
         RightSection.AnchorPoint = Vector2.new(0, 0.5)
         RightSection.ScrollBarImageTransparency = 1
         RightSection.BackgroundTransparency = 1
-        RightSection.Position = UDim2.new(0.6290000081062317, 0, 0.5, 0)
+        RightSection.Position = UDim2.new(0.6290000081062317, 0, 0.53, 0)
         RightSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
         RightSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         RightSection.BorderSizePixel = 0
@@ -2723,7 +2733,7 @@ if not settings or settings and not settings.disableline then
     end)
 
     -- Close button: destroy the whole UI
-    local closeBtn = self._ui.Container:FindFirstChild('Close')
+    local closeBtn = self._ui.Container:FindFirstChild('Close', true)
     if closeBtn then
         closeBtn.MouseButton1Click:Connect(function()
             TweenService:Create(self._ui.Container, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
