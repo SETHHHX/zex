@@ -806,17 +806,7 @@ function Library:create_ui()
     
 
     function self:load()
-        local content = {}
-    
-        for _, object in click:GetDescendants() do
-            if not object:IsA('ImageLabel') then
-                continue
-            end
-    
-            table.insert(content, object)
-        end
-    
-        ContentProvider:PreloadAsync(content)
+        -- Fast open: no blocking PreloadAsync
         self:get_device()
 
         if self._device == 'Mobile' or self._device == 'Unknown' then
@@ -829,11 +819,18 @@ function Library:create_ui()
             end)
         end
     
-        TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        -- Faster open animation
+        TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
             Size = UDim2.fromOffset(698, 479)
         }):Play()
 
-        AcrylicBlur.new(Container)
+        -- Acrylic blur deferred so UI shows instantly
+        task.defer(function()
+            pcall(function()
+                AcrylicBlur.new(Container)
+            end)
+        end)
+
         self._ui_loaded = true
     end
 
@@ -1742,86 +1739,6 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TitleLabel.Parent = Checkbox
 
-                -- Small keybind button next to checkbox (left click to set)
-                local KeybindBox = Instance.new("TextButton")
-                KeybindBox.Name = "KeybindBox"
-                KeybindBox.Size = UDim2.fromOffset(28, 16)
-                KeybindBox.Position = UDim2.new(1, -42, 0.5, 0)
-                KeybindBox.AnchorPoint = Vector2.new(0, 0.5)
-                KeybindBox.BackgroundColor3 = Color3.fromRGB(45, 32, 70)
-                KeybindBox.BackgroundTransparency = 0.15
-                KeybindBox.BorderSizePixel = 0
-                KeybindBox.Text = ""
-                KeybindBox.AutoButtonColor = false
-                KeybindBox.Parent = Checkbox
-            
-                local KeybindCorner = Instance.new("UICorner")
-                KeybindCorner.CornerRadius = UDim.new(0, 4)
-                KeybindCorner.Parent = KeybindBox
-
-                local KeybindStroke = Instance.new("UIStroke")
-                KeybindStroke.Color = Color3.fromRGB(120, 70, 200)
-                KeybindStroke.Transparency = 0.5
-                KeybindStroke.Thickness = 1
-                KeybindStroke.Parent = KeybindBox
-            
-                local KeybindLabel = Instance.new("TextLabel")
-                KeybindLabel.Name = "KeybindLabel"
-                KeybindLabel.Size = UDim2.new(1, 0, 1, 0)
-                KeybindLabel.BackgroundTransparency = 1
-                KeybindLabel.TextColor3 = Color3.fromRGB(200, 185, 230)
-                KeybindLabel.TextScaled = false
-                KeybindLabel.TextSize = 9
-                KeybindLabel.Font = Enum.Font.Gotham
-                KeybindLabel.Text = Library._config._keybinds[settings.flag] 
-                    and string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "") 
-                    or "Key"
-                KeybindLabel.Parent = KeybindBox
-
-                KeybindBox.MouseButton1Click:Connect(function()
-                    if Library._choosing_keybind then return end
-                    Library._choosing_keybind = true
-                    KeybindLabel.Text = "..."
-                    local chooseConnection
-                    chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
-                        if processed then return end
-                        if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                        if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
-
-                        if keyInput.KeyCode == Enum.KeyCode.Backspace or keyInput.KeyCode == Enum.KeyCode.Escape then
-                            Library._config._keybinds[settings.flag] = nil
-                            Config:save(game.GameId, Library._config)
-                            KeybindLabel.Text = "Key"
-                            if Connections[settings.flag .. "_keybind"] then
-                                Connections[settings.flag .. "_keybind"]:Disconnect()
-                                Connections[settings.flag .. "_keybind"] = nil
-                            end
-                            if chooseConnection then chooseConnection:Disconnect() end
-                            Library._choosing_keybind = false
-                            return
-                        end
-
-                        Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
-                        Config:save(game.GameId, Library._config)
-
-                        if Connections[settings.flag .. "_keybind"] then
-                            Connections[settings.flag .. "_keybind"]:Disconnect()
-                            Connections[settings.flag .. "_keybind"] = nil
-                        end
-
-                        Connections[settings.flag .. "_keybind"] = UserInputService.InputBegan:Connect(function(input, process)
-                            if process then return end
-                            if tostring(input.KeyCode) ~= Library._config._keybinds[settings.flag] then return end
-                            CheckboxManager:change_state(not CheckboxManager._state)
-                        end)
-
-                        local keyStr = string.gsub(tostring(keyInput.KeyCode), "Enum.KeyCode.", "")
-                        KeybindLabel.Text = keyStr
-                        if chooseConnection then chooseConnection:Disconnect() end
-                        Library._choosing_keybind = false
-                    end)
-                end)
-            
                 local Box = Instance.new("Frame")
                 Box.BorderColor3 = Color3.fromRGB(90, 50, 140)
                 Box.AnchorPoint = Vector2.new(1, 0.5)
@@ -1880,60 +1797,120 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 Checkbox.MouseButton1Click:Connect(function()
                     CheckboxManager:change_state(not CheckboxManager._state)
                 end)
-            
-                Checkbox.InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
-                    if Library._choosing_keybind then return end
-            
-                    Library._choosing_keybind = true
-                    local chooseConnection
-                    chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
-                        if processed then return end
-                        if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                        if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
-            
-                        if keyInput.KeyCode == Enum.KeyCode.Backspace then
-                            ModuleManager:scale_keybind(true)
-                            Library._config._keybinds[settings.flag] = nil
-                            Config:save(game.GameId, Library._config)
-                            KeybindLabel.Text = "..."
-                            if Connections[settings.flag .. "_keybind"] then
-                                Connections[settings.flag .. "_keybind"]:Disconnect()
-                                Connections[settings.flag .. "_keybind"] = nil
+
+                -- Optional keybind: only appears if you call :AddKeybind() or pass keybind = true
+                function CheckboxManager:AddKeybind()
+                    if self._keybindAdded then return self end
+                    self._keybindAdded = true
+
+                    -- Move the toggle box left a bit to make room
+                    Box.Position = UDim2.new(1, 0, 0.5, 0)
+
+                    local KeybindBox = Instance.new("TextButton")
+                    KeybindBox.Name = "KeybindBox"
+                    KeybindBox.Size = UDim2.fromOffset(32, 16)
+                    KeybindBox.Position = UDim2.new(1, -38, 0.5, 0)
+                    KeybindBox.AnchorPoint = Vector2.new(1, 0.5)
+                    KeybindBox.BackgroundColor3 = Color3.fromRGB(45, 32, 70)
+                    KeybindBox.BackgroundTransparency = 0.1
+                    KeybindBox.BorderSizePixel = 0
+                    KeybindBox.Text = ""
+                    KeybindBox.AutoButtonColor = false
+                    KeybindBox.ZIndex = 5
+                    KeybindBox.Parent = Checkbox
+
+                    -- shift checkbox indicator to the right edge still
+                    Box.Position = UDim2.new(1, 0, 0.5, 0)
+                    KeybindBox.Position = UDim2.new(1, -22, 0.5, 0)
+                    Box.Position = UDim2.new(1, 0, 0.5, 0)
+                    -- Layout: [Title ........] [Key] [Box]
+                    KeybindBox.Position = UDim2.new(1, -40, 0.5, 0)
+                    KeybindBox.AnchorPoint = Vector2.new(1, 0.5)
+
+                    local KeybindCorner = Instance.new("UICorner")
+                    KeybindCorner.CornerRadius = UDim.new(0, 4)
+                    KeybindCorner.Parent = KeybindBox
+
+                    local KeybindStroke = Instance.new("UIStroke")
+                    KeybindStroke.Color = Color3.fromRGB(120, 70, 200)
+                    KeybindStroke.Transparency = 0.45
+                    KeybindStroke.Thickness = 1
+                    KeybindStroke.Parent = KeybindBox
+
+                    local KeybindLabel = Instance.new("TextLabel")
+                    KeybindLabel.Name = "KeybindLabel"
+                    KeybindLabel.Size = UDim2.new(1, 0, 1, 0)
+                    KeybindLabel.BackgroundTransparency = 1
+                    KeybindLabel.TextColor3 = Color3.fromRGB(200, 185, 230)
+                    KeybindLabel.TextSize = 9
+                    KeybindLabel.Font = Enum.Font.Gotham
+                    KeybindLabel.Text = Library._config._keybinds[settings.flag]
+                        and string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "")
+                        or "Key"
+                    KeybindLabel.Parent = KeybindBox
+
+                    local function bind_key_listener()
+                        if Connections[settings.flag .. "_keypress"] then
+                            Connections[settings.flag .. "_keypress"]:Disconnect()
+                            Connections[settings.flag .. "_keypress"] = nil
+                        end
+                        local stored = Library._config._keybinds[settings.flag]
+                        if not stored then return end
+                        Connections[settings.flag .. "_keypress"] = UserInputService.InputBegan:Connect(function(input, process)
+                            if process then return end
+                            if tostring(input.KeyCode) == stored then
+                                CheckboxManager:change_state(not CheckboxManager._state)
                             end
-                            chooseConnection:Disconnect()
-                            Library._choosing_keybind = false
-                            return
-                        end
-            
-                        chooseConnection:Disconnect()
-                        Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
-                        Config:save(game.GameId, Library._config)
-                        if Connections[settings.flag .. "_keybind"] then
-                            Connections[settings.flag .. "_keybind"]:Disconnect()
-                            Connections[settings.flag .. "_keybind"] = nil
-                        end
-                        ModuleManager:connect_keybind()
-                        ModuleManager:scale_keybind()
-                        Library._choosing_keybind = false
-            
-                        local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), "Enum.KeyCode.", "")
-                        KeybindLabel.Text = keybind_string
-                    end)
-                end)
-            
-                local keyPressConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType == Enum.UserInputType.Keyboard then
-                        local storedKey = Library._config._keybinds[settings.flag]
-                        if storedKey and tostring(input.KeyCode) == storedKey then
-                            CheckboxManager:change_state(not CheckboxManager._state)
-                        end
+                        end)
                     end
-                end)
-                Connections[settings.flag .. "_keypress"] = keyPressConnection
-            
+
+                    -- Restore existing bind if any
+                    bind_key_listener()
+
+                    KeybindBox.MouseButton1Click:Connect(function()
+                        if Library._choosing_keybind then return end
+                        Library._choosing_keybind = true
+                        KeybindLabel.Text = "..."
+
+                        local chooseConnection
+                        chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
+                            if processed then return end
+                            if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                            if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
+
+                            if keyInput.KeyCode == Enum.KeyCode.Backspace or keyInput.KeyCode == Enum.KeyCode.Escape then
+                                Library._config._keybinds[settings.flag] = nil
+                                Config:save(game.GameId, Library._config)
+                                KeybindLabel.Text = "Key"
+                                if Connections[settings.flag .. "_keypress"] then
+                                    Connections[settings.flag .. "_keypress"]:Disconnect()
+                                    Connections[settings.flag .. "_keypress"] = nil
+                                end
+                                if chooseConnection then chooseConnection:Disconnect() end
+                                Library._choosing_keybind = false
+                                return
+                            end
+
+                            Library._config._keybinds[settings.flag] = tostring(keyInput.KeyCode)
+                            Config:save(game.GameId, Library._config)
+
+                            local keyStr = string.gsub(tostring(keyInput.KeyCode), "Enum.KeyCode.", "")
+                            KeybindLabel.Text = keyStr
+                            bind_key_listener()
+
+                            if chooseConnection then chooseConnection:Disconnect() end
+                            Library._choosing_keybind = false
+                        end)
+                    end)
+
+                    return self
+                end
+
+                -- Auto-add if settings.keybind == true
+                if settings.keybind then
+                    CheckboxManager:AddKeybind()
+                end
+
                 return CheckboxManager
             end
 
