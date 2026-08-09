@@ -1202,12 +1202,13 @@ Description.Parent = Header
             
 local Keybind = Instance.new('Frame')
 Keybind.Name = 'Keybind'
-Keybind.BackgroundTransparency = 0.4 -- Lo bajé un poco para que sea más sólido
+Keybind.BackgroundTransparency = 0.2
 Keybind.Position = UDim2.new(0.15, 0, 0.735, 0)
-Keybind.Size = UDim2.new(0, 33, 0, 15)
+Keybind.Size = UDim2.new(0, 40, 0, 18)
 Keybind.BorderSizePixel = 0
-Keybind.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- GRIS OSCURO
+Keybind.BackgroundColor3 = Color3.fromRGB(50, 35, 75)
 Keybind.Parent = Header
+Keybind.Active = true
             
             local UICorner = Instance.new('UICorner')
             UICorner.CornerRadius = UDim.new(0, 3)
@@ -1359,23 +1360,21 @@ end
                 ModuleManager:scale_keybind()
             end
 
-            Connections[settings.flag..'_input_began'] = Header.InputBegan:Connect(function(input: InputObject)
+            local function start_keybind_listen()
                 if Library._choosing_keybind then
                     return
                 end
 
-                if input.UserInputType ~= Enum.UserInputType.MouseButton3 then
-                    return
-                end
-                
                 Library._choosing_keybind = true
-                
+                TextLabel.Text = "..."
+
                 Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input: InputObject, process: boolean)
                     if process then
                         return
                     end
-                    
-                    if input == Enum.UserInputState or input == Enum.UserInputType then
+
+                    -- Only accept keyboard keys
+                    if input.UserInputType ~= Enum.UserInputType.Keyboard then
                         return
                     end
 
@@ -1383,30 +1382,31 @@ end
                         return
                     end
 
-                    if input.KeyCode == Enum.KeyCode.Backspace then
+                    if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Escape then
                         ModuleManager:scale_keybind(true)
-
                         Library._config._keybinds[settings.flag] = nil
                         Config:save(game.GameId, Library._config)
-
                         TextLabel.Text = 'None'
-                        
+
                         if Connections[settings.flag..'_keybind'] then
                             Connections[settings.flag..'_keybind']:Disconnect()
                             Connections[settings.flag..'_keybind'] = nil
                         end
 
-                        Connections['keybind_choose_start']:Disconnect()
-                        Connections['keybind_choose_start'] = nil
+                        if Connections['keybind_choose_start'] then
+                            Connections['keybind_choose_start']:Disconnect()
+                            Connections['keybind_choose_start'] = nil
+                        end
 
                         Library._choosing_keybind = false
-
                         return
                     end
-                    
-                    Connections['keybind_choose_start']:Disconnect()
-                    Connections['keybind_choose_start'] = nil
-                    
+
+                    if Connections['keybind_choose_start'] then
+                        Connections['keybind_choose_start']:Disconnect()
+                        Connections['keybind_choose_start'] = nil
+                    end
+
                     Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
                     Config:save(game.GameId, Library._config)
 
@@ -1417,12 +1417,25 @@ end
 
                     ModuleManager:connect_keybind()
                     ModuleManager:scale_keybind()
-                    
                     Library._choosing_keybind = false
 
                     local keybind_string = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
                     TextLabel.Text = keybind_string
                 end)
+            end
+
+            -- Left click on the keybind box to set key
+            Keybind.InputBegan:Connect(function(input: InputObject)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    start_keybind_listen()
+                end
+            end)
+
+            -- Also still support middle click on header (legacy)
+            Connections[settings.flag..'_input_began'] = Header.InputBegan:Connect(function(input: InputObject)
+                if input.UserInputType == Enum.UserInputType.MouseButton3 then
+                    start_keybind_listen()
+                end
             end)
 
             Header.MouseButton1Click:Connect(function()
@@ -1430,83 +1443,105 @@ end
             end)
 
             function ModuleManager:create_paragraph(settings: any)
-                LayoutOrderModule = LayoutOrderModule + 1;
+                settings = settings or {}
+                -- Support both APIs: title/text and Header/Body
+                local headerText = settings.Header or settings.title or settings.header or "Info"
+                local bodyText = settings.Body or settings.text or settings.body or ""
+                settings.callback = settings.callback or function() end
 
-                local ParagraphManager = {}
-                
+                LayoutOrderModule = LayoutOrderModule + 1
+
+                local ParagraphManager = {
+                    Settings = settings
+                }
+
                 if self._size == 0 then
                     self._size = 11
                 end
-            
-                self._size += settings.customScale or 70
-            
+
+                self._size += settings.customScale or 55
+
                 Module.Size = UDim2.fromOffset(241, 93 + self._size)
-            
                 Options.Size = UDim2.fromOffset(241, self._size)
-            
-                
+
                 local Paragraph = Instance.new('Frame')
-                Paragraph.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
-                Paragraph.BackgroundTransparency = 0.3
-                Paragraph.Size = UDim2.new(0, 207, 0, 30) 
+                Paragraph.BackgroundColor3 = Color3.fromRGB(28, 22, 40)
+                Paragraph.BackgroundTransparency = 0.15
+                Paragraph.Size = UDim2.new(0, 207, 0, 0)
                 Paragraph.BorderSizePixel = 0
                 Paragraph.Name = "Paragraph"
-                Paragraph.AutomaticSize = Enum.AutomaticSize.Y 
+                Paragraph.AutomaticSize = Enum.AutomaticSize.Y
                 Paragraph.Parent = Options
-                Paragraph.LayoutOrder = LayoutOrderModule;
-            
+                Paragraph.LayoutOrder = LayoutOrderModule
+
                 local UICorner = Instance.new('UICorner')
-                UICorner.CornerRadius = UDim.new(0, 4)
+                UICorner.CornerRadius = UDim.new(0, 6)
                 UICorner.Parent = Paragraph
-            
-                
+
+                local UIStroke = Instance.new('UIStroke')
+                UIStroke.Color = Color3.fromRGB(100, 60, 170)
+                UIStroke.Transparency = 0.65
+                UIStroke.Thickness = 1
+                UIStroke.Parent = Paragraph
+
+                local UIPadding = Instance.new('UIPadding')
+                UIPadding.PaddingTop = UDim.new(0, 8)
+                UIPadding.PaddingBottom = UDim.new(0, 8)
+                UIPadding.PaddingLeft = UDim.new(0, 10)
+                UIPadding.PaddingRight = UDim.new(0, 10)
+                UIPadding.Parent = Paragraph
+
                 local Title = Instance.new('TextLabel')
+                Title.Name = "Header"
                 Title.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-                Title.Text = settings.title or "Title"
-                Title.Size = UDim2.new(1, -10, 0, 20)
-                Title.Position = UDim2.new(0, 5, 0, 5)
+                Title.TextColor3 = Color3.fromRGB(230, 220, 255)
+                Title.Text = headerText
+                Title.Size = UDim2.new(1, 0, 0, 16)
                 Title.BackgroundTransparency = 1
                 Title.TextXAlignment = Enum.TextXAlignment.Left
                 Title.TextYAlignment = Enum.TextYAlignment.Center
                 Title.TextSize = 12
-                Title.AutomaticSize = Enum.AutomaticSize.XY
+                Title.TextWrapped = true
+                Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.Parent = Paragraph
-            
-               
+
                 local Body = Instance.new('TextLabel')
+                Body.Name = "Body"
                 Body.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-                Body.TextColor3 = Color3.fromRGB(150, 90, 255)
-                
-                if not settings.rich then
-                    Body.Text = settings.text or "Skibidi"
-                else
-                    Body.RichText = true
-                    Body.Text = settings.richtext or "<font color='rgb(255,0,0)'>Zex Hub</font> user"
-                end
-                
-                Body.Size = UDim2.new(1, -10, 0, 20)
-                Body.Position = UDim2.new(0, 5, 0, 30)
+                Body.TextColor3 = Color3.fromRGB(160, 145, 190)
+                Body.Text = bodyText
+                Body.Size = UDim2.new(1, 0, 0, 14)
+                Body.Position = UDim2.new(0, 0, 0, 20)
                 Body.BackgroundTransparency = 1
                 Body.TextXAlignment = Enum.TextXAlignment.Left
                 Body.TextYAlignment = Enum.TextYAlignment.Top
                 Body.TextSize = 11
                 Body.TextWrapped = true
-                Body.AutomaticSize = Enum.AutomaticSize.XY
+                Body.RichText = settings.rich == true
+                Body.AutomaticSize = Enum.AutomaticSize.Y
                 Body.Parent = Paragraph
-            
-                
-                Paragraph.MouseEnter:Connect(function()
-                    TweenService:Create(Paragraph, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(90, 50, 140)
-                    }):Play()
-                end)
-            
-                Paragraph.MouseLeave:Connect(function()
-                    TweenService:Create(Paragraph, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(90, 50, 140)
-                    }):Play()
-                end)
+
+                function ParagraphManager:UpdateHeader(text)
+                    Title.Text = tostring(text or "")
+                    settings.Header = Title.Text
+                    settings.title = Title.Text
+                end
+
+                function ParagraphManager:UpdateBody(text)
+                    Body.Text = tostring(text or "")
+                    settings.Body = Body.Text
+                    settings.text = Body.Text
+                end
+
+                function ParagraphManager:SetVisibility(visible)
+                    Paragraph.Visible = visible and true or false
+                end
+                -- alias with original spelling from user request
+                ParagraphManager.SetVisiblity = ParagraphManager.SetVisibility
+
+                function ParagraphManager:Destroy()
+                    Paragraph:Destroy()
+                end
 
                 return ParagraphManager
             end
