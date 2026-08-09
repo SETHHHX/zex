@@ -1646,6 +1646,9 @@ end
             end   
 
             function ModuleManager:create_checkbox(settings: any)
+                settings.callback = settings.callback or function() end
+                settings.flag = settings.flag or ("Checkbox_" .. tostring(math.random(10000, 99999)))
+
                 LayoutOrderModule = LayoutOrderModule + 1
                 local CheckboxManager = { _state = false }
             
@@ -1916,6 +1919,12 @@ if not settings or settings and not settings.disableline then
             end
             
             function ModuleManager:create_slider(settings: any)
+                -- Defaults
+                settings.minimum_value = settings.minimum_value or 0
+                settings.maximum_value = settings.maximum_value or 100
+                settings.value = settings.value or settings.minimum_value
+                settings.round_number = settings.round_number ~= false
+                settings.callback = settings.callback or function() end
 
                 LayoutOrderModule = LayoutOrderModule + 1
 
@@ -2107,6 +2116,11 @@ if not settings or settings and not settings.disableline then
             end
 
             function ModuleManager:create_dropdown(settings: any)
+                -- Defaults to avoid nil comparison errors
+                settings.options = settings.options or {}
+                settings.maximum_options = settings.maximum_options or 999
+                settings.multi_dropdown = settings.multi_dropdown or false
+                settings.callback = settings.callback or function() end
 
                 if not settings.Order then
                     LayoutOrderModule = LayoutOrderModule + 1;
