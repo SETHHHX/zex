@@ -589,7 +589,7 @@ function Library:create_ui()
     ClientName.BackgroundTransparency = 1
     ClientName.TextXAlignment = Enum.TextXAlignment.Left
     ClientName.BorderSizePixel = 0
-    ClientName.TextSize = 13
+    ClientName.TextSize = 14
     ClientName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     ClientName.Parent = Handler
 
@@ -951,7 +951,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
     TextLabel.TextXAlignment = Enum.TextXAlignment.Left
     TextLabel.BorderSizePixel = 0
     TextLabel.BorderColor3 = Color3.fromRGB(40, 40, 40) -- Antes 8, 51, 8
-    TextLabel.TextSize = 13
+    TextLabel.TextSize = 14
     TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     TextLabel.Parent = Tab
     
@@ -1147,7 +1147,7 @@ ModuleName.TextXAlignment = Enum.TextXAlignment.Left
 ModuleName.BorderSizePixel = 0
 -- CAMBIA EL BORDE TAMBIÉN:
 ModuleName.BorderColor3 = Color3.fromRGB(40, 40, 40) 
-ModuleName.TextSize = 13
+ModuleName.TextSize = 14
 ModuleName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 ModuleName.Parent = Header
             
@@ -1164,7 +1164,7 @@ Description.BackgroundTransparency = 1
 Description.TextXAlignment = Enum.TextXAlignment.Left
 Description.BorderSizePixel = 0
 Description.BorderColor3 = Color3.fromRGB(40, 40, 40) -- GRIS OSCURO
-Description.TextSize = 10
+Description.TextSize = 12
 Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 Description.Parent = Header
             
@@ -1222,7 +1222,7 @@ Keybind.Active = true
             TextLabel.TextXAlignment = Enum.TextXAlignment.Left
             TextLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
             TextLabel.BorderSizePixel = 0
-            TextLabel.TextSize = 10
+            TextLabel.TextSize = 11
             TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             TextLabel.Parent = Keybind
             
@@ -1497,7 +1497,7 @@ end
                 Title.BackgroundTransparency = 1
                 Title.TextXAlignment = Enum.TextXAlignment.Left
                 Title.TextYAlignment = Enum.TextYAlignment.Center
-                Title.TextSize = 12
+                Title.TextSize = 13
                 Title.TextWrapped = true
                 Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.Parent = Paragraph
@@ -1512,7 +1512,7 @@ end
                 Body.BackgroundTransparency = 1
                 Body.TextXAlignment = Enum.TextXAlignment.Left
                 Body.TextYAlignment = Enum.TextYAlignment.Top
-                Body.TextSize = 11
+                Body.TextSize = 12
                 Body.TextWrapped = true
                 Body.RichText = settings.rich == true
                 Body.AutomaticSize = Enum.AutomaticSize.Y
@@ -1590,7 +1590,7 @@ end
                 Body.BackgroundTransparency = 1
                 Body.TextXAlignment = Enum.TextXAlignment.Left
                 Body.TextYAlignment = Enum.TextYAlignment.Top
-                Body.TextSize = 10
+                Body.TextSize = 12
                 Body.TextWrapped = true
                 Body.AutomaticSize = Enum.AutomaticSize.XY
                 Body.Parent = TextFrame
@@ -1648,7 +1648,7 @@ end
                 Label.TextXAlignment = Enum.TextXAlignment.Left
                 Label.BorderSizePixel = 0
                 Label.Parent = Options
-                Label.TextSize = 10;
+                Label.TextSize = 12;
                 Label.LayoutOrder = LayoutOrderModule
             
                 local Textbox = Instance.new('TextBox')
@@ -1660,7 +1660,7 @@ end
                 Textbox.Name = 'Textbox'
                 Textbox.Size = UDim2.new(0, 207, 0, 15)
                 Textbox.BorderSizePixel = 0
-                Textbox.TextSize = 10
+                Textbox.TextSize = 12
                 Textbox.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
                 Textbox.BackgroundTransparency = 0.9
                 Textbox.ClearTextOnFocus = false
@@ -1724,10 +1724,10 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.Name = "TitleLabel"
                 if SelectedLanguage == "th" then
                     TitleLabel.FontFace = Font.new("rbxasset://fonts/families/NotoSansThai.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TitleLabel.TextSize = 13
+                    TitleLabel.TextSize = 14
                 else
                     TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TitleLabel.TextSize = 11
+                    TitleLabel.TextSize = 13
                 end
                 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TitleLabel.TextTransparency = 0.2
@@ -1947,9 +1947,9 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.Size = UDim2.new(1, -55, 1, 0)
                 TitleLabel.Position = UDim2.new(0, 0, 0, 0)
                 TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                TitleLabel.TextSize = 11
+                TitleLabel.TextSize = 13
                 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                TitleLabel.TextTransparency = 0.15
+                TitleLabel.TextTransparency = 0.05
                 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TitleLabel.Text = settings.title or "Toggle"
                 TitleLabel.Parent = Row
@@ -2257,7 +2257,7 @@ if not settings or settings and not settings.disableline then
                     TextLabel.TextSize = 13;
                 else
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TextLabel.TextSize = 11;
+                    TextLabel.TextSize = 13;
                 end;
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.TextTransparency = 0.20000000298023224
@@ -2335,7 +2335,7 @@ if not settings or settings and not settings.disableline then
                 Value.TextXAlignment = Enum.TextXAlignment.Right
                 Value.BorderSizePixel = 0
                 Value.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                Value.TextSize = 10
+                Value.TextSize = 12
                 Value.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Value.Parent = Slider
 
@@ -2468,7 +2468,7 @@ if not settings or settings and not settings.disableline then
                     TextLabel.TextSize = 13;
                 else
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                    TextLabel.TextSize = 11;
+                    TextLabel.TextSize = 13;
                 end;
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.TextTransparency = 0.20000000298023224
@@ -2520,7 +2520,7 @@ if not settings or settings and not settings.disableline then
                 CurrentOption.TextXAlignment = Enum.TextXAlignment.Left
                 CurrentOption.BorderSizePixel = 0
                 CurrentOption.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                CurrentOption.TextSize = 10
+                CurrentOption.TextSize = 12
                 CurrentOption.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 CurrentOption.Parent = Header
                 local UIGradient = Instance.new('UIGradient')
@@ -2744,7 +2744,7 @@ if not settings or settings and not settings.disableline then
                         Option.Active = false
                         Option.TextTransparency = 0.6000000238418579
                         Option.AnchorPoint = Vector2.new(0, 0.5)
-                        Option.TextSize = 10
+                        Option.TextSize = 12
                         Option.Size = UDim2.new(0, 186, 0, 16)
                         Option.TextColor3 = Color3.fromRGB(255, 255, 255)
                         Option.BorderColor3 = Color3.fromRGB(90, 50, 140)
@@ -2842,14 +2842,15 @@ if not settings or settings and not settings.disableline then
             
                 local FeatureButton = Instance.new("TextButton")
                 FeatureButton.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                FeatureButton.TextSize = 11;
+                FeatureButton.TextSize = 13;
                 FeatureButton.Size = UDim2.new(1, -35, 0, 16)
                 FeatureButton.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
                 FeatureButton.TextColor3 = Color3.fromRGB(255, 255, 255)
                 FeatureButton.Text = "    " .. settings.title or "    " .. "Feature"
                 FeatureButton.AutoButtonColor = false
                 FeatureButton.TextXAlignment = Enum.TextXAlignment.Left
-                FeatureButton.TextTransparency = 0.2
+                FeatureButton.TextTransparency = 0.05
+                FeatureButton.TextSize = 12
                 FeatureButton.Parent = FeatureContainer
             
                 local RightContainer = Instance.new("Frame")
