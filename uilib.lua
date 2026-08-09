@@ -667,6 +667,43 @@ function Library:create_ui()
     Minimize.TextSize = 14
     Minimize.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Minimize.Parent = Handler
+
+    -- Close button (X) top-right
+    local CloseBtn = Instance.new('TextButton')
+    CloseBtn.Name = 'Close'
+    CloseBtn.Text = '×'
+    CloseBtn.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+    CloseBtn.TextSize = 20
+    CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    CloseBtn.AutoButtonColor = false
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    CloseBtn.BackgroundTransparency = 0.3
+    CloseBtn.BorderSizePixel = 0
+    CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+    CloseBtn.Position = UDim2.new(1, -40, 0, 12)
+    CloseBtn.AnchorPoint = Vector2.new(0, 0)
+    CloseBtn.ZIndex = 10
+    CloseBtn.Parent = Handler
+
+    local CloseCorner = Instance.new('UICorner')
+    CloseCorner.CornerRadius = UDim.new(0, 6)
+    CloseCorner.Parent = CloseBtn
+
+    CloseBtn.MouseEnter:Connect(function()
+        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(200, 50, 60),
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 0
+        }):Play()
+    end)
+
+    CloseBtn.MouseLeave:Connect(function()
+        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+            TextColor3 = Color3.fromRGB(180, 180, 180),
+            BackgroundTransparency = 0.3
+        }):Play()
+    end)
     
     local UIScale = Instance.new('UIScale')
     UIScale.Parent = Container    
@@ -2672,6 +2709,24 @@ if not settings or settings and not settings.disableline then
         self._ui_open = not self._ui_open
         self:change_visiblity(self._ui_open)
     end)
+
+    -- Close button: destroy the whole UI
+    local closeBtn = self._ui.Container.Handler:FindFirstChild('Close')
+    if closeBtn then
+        closeBtn.MouseButton1Click:Connect(function()
+            TweenService:Create(self._ui.Container, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+                Size = UDim2.fromOffset(0, 0),
+                BackgroundTransparency = 1
+            }):Play()
+            task.delay(0.35, function()
+                if self._ui then
+                    self._ui:Destroy()
+                    self._ui = nil
+                end
+                Connections:disconnect_all()
+            end)
+        end)
+    end
 
     return self
 end
