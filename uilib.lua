@@ -3699,6 +3699,381 @@ if not settings or settings and not settings.disableline then
                 }
             end
 
+            function ModuleManager:create_colorpicker(settings: any)
+                settings = settings or {}
+                settings.title = settings.title or settings.Name or "Color"
+                settings.callback = settings.callback or settings.Callback or function() end
+                local defaultColor = settings.default or settings.Default or Color3.fromRGB(255, 255, 255)
+                if typeof(defaultColor) ~= "Color3" then
+                    defaultColor = Color3.fromRGB(255, 255, 255)
+                end
+
+                LayoutOrderModule = LayoutOrderModule + 1
+                if self._size == 0 then
+                    self._size = 11
+                end
+                self._size += 34
+
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
+
+                local h, s, v = defaultColor:ToHSV()
+                local currentColor = defaultColor
+                local open = false
+
+                local Row = Instance.new("TextButton")
+                Row.Name = "ColorPicker"
+                Row.AutoButtonColor = false
+                Row.Text = ""
+                Row.Size = UDim2.new(0, 207, 0, 28)
+                Row.BackgroundColor3 = Color3.fromRGB(28, 22, 40)
+                Row.BackgroundTransparency = 0.05
+                Row.BorderSizePixel = 0
+                Row.LayoutOrder = LayoutOrderModule
+                Row.Parent = Options
+
+                local RowCorner = Instance.new("UICorner")
+                RowCorner.CornerRadius = UDim.new(0, 8)
+                RowCorner.Parent = Row
+
+                local RowStroke = Instance.new("UIStroke")
+                RowStroke.Color = Color3.fromRGB(90, 70, 130)
+                RowStroke.Transparency = 0.55
+                RowStroke.Thickness = 1
+                RowStroke.Parent = Row
+
+                local Title = Instance.new("TextLabel")
+                Title.BackgroundTransparency = 1
+                Title.Size = UDim2.new(1, -40, 1, 0)
+                Title.Position = UDim2.new(0, 10, 0, 0)
+                Title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+                Title.TextSize = 13
+                Title.TextColor3 = Color3.fromRGB(230, 225, 245)
+                Title.TextXAlignment = Enum.TextXAlignment.Left
+                Title.Text = tostring(settings.title)
+                Title.Parent = Row
+
+                local Preview = Instance.new("Frame")
+                Preview.Name = "Preview"
+                Preview.Size = UDim2.fromOffset(18, 18)
+                Preview.Position = UDim2.new(1, -28, 0.5, -9)
+                Preview.BackgroundColor3 = currentColor
+                Preview.BorderSizePixel = 0
+                Preview.Parent = Row
+
+                local PreviewCorner = Instance.new("UICorner")
+                PreviewCorner.CornerRadius = UDim.new(1, 0)
+                PreviewCorner.Parent = Preview
+
+                local PreviewStroke = Instance.new("UIStroke")
+                PreviewStroke.Color = Color3.fromRGB(255, 255, 255)
+                PreviewStroke.Transparency = 0.7
+                PreviewStroke.Thickness = 1
+                PreviewStroke.Parent = Preview
+
+                -- Popup panel (parented to Options so it stays in module)
+                local Panel = Instance.new("Frame")
+                Panel.Name = "ColorPanel"
+                Panel.Size = UDim2.fromOffset(207, 128)
+                Panel.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
+                Panel.BackgroundTransparency = 0.02
+                Panel.BorderSizePixel = 0
+                Panel.Visible = false
+                Panel.ClipsDescendants = true
+                Panel.LayoutOrder = LayoutOrderModule + 0 -- will adjust when open
+                Panel.Parent = Options
+
+                local PanelCorner = Instance.new("UICorner")
+                PanelCorner.CornerRadius = UDim.new(0, 8)
+                PanelCorner.Parent = Panel
+
+                local PanelStroke = Instance.new("UIStroke")
+                PanelStroke.Color = Color3.fromRGB(130, 80, 210)
+                PanelStroke.Transparency = 0.4
+                PanelStroke.Thickness = 1.2
+                PanelStroke.Parent = Panel
+
+                -- SV square
+                local SV = Instance.new("ImageButton")
+                SV.Name = "SV"
+                SV.AutoButtonColor = false
+                SV.Size = UDim2.fromOffset(110, 100)
+                SV.Position = UDim2.fromOffset(8, 8)
+                SV.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                SV.BorderSizePixel = 0
+                SV.Image = ""
+                SV.Parent = Panel
+
+                local SVCorner = Instance.new("UICorner")
+                SVCorner.CornerRadius = UDim.new(0, 6)
+                SVCorner.Parent = SV
+
+                -- White to transparent gradient (saturation)
+                local satGrad = Instance.new("UIGradient")
+                satGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                    ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+                })
+                satGrad.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0),
+                    NumberSequenceKeypoint.new(1, 1),
+                })
+                satGrad.Rotation = 0
+                satGrad.Parent = SV
+
+                -- Black overlay for value
+                local valOverlay = Instance.new("Frame")
+                valOverlay.Size = UDim2.fromScale(1, 1)
+                valOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
+                valOverlay.BorderSizePixel = 0
+                valOverlay.Parent = SV
+
+                local valCorner = Instance.new("UICorner")
+                valCorner.CornerRadius = UDim.new(0, 6)
+                valCorner.Parent = valOverlay
+
+                local valGrad = Instance.new("UIGradient")
+                valGrad.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 1),
+                    NumberSequenceKeypoint.new(1, 0),
+                })
+                valGrad.Rotation = 90
+                valGrad.Parent = valOverlay
+
+                local SVCursor = Instance.new("Frame")
+                SVCursor.Size = UDim2.fromOffset(10, 10)
+                SVCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+                SVCursor.Position = UDim2.fromScale(s, 1 - v)
+                SVCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                SVCursor.BorderSizePixel = 0
+                SVCursor.ZIndex = 3
+                SVCursor.Parent = SV
+
+                local SVCursorCorner = Instance.new("UICorner")
+                SVCursorCorner.CornerRadius = UDim.new(1, 0)
+                SVCursorCorner.Parent = SVCursor
+
+                local SVCursorStroke = Instance.new("UIStroke")
+                SVCursorStroke.Color = Color3.fromRGB(0, 0, 0)
+                SVCursorStroke.Thickness = 1
+                SVCursorStroke.Parent = SVCursor
+
+                -- Hue bar
+                local HueBar = Instance.new("ImageButton")
+                HueBar.Name = "Hue"
+                HueBar.AutoButtonColor = false
+                HueBar.Size = UDim2.fromOffset(16, 100)
+                HueBar.Position = UDim2.fromOffset(126, 8)
+                HueBar.BorderSizePixel = 0
+                HueBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                HueBar.Parent = Panel
+
+                local HueCorner = Instance.new("UICorner")
+                HueCorner.CornerRadius = UDim.new(0, 4)
+                HueCorner.Parent = HueBar
+
+                local hueGrad = Instance.new("UIGradient")
+                hueGrad.Rotation = 90
+                hueGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+                    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+                    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+                })
+                hueGrad.Parent = HueBar
+
+                local HueCursor = Instance.new("Frame")
+                HueCursor.Size = UDim2.new(1, 4, 0, 4)
+                HueCursor.Position = UDim2.new(0.5, 0, h, 0)
+                HueCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+                HueCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                HueCursor.BorderSizePixel = 0
+                HueCursor.ZIndex = 3
+                HueCursor.Parent = HueBar
+
+                local HueCursorCorner = Instance.new("UICorner")
+                HueCursorCorner.CornerRadius = UDim.new(0, 2)
+                HueCursorCorner.Parent = HueCursor
+
+                -- Hex display
+                local HexLabel = Instance.new("TextLabel")
+                HexLabel.BackgroundTransparency = 1
+                HexLabel.Size = UDim2.fromOffset(55, 20)
+                HexLabel.Position = UDim2.fromOffset(148, 8)
+                HexLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+                HexLabel.TextSize = 11
+                HexLabel.TextColor3 = Color3.fromRGB(200, 190, 220)
+                HexLabel.TextXAlignment = Enum.TextXAlignment.Left
+                HexLabel.Text = string.format("#%02X%02X%02X", math.floor(currentColor.R * 255 + 0.5), math.floor(currentColor.G * 255 + 0.5), math.floor(currentColor.B * 255 + 0.5))
+                HexLabel.Parent = Panel
+
+                local BigPreview = Instance.new("Frame")
+                BigPreview.Size = UDim2.fromOffset(48, 48)
+                BigPreview.Position = UDim2.fromOffset(148, 36)
+                BigPreview.BackgroundColor3 = currentColor
+                BigPreview.BorderSizePixel = 0
+                BigPreview.Parent = Panel
+
+                local BigPreviewCorner = Instance.new("UICorner")
+                BigPreviewCorner.CornerRadius = UDim.new(0, 8)
+                BigPreviewCorner.Parent = BigPreview
+
+                local function applyColor(fireCallback)
+                    currentColor = Color3.fromHSV(h, s, v)
+                    Preview.BackgroundColor3 = currentColor
+                    BigPreview.BackgroundColor3 = currentColor
+                    SV.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                    HexLabel.Text = string.format("#%02X%02X%02X",
+                        math.floor(currentColor.R * 255 + 0.5),
+                        math.floor(currentColor.G * 255 + 0.5),
+                        math.floor(currentColor.B * 255 + 0.5)
+                    )
+                    if settings.flag then
+                        Library._config._flags[settings.flag] = {
+                            R = currentColor.R,
+                            G = currentColor.G,
+                            B = currentColor.B,
+                        }
+                        pcall(function()
+                            Config:save(game.GameId, Library._config)
+                        end)
+                    end
+                    if fireCallback ~= false then
+                        settings.callback(currentColor)
+                    end
+                end
+
+                local draggingSV = false
+                local draggingHue = false
+
+                local function updateSV(inputPos)
+                    local rel = SV.AbsolutePosition
+                    local size = SV.AbsoluteSize
+                    local x = math.clamp((inputPos.X - rel.X) / math.max(size.X, 1), 0, 1)
+                    local y = math.clamp((inputPos.Y - rel.Y) / math.max(size.Y, 1), 0, 1)
+                    s = x
+                    v = 1 - y
+                    SVCursor.Position = UDim2.fromScale(s, 1 - v)
+                    applyColor(true)
+                end
+
+                local function updateHue(inputPos)
+                    local rel = HueBar.AbsolutePosition
+                    local size = HueBar.AbsoluteSize
+                    local y = math.clamp((inputPos.Y - rel.Y) / math.max(size.Y, 1), 0, 1)
+                    h = y
+                    HueCursor.Position = UDim2.new(0.5, 0, h, 0)
+                    SV.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+                    applyColor(true)
+                end
+
+                SV.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        draggingSV = true
+                        updateSV(input.Position)
+                    end
+                end)
+
+                HueBar.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        draggingHue = true
+                        updateHue(input.Position)
+                    end
+                end)
+
+                Connections["cp_sv_" .. tostring(settings.flag or LayoutOrderModule)] = UserInputService.InputChanged:Connect(function(input)
+                    if not open then return end
+                    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                        if draggingSV then updateSV(input.Position) end
+                        if draggingHue then updateHue(input.Position) end
+                    end
+                end)
+
+                Connections["cp_end_" .. tostring(settings.flag or LayoutOrderModule)] = UserInputService.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        draggingSV = false
+                        draggingHue = false
+                    end
+                end)
+
+                local ColorManager = {}
+
+                function ColorManager:Set(color)
+                    if typeof(color) == "table" and color.R then
+                        color = Color3.new(color.R, color.G, color.B)
+                    end
+                    if typeof(color) ~= "Color3" then return end
+                    currentColor = color
+                    h, s, v = color:ToHSV()
+                    SVCursor.Position = UDim2.fromScale(s, 1 - v)
+                    HueCursor.Position = UDim2.new(0.5, 0, h, 0)
+                    applyColor(false)
+                end
+
+                function ColorManager:Get()
+                    return currentColor
+                end
+
+                local panelSizeAdded = false
+                local PANEL_EXTRA = 132
+
+                local function refreshModuleAndSection()
+                    Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + ModuleManager._size + ModuleManager._multiplier)
+                    Options.Size = UDim2.fromOffset(241, ModuleManager._size + 8)
+                    local section = Module.Parent
+                    if section and section:IsA("ScrollingFrame") then
+                        local layout = section:FindFirstChildOfClass("UIListLayout")
+                        if layout then
+                            task.defer(function()
+                                section.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 56)
+                            end)
+                        end
+                    end
+                end
+
+                function ColorManager:SetOpen(state)
+                    local want = state and true or false
+                    if want == open then
+                        Panel.Visible = open
+                        return
+                    end
+                    open = want
+                    Panel.Visible = open
+                    if open and not panelSizeAdded then
+                        ModuleManager._size += PANEL_EXTRA
+                        panelSizeAdded = true
+                    elseif (not open) and panelSizeAdded then
+                        ModuleManager._size = math.max(11, ModuleManager._size - PANEL_EXTRA)
+                        panelSizeAdded = false
+                    end
+                    refreshModuleAndSection()
+                end
+
+                Row.MouseButton1Click:Connect(function()
+                    ColorManager:SetOpen(not open)
+                end)
+
+                if settings.flag and Library:flag_type(settings.flag, "table") then
+                    local saved = Library._config._flags[settings.flag]
+                    if type(saved) == "table" and saved.R then
+                        ColorManager:Set(Color3.new(saved.R, saved.G, saved.B))
+                    end
+                end
+
+                Library:RegisterElement(settings.flag, "colorpicker", function(v)
+                    ColorManager:Set(v)
+                end, function()
+                    local c = ColorManager:Get()
+                    return { R = c.R, G = c.G, B = c.B }
+                end)
+
+                applyColor(false)
+                return ColorManager
+            end
+
             -- Ensure module starts expanded so options are always visible
             if ModuleManager._size > 0 then
                 local hb = showModuleToggle and 102 or 56
