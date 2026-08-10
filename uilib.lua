@@ -349,9 +349,10 @@ function Library.new(settings)
         _settings = {
             Title = settings.Title or "Zex Hub",
             Subtitle = settings.Subtitle or "",
+            Icon = settings.Icon or "rbxassetid://130655920174103",
             Keybind = settings.Keybind or Enum.KeyCode.RightControl,
             ToggleIcon = settings.ToggleIcon == true,
-            ToggleIconImage = settings.ToggleIconImage or "rbxassetid://130655920174103",
+            ToggleIconImage = settings.ToggleIconImage or settings.Icon or "rbxassetid://130655920174103",
             ToggleIconSize = settings.ToggleIconSize or 60,
         },
     }, Library)
@@ -645,6 +646,22 @@ function Library:create_ui()
     function self:SetState(state)
         self:change_visiblity(state and true or false)
     end
+
+    function self:SetIcon(image)
+        local img = tostring(image or "")
+        if img == "" then return end
+        self._settings.Icon = img
+        if self._logoIcon then
+            self._logoIcon.Image = img
+        end
+        -- Also update floating toggle icon if present
+        if self._toggleGui then
+            local btn = self._toggleGui:FindFirstChild("ToggleButton")
+            if btn and btn:IsA("ImageButton") then
+                btn.Image = img
+            end
+        end
+    end
     
     local Pin = Instance.new('Frame')
     Pin.Name = 'Pin'
@@ -664,7 +681,7 @@ function Library:create_ui()
     Icon.ScaleType = Enum.ScaleType.Fit
     Icon.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Icon.AnchorPoint = Vector2.new(0, 0.5)
-    Icon.Image = 'rbxassetid://130655920174103'
+    Icon.Image = self._settings.Icon or 'rbxassetid://130655920174103'
     Icon.BackgroundTransparency = 1
     Icon.Position = UDim2.new(0.021, 0,0.053, 0)
     Icon.Name = 'Icon'
@@ -672,6 +689,7 @@ function Library:create_ui()
     Icon.BorderSizePixel = 0
     Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Icon.Parent = Handler
+    self._logoIcon = Icon
     
     local Divider = Instance.new('Frame')
     Divider.Name = 'Divider'
@@ -3323,6 +3341,7 @@ end
 --      local Window = Library.new({
 --          Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
 --          Subtitle = "<font color='#33ff00'><b>San Diego Border Roleplay</b></font>",
+--          Icon = "rbxassetid://130655920174103",   -- logo de la UI
 --          Keybind = Enum.KeyCode.RightControl,
 --          ToggleIcon = true,
 --          ToggleIconImage = "rbxassetid://130655920174103",
@@ -3331,13 +3350,12 @@ end
 --
 --      Window:load()
 --
---      -- Cambiar título / subtítulo en runtime:
+--      -- Cambiar en runtime:
 --      Window:SetTitle("ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>")
 --      Window:SetSubtitle("<font color='#33ff00'><b>Mi Juego</b></font>")
---
---      -- Abrir / cerrar desde código:
---      Window:SetState(true)
---      Window:SetState(false)
+--      Window:SetIcon("rbxassetid://123456789")
+--      Window:SetState(true)   -- abrir
+--      Window:SetState(false)  -- cerrar
 -- ============================================
 
 return Library
