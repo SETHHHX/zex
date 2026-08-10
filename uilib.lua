@@ -56,6 +56,10 @@ if not isfolder("ZexHub") then
     makefolder("ZexHub")
 end
 
+if not isfolder("ZexHub/Configs") then
+    makefolder("ZexHub/Configs")
+end
+
 
 local Connections = setmetatable({
     disconnect = function(self, connection)
@@ -278,34 +282,44 @@ function AcrylicBlur:change_visiblity(state: boolean)
 end
 
 
+local function sanitize_config_name(name: string): string
+    name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    name = name:gsub("[^%w%-%_ ]", "")
+    if name == "" then
+        return "default"
+    end
+    return name
+end
+
 local Config = setmetatable({
     save = function(self: any, file_name: any, config: any)
-        -- Auto-save disabled: settings reset every execute
-        return
+        local ok, err = pcall(function()
+            writefile("ZexHub/" .. tostring(file_name) .. ".json", HttpService:JSONEncode(config))
+        end)
+        if not ok then
+            warn("failed to save config", err)
+        end
     end,
     load = function(self: any, file_name: any, config: any)
         local success_load, result = pcall(function()
-            if not isfile('ZexHub/'..file_name..'.json') then
+            if not isfile("ZexHub/" .. file_name .. ".json") then
                 self:save(file_name, config)
-        
                 return
             end
-        
-            local flags = readfile('ZexHub/'..file_name..'.json')
-        
+
+            local flags = readfile("ZexHub/" .. file_name .. ".json")
             if not flags then
                 self:save(file_name, config)
-        
                 return
             end
 
             return HttpService:JSONDecode(flags)
         end)
-    
+
         if not success_load then
-            warn('failed to load config', result)
+            warn("failed to load config", result)
         end
-    
+
         if not result then
             result = {
                 _flags = {},
@@ -313,8 +327,72 @@ local Config = setmetatable({
                 _library = {}
             }
         end
-    
+
         return result
+    end,
+    save_named = function(self: any, name: string, config: any)
+        name = sanitize_config_name(name)
+        local ok, err = pcall(function()
+            if not isfolder("ZexHub/Configs") then
+                makefolder("ZexHub/Configs")
+            end
+            writefile("ZexHub/Configs/" .. name .. ".json", HttpService:JSONEncode(config))
+        end)
+        if not ok then
+            warn("failed to save named config", err)
+            return false
+        end
+        return true
+    end,
+    load_named = function(self: any, name: string)
+        name = sanitize_config_name(name)
+        local path = "ZexHub/Configs/" .. name .. ".json"
+        local ok, result = pcall(function()
+            if not isfile(path) then
+                return nil
+            end
+            return HttpService:JSONDecode(readfile(path))
+        end)
+        if not ok then
+            warn("failed to load named config", result)
+            return nil
+        end
+        return result
+    end,
+    delete_named = function(self: any, name: string)
+        name = sanitize_config_name(name)
+        local path = "ZexHub/Configs/" .. name .. ".json"
+        local ok, err = pcall(function()
+            if isfile(path) then
+                delfile(path)
+            end
+        end)
+        if not ok then
+            warn("failed to delete config", err)
+            return false
+        end
+        return true
+    end,
+    list_named = function(self: any)
+        local list = {}
+        local ok, files = pcall(function()
+            if not isfolder("ZexHub/Configs") then
+                makefolder("ZexHub/Configs")
+                return {}
+            end
+            return listfiles("ZexHub/Configs")
+        end)
+        if not ok or type(files) ~= "table" then
+            return list
+        end
+        for _, path in files do
+            local name = tostring(path):match("([^/\\]+)%.json$")
+            if name then
+                table.insert(list, name)
+            end
+        end
+        table.sort(list)
+        return list
     end
 }, Config)
 
@@ -325,6 +403,8 @@ local Library = {
         _keybinds = {},
         _library = {}
     },
+
+    _elements = {}, -- flag -> { type, set, get }
 
     _choosing_keybind = false,
     _device = nil,
@@ -339,6 +419,76 @@ local Library = {
     _container_position = nil
 }
 Library.__index = Library
+
+function Library:RegisterElement(flag: string, elementType: string, setFn: any, getFn: any)
+    if not flag or flag == "" then
+        return
+    end
+    self._elements[flag] = {
+        type = elementType,
+        set = setFn,
+        get = getFn
+    }
+end
+
+function Library:GetConfigs()
+    return Config:list_named()
+end
+
+function Library:SaveConfig(name: string)
+    name = sanitize_config_name(name)
+    -- Snapshot current flags from live elements when possible
+    for flag, el in pairs(self._elements) do
+        if el.get then
+            local ok, val = pcall(el.get)
+            if ok then
+                self._config._flags[flag] = val
+            end
+        end
+    end
+    local payload = {
+        _flags = self._config._flags,
+        _keybinds = self._config._keybinds,
+        _library = self._config._library or {},
+        _name = name,
+        _savedAt = os.time()
+    }
+    local ok = Config:save_named(name, payload)
+    return ok, name
+end
+
+function Library:LoadConfig(name: string)
+    name = sanitize_config_name(name)
+    local data = Config:load_named(name)
+    if not data then
+        return false, "Config not found"
+    end
+
+    if type(data._flags) == "table" then
+        self._config._flags = data._flags
+    end
+    if type(data._keybinds) == "table" then
+        self._config._keybinds = data._keybinds
+    end
+    if type(data._library) == "table" then
+        self._config._library = data._library
+    end
+
+    -- Apply to live UI elements
+    for flag, value in pairs(self._config._flags) do
+        local el = self._elements[flag]
+        if el and el.set then
+            pcall(el.set, value)
+        end
+    end
+
+    return true, name
+end
+
+function Library:DeleteConfig(name: string)
+    name = sanitize_config_name(name)
+    return Config:delete_named(name)
+end
 
 
 function Library.new(settings)
@@ -1860,6 +2010,12 @@ end
                 function TextboxManager:Set(text)
                     self:update_text(tostring(text or ""))
                 end
+
+                Library:RegisterElement(settings.flag, "textbox", function(v)
+                    TextboxManager:Set(v)
+                end, function()
+                    return TextboxManager:Get()
+                end)
             
                 if Library:flag_type(settings.flag, "string") then
                     TextboxManager:update_text(Library._config._flags[settings.flag])
@@ -1969,6 +2125,20 @@ Checkbox.LayoutOrder = LayoutOrderModule
                     settings.callback(self._state)
                 end
             
+                function CheckboxManager:Get()
+                    return self._state
+                end
+
+                function CheckboxManager:Set(state)
+                    self:change_state(state and true or false)
+                end
+
+                Library:RegisterElement(settings.flag, "checkbox", function(v)
+                    CheckboxManager:Set(v)
+                end, function()
+                    return CheckboxManager:Get()
+                end)
+
                 if Library:flag_type(settings.flag, "boolean") then
                     CheckboxManager:change_state(Library._config._flags[settings.flag])
                 end
@@ -2206,6 +2376,12 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 function ToggleManager:Set(state)
                     self:change_state(state and true or false)
                 end
+
+                Library:RegisterElement(settings.flag, "toggle", function(v)
+                    ToggleManager:Set(v)
+                end, function()
+                    return ToggleManager:Get()
+                end)
 
                 -- Optional keybind (same API as checkbox)
                 function ToggleManager:AddKeybind()
@@ -2583,6 +2759,20 @@ if not settings or settings and not settings.disableline then
     
                 Slider.MouseButton1Down:Connect(function()
                     SliderManager:input()
+                end)
+
+                function SliderManager:Set(value)
+                    self:set_percentage(tonumber(value) or settings.minimum_value or 0)
+                end
+
+                function SliderManager:Get()
+                    return Library._config._flags[settings.flag]
+                end
+
+                Library:RegisterElement(settings.flag, "slider", function(v)
+                    SliderManager:Set(v)
+                end, function()
+                    return SliderManager:Get()
                 end)
 
                 return SliderManager
@@ -2973,14 +3163,53 @@ if not settings or settings and not settings.disableline then
                 end
 
                 function DropdownManager:New(value)
-                    Dropdown:Destroy(true);
-                    value.OrderValue = Dropdown.LayoutOrder
+                    local oldOrder = Dropdown.LayoutOrder
+                    Dropdown:Destroy()
+                    value.Order = true
+                    value.OrderValue = oldOrder
                     ModuleManager._multiplier -= CurrentDropSizeState
                     return ModuleManager:create_dropdown(value)
                 end;
 
+                function DropdownManager:Set(value)
+                    if settings.multi_dropdown then
+                        local selected = {}
+                        if type(value) == "table" then
+                            selected = value
+                        elseif type(value) == "string" and value ~= "" then
+                            selected = convertStringToTable(value)
+                        end
+                        Library._config._flags[settings.flag] = selected
+                        CurrentOption.Text = table.concat(selected, ", ")
+                        for _, object in Options:GetChildren() do
+                            if object.Name == "Option" then
+                                if table.find(selected, object.Text) then
+                                    object.TextTransparency = 0.2
+                                else
+                                    object.TextTransparency = 0.6
+                                end
+                            end
+                        end
+                        settings.callback(selected)
+                    else
+                        self:update(value)
+                    end
+                end
+
+                function DropdownManager:Get()
+                    return Library._config._flags[settings.flag]
+                end
+
+                Library:RegisterElement(settings.flag, "dropdown", function(v)
+                    DropdownManager:Set(v)
+                end, function()
+                    return DropdownManager:Get()
+                end)
+
                 if Library:flag_type(settings.flag, 'string') then
                     DropdownManager:update(Library._config._flags[settings.flag])
+                elseif Library:flag_type(settings.flag, 'table') then
+                    DropdownManager:Set(Library._config._flags[settings.flag])
                 else
                     DropdownManager:update(settings.options[1])
                 end
@@ -3233,6 +3462,14 @@ if not settings or settings and not settings.disableline then
             if ModuleManager._size > 0 then
                 local hb = showModuleToggle and 102 or 56
                 Module.Size = UDim2.fromOffset(241, hb + ModuleManager._size + ModuleManager._multiplier)
+            end
+
+            if showModuleToggle and settings.flag then
+                Library:RegisterElement(settings.flag, "module", function(v)
+                    ModuleManager:change_state(v and true or false)
+                end, function()
+                    return ModuleManager._state
+                end)
             end
 
             return ModuleManager
