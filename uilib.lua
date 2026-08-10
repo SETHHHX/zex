@@ -443,19 +443,32 @@ function Library:GetConfigs()
     return Config:list_named()
 end
 
+local META_FLAGS = {
+    ConfigNameInput = true,
+    SelectedConfig = true,
+}
+
 function Library:SaveConfig(name: string)
     name = sanitize_config_name(name)
     -- Snapshot current flags from live elements when possible
     for flag, el in pairs(self._elements) do
-        if el.get then
+        if el.get and not META_FLAGS[flag] then
             local ok, val = pcall(el.get)
             if ok then
                 self._config._flags[flag] = val
             end
         end
     end
+
+    local flagsCopy = {}
+    for k, v in pairs(self._config._flags) do
+        if not META_FLAGS[k] then
+            flagsCopy[k] = v
+        end
+    end
+
     local payload = {
-        _flags = self._config._flags,
+        _flags = flagsCopy,
         _keybinds = self._config._keybinds,
         _library = self._config._library or {},
         _name = name,
@@ -473,7 +486,11 @@ function Library:LoadConfig(name: string)
     end
 
     if type(data._flags) == "table" then
-        self._config._flags = data._flags
+        for k, v in pairs(data._flags) do
+            if not META_FLAGS[k] then
+                self._config._flags[k] = v
+            end
+        end
     end
     if type(data._keybinds) == "table" then
         self._config._keybinds = data._keybinds
@@ -482,11 +499,13 @@ function Library:LoadConfig(name: string)
         self._config._library = data._library
     end
 
-    -- Apply to live UI elements
+    -- Apply to live UI elements (skip config UI meta flags)
     for flag, value in pairs(self._config._flags) do
-        local el = self._elements[flag]
-        if el and el.set then
-            pcall(el.set, value)
+        if not META_FLAGS[flag] then
+            local el = self._elements[flag]
+            if el and el.set then
+                pcall(el.set, value)
+            end
         end
     end
 
@@ -495,7 +514,58 @@ end
 
 function Library:DeleteConfig(name: string)
     name = sanitize_config_name(name)
-    return Config:delete_named(name)
+    local current = self:GetAutoLoad()
+    local ok = Config:delete_named(name)
+    if ok and current and sanitize_config_name(current) == name then
+        self:ClearAutoLoad()
+    end
+    return ok
+end
+
+function Library:SetAutoLoad(name: string)
+    name = sanitize_config_name(name)
+    local ok, err = pcall(function()
+        writefile("ZexHub/autoload.txt", name)
+    end)
+    if not ok then
+        warn("failed to set autoload", err)
+        return false
+    end
+    return true, name
+end
+
+function Library:GetAutoLoad()
+    local ok, result = pcall(function()
+        if not isfile("ZexHub/autoload.txt") then
+            return nil
+        end
+        local name = readfile("ZexHub/autoload.txt")
+        if type(name) ~= "string" or name == "" then
+            return nil
+        end
+        return name:gsub("^%s+", ""):gsub("%s+$", "")
+    end)
+    if not ok then
+        return nil
+    end
+    return result
+end
+
+function Library:ClearAutoLoad()
+    local ok = pcall(function()
+        if isfile("ZexHub/autoload.txt") then
+            delfile("ZexHub/autoload.txt")
+        end
+    end)
+    return ok and true or false
+end
+
+function Library:TryAutoLoad()
+    local name = self:GetAutoLoad()
+    if not name or name == "" then
+        return false, nil
+    end
+    return self:LoadConfig(name)
 end
 
 
@@ -521,13 +591,26 @@ function Library.new(settings)
 end
 
 
+local NotificationGui = Instance.new("ScreenGui")
+NotificationGui.Name = "ZexHubNotifications"
+NotificationGui.ResetOnSpawn = false
+NotificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+NotificationGui.DisplayOrder = 999999998
+NotificationGui.IgnoreGuiInset = true
+pcall(function()
+    NotificationGui.Parent = CoreGui
+end)
+if not NotificationGui.Parent then
+    NotificationGui.Parent = game:GetService("CoreGui")
+end
+
 local NotificationContainer = Instance.new("Frame")
-NotificationContainer.Name = "RobloxCoreGuis"
-NotificationContainer.Size = UDim2.new(0, 300, 0, 0)  
-NotificationContainer.Position = UDim2.new(0.8, 0, 0, 10)  
+NotificationContainer.Name = "Container"
+NotificationContainer.Size = UDim2.new(0, 320, 0, 0)
+NotificationContainer.Position = UDim2.new(1, -340, 0, 16)
 NotificationContainer.BackgroundTransparency = 1
-NotificationContainer.ClipsDescendants = false;
-NotificationContainer.Parent = game:GetService("CoreGui").RobloxGui:FindFirstChild("RobloxCoreGuis") or Instance.new("ScreenGui", game:GetService("CoreGui").RobloxGui)
+NotificationContainer.ClipsDescendants = false
+NotificationContainer.Parent = NotificationGui
 NotificationContainer.AutomaticSize = Enum.AutomaticSize.Y
 
 
@@ -539,97 +622,142 @@ UIListLayout.Parent = NotificationContainer
 
 
 function Library.SendNotification(settings)
-  
+    settings = settings or {}
+
     local Notification = Instance.new("Frame")
-    Notification.Size = UDim2.new(1, 0, 0, 60)  
-    Notification.BackgroundTransparency = 1  
+    Notification.Size = UDim2.new(1, 0, 0, 0)
+    Notification.BackgroundTransparency = 1
     Notification.BorderSizePixel = 0
     Notification.Name = "Notification"
-    Notification.Parent = NotificationContainer  
-    Notification.AutomaticSize = Enum.AutomaticSize.Y  
+    Notification.Parent = NotificationContainer
+    Notification.AutomaticSize = Enum.AutomaticSize.Y
 
-   
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 4)
-    UICorner.Parent = Notification
-
-   
     local InnerFrame = Instance.new("Frame")
-    InnerFrame.Size = UDim2.new(1, 0, 0, 60)  
-    InnerFrame.Position = UDim2.new(0, 0, 0, 0)  
-    InnerFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    InnerFrame.BackgroundTransparency = 1
+    InnerFrame.Size = UDim2.new(1, 0, 0, 0)
+    InnerFrame.Position = UDim2.new(1, 20, 0, 0)
+    InnerFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
+    InnerFrame.BackgroundTransparency = 0.08
     InnerFrame.BorderSizePixel = 0
     InnerFrame.Name = "InnerFrame"
     InnerFrame.Parent = Notification
-    InnerFrame.AutomaticSize = Enum.AutomaticSize.Y  
+    InnerFrame.AutomaticSize = Enum.AutomaticSize.Y
 
-    
     local InnerUICorner = Instance.new("UICorner")
-    InnerUICorner.CornerRadius = UDim.new(0, 4)
+    InnerUICorner.CornerRadius = UDim.new(0, 10)
     InnerUICorner.Parent = InnerFrame
 
-   
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Color = Color3.fromRGB(140, 90, 220)
+    Stroke.Transparency = 0.35
+    Stroke.Thickness = 1.2
+    Stroke.Parent = InnerFrame
+
+    local Accent = Instance.new("Frame")
+    Accent.Size = UDim2.new(0, 3, 1, 0)
+    Accent.Position = UDim2.new(0, 0, 0, 0)
+    Accent.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
+    Accent.BorderSizePixel = 0
+    Accent.Parent = InnerFrame
+
+    local AccentCorner = Instance.new("UICorner")
+    AccentCorner.CornerRadius = UDim.new(0, 2)
+    AccentCorner.Parent = Accent
+
+    local Pad = Instance.new("UIPadding")
+    Pad.PaddingTop = UDim.new(0, 10)
+    Pad.PaddingBottom = UDim.new(0, 10)
+    Pad.PaddingLeft = UDim.new(0, 14)
+    Pad.PaddingRight = UDim.new(0, 12)
+    Pad.Parent = InnerFrame
+
     local Title = Instance.new("TextLabel")
-    Title.Text = settings.title or "Notification Title"
+    Title.Text = tostring(settings.title or "Notification")
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+    Title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
     Title.TextSize = 14
-    Title.Size = UDim2.new(1, -10, 0, 20)  
-    Title.Position = UDim2.new(0, 5, 0, 5)
+    Title.Size = UDim2.new(1, 0, 0, 18)
     Title.BackgroundTransparency = 1
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.TextYAlignment = Enum.TextYAlignment.Center
     Title.TextWrapped = true
-    Title.AutomaticSize = Enum.AutomaticSize.Y 
     Title.Parent = InnerFrame
 
-    
     local Body = Instance.new("TextLabel")
-    Body.Text = settings.text or "This is the body of the notification."
-    Body.TextColor3 = Color3.fromRGB(180, 180, 180)
-    Body.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    Body.Text = tostring(settings.text or "")
+    Body.TextColor3 = Color3.fromRGB(190, 180, 210)
+    Body.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
     Body.TextSize = 12
-    Body.Size = UDim2.new(1, -10, 0, 30) 
-    Body.Position = UDim2.new(0, 5, 0, 25)
+    Body.Size = UDim2.new(1, 0, 0, 0)
+    Body.Position = UDim2.new(0, 0, 0, 20)
     Body.BackgroundTransparency = 1
     Body.TextXAlignment = Enum.TextXAlignment.Left
     Body.TextYAlignment = Enum.TextYAlignment.Top
-    Body.TextWrapped = true  
-    Body.AutomaticSize = Enum.AutomaticSize.Y  
+    Body.TextWrapped = true
+    Body.AutomaticSize = Enum.AutomaticSize.Y
     Body.Parent = InnerFrame
 
-   
     task.spawn(function()
-        wait(0.1) 
-        
-        local totalHeight = Title.TextBounds.Y + Body.TextBounds.Y + 10  
-        InnerFrame.Size = UDim2.new(1, 0, 0, totalHeight)  
-    end)
+        task.wait()
+        local h = math.max(44, Title.TextBounds.Y + Body.TextBounds.Y + 24)
+        InnerFrame.Size = UDim2.new(1, 0, 0, h)
+        Notification.Size = UDim2.new(1, 0, 0, h)
 
-   
-    task.spawn(function()
-       
-        local tweenIn = TweenService:Create(InnerFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-            Position = UDim2.new(0, 0, 0, 10 + NotificationContainer.Size.Y.Offset)
+        local tweenIn = TweenService:Create(InnerFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 0, 0, 0)
         })
         tweenIn:Play()
 
-        
-        local duration = settings.duration or 5  
-        wait(duration)
+        task.wait(settings.duration or 4)
 
-        
-        local tweenOut = TweenService:Create(InnerFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-            Position = UDim2.new(1, 310, 0, 10 + NotificationContainer.Size.Y.Offset) 
+        local tweenOut = TweenService:Create(InnerFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 40, 0, 0),
+            BackgroundTransparency = 1
         })
+        TweenService:Create(Stroke, TweenInfo.new(0.3), { Transparency = 1 }):Play()
+        TweenService:Create(Title, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+        TweenService:Create(Body, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
         tweenOut:Play()
-
-        
         tweenOut.Completed:Connect(function()
             Notification:Destroy()
         end)
     end)
+end
+
+-- Convert any flag value to safe display / storage string
+local function value_to_display(value)
+    if value == nil then
+        return ""
+    end
+    local t = typeof(value)
+    if t == "string" then
+        return value
+    end
+    if t == "number" or t == "boolean" then
+        return tostring(value)
+    end
+    if t == "table" then
+        if value.Name then
+            return tostring(value.Name)
+        end
+        -- array of strings
+        local parts = {}
+        local isArray = true
+        for k, v in pairs(value) do
+            if type(k) ~= "number" then
+                isArray = false
+                break
+            end
+            local s = value_to_display(v)
+            if s ~= "" then
+                table.insert(parts, s)
+            end
+        end
+        if isArray and #parts > 0 then
+            return table.concat(parts, ", ")
+        end
+        return ""
+    end
+    return tostring(value)
 end
 
 function Library:get_screen_scale()
@@ -1967,7 +2095,7 @@ end
                 Textbox.TextColor3 = Color3.fromRGB(230, 225, 240)
                 Textbox.PlaceholderColor3 = Color3.fromRGB(120, 110, 140)
                 Textbox.PlaceholderText = settings.placeholder
-                Textbox.Text = Library._config._flags[settings.flag] or ""
+                Textbox.Text = value_to_display(Library._config._flags[settings.flag])
                 Textbox.ClearTextOnFocus = false
                 Textbox.TextXAlignment = Enum.TextXAlignment.Center
                 Textbox.Parent = Row
@@ -2004,19 +2132,20 @@ end
                 end)
             
                 function TextboxManager:update_text(text: string)
-                    self._text = text
-                    Textbox.Text = text
-                    Library._config._flags[settings.flag] = self._text
+                    local safe = value_to_display(text)
+                    self._text = safe
+                    Textbox.Text = safe
+                    Library._config._flags[settings.flag] = safe
                     Config:save(game.GameId, Library._config)
-                    settings.callback(self._text)
+                    settings.callback(safe)
                 end
 
                 function TextboxManager:Get()
-                    return self._text
+                    return self._text or ""
                 end
 
                 function TextboxManager:Set(text)
-                    self:update_text(tostring(text or ""))
+                    self:update_text(value_to_display(text))
                 end
 
                 Library:RegisterElement(settings.flag, "textbox", function(v)
@@ -3037,17 +3166,13 @@ if not settings or settings and not settings.disableline then
                 
                         Library._config._flags[settings.flag] = convertStringToTable(CurrentOption.Text);
                     else
-                        local textValue = ""
-                        if typeof(option) == "string" then
-                            textValue = option
-                        elseif typeof(option) == "table" and option.Name then
-                            textValue = tostring(option.Name)
-                        elseif option ~= nil then
-                            textValue = tostring(option)
-                        elseif settings.options and settings.options[1] then
-                            local first = settings.options[1]
-                            textValue = (typeof(first) == "string" and first) or (typeof(first) == "table" and first.Name) or tostring(first)
-                            option = first
+                        local textValue = value_to_display(option)
+                        if textValue == "" and settings.options and settings.options[1] then
+                            option = settings.options[1]
+                            textValue = value_to_display(option)
+                        end
+                        if textValue == "" then
+                            textValue = "None"
                         end
 
                         CurrentOption.Text = textValue
@@ -3060,7 +3185,8 @@ if not settings or settings and not settings.disableline then
                                 end
                             end
                         end
-                        Library._config._flags[settings.flag] = option
+                        -- Always store a string for single dropdowns (never a table ref)
+                        Library._config._flags[settings.flag] = textValue
                     end
                 
                    
@@ -3197,12 +3323,18 @@ if not settings or settings and not settings.disableline then
                     if settings.multi_dropdown then
                         local selected = {}
                         if type(value) == "table" then
-                            selected = value
+                            for _, v in pairs(value) do
+                                local s = value_to_display(v)
+                                if s ~= "" then
+                                    table.insert(selected, s)
+                                end
+                            end
                         elseif type(value) == "string" and value ~= "" then
                             selected = convertStringToTable(value)
                         end
                         Library._config._flags[settings.flag] = selected
-                        CurrentOption.Text = table.concat(selected, ", ")
+                        local display = table.concat(selected, ", ")
+                        CurrentOption.Text = (display ~= "" and display) or "None"
                         for _, object in Options:GetChildren() do
                             if object.Name == "Option" then
                                 if table.find(selected, object.Text) then
@@ -3214,17 +3346,26 @@ if not settings or settings and not settings.disableline then
                         end
                         settings.callback(selected)
                     else
-                        if value == nil or value == "" then
+                        local textValue = value_to_display(value)
+                        if textValue == "" then
                             value = settings.options and settings.options[1]
+                            textValue = value_to_display(value)
                         end
-                        if value ~= nil then
-                            self:update(value)
+                        if textValue ~= "" then
+                            self:update(textValue)
+                        else
+                            CurrentOption.Text = "None"
+                            Library._config._flags[settings.flag] = nil
                         end
                     end
                 end
 
                 function DropdownManager:Get()
-                    return Library._config._flags[settings.flag]
+                    local v = Library._config._flags[settings.flag]
+                    if settings.multi_dropdown then
+                        return type(v) == "table" and v or {}
+                    end
+                    return value_to_display(v)
                 end
 
                 Library:RegisterElement(settings.flag, "dropdown", function(v)
