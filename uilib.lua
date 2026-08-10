@@ -1752,6 +1752,12 @@ end
                 return TextManager
             end
             function ModuleManager:create_textbox(settings: any)
+                settings = settings or {}
+                settings.callback = settings.callback or function() end
+                settings.title = settings.title or "Input"
+                settings.placeholder = settings.placeholder or "..."
+                settings.flag = settings.flag or ("Textbox_" .. tostring(math.random(10000, 99999)))
+
                 LayoutOrderModule = LayoutOrderModule + 1
             
                 local TextboxManager = {
@@ -1762,61 +1768,102 @@ end
                     self._size = 11
                 end
             
-                self._size += 34
+                self._size += 32
             
                 Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-            
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
-            
-                local Label = Instance.new('TextLabel')
-                Label.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-                Label.TextTransparency = 0.2
-                Label.Text = settings.title or "Enter text"
-                Label.Size = UDim2.new(0, 207, 0, 13)
-                Label.AnchorPoint = Vector2.new(0, 0)
-                Label.Position = UDim2.new(0, 0, 0, 0)
+
+                -- Row container (label left + input right)
+                local Row = Instance.new("Frame")
+                Row.Name = "TextboxRow"
+                Row.Size = UDim2.new(0, 207, 0, 28)
+                Row.BackgroundTransparency = 1
+                Row.BorderSizePixel = 0
+                Row.Parent = Options
+                Row.LayoutOrder = LayoutOrderModule
+
+                local Label = Instance.new("TextLabel")
+                Label.Name = "Title"
                 Label.BackgroundTransparency = 1
+                Label.Size = UDim2.new(0, 95, 1, 0)
+                Label.Position = UDim2.new(0, 0, 0, 0)
+                Label.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                Label.TextSize = 12
+                Label.TextColor3 = Color3.fromRGB(235, 230, 245)
+                Label.TextTransparency = 0.05
                 Label.TextXAlignment = Enum.TextXAlignment.Left
-                Label.BorderSizePixel = 0
-                Label.Parent = Options
-                Label.TextSize = 12;
-                Label.LayoutOrder = LayoutOrderModule
-            
-                local Textbox = Instance.new('TextBox')
-                Textbox.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-                Textbox.TextColor3 = Color3.fromRGB(255, 255, 255)
-                Textbox.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                Textbox.PlaceholderText = settings.placeholder or "Enter text..."
-                Textbox.Text = Library._config._flags[settings.flag] or ""
-                Textbox.Name = 'Textbox'
-                Textbox.Size = UDim2.new(0, 207, 0, 15)
+                Label.TextYAlignment = Enum.TextYAlignment.Center
+                Label.Text = settings.title
+                Label.Parent = Row
+
+                local Textbox = Instance.new("TextBox")
+                Textbox.Name = "Textbox"
+                Textbox.Size = UDim2.new(0, 100, 0, 24)
+                Textbox.Position = UDim2.new(1, 0, 0.5, 0)
+                Textbox.AnchorPoint = Vector2.new(1, 0.5)
+                Textbox.BackgroundColor3 = Color3.fromRGB(32, 28, 42)
+                Textbox.BackgroundTransparency = 0.15
                 Textbox.BorderSizePixel = 0
+                Textbox.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
                 Textbox.TextSize = 12
-                Textbox.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
-                Textbox.BackgroundTransparency = 0.9
+                Textbox.TextColor3 = Color3.fromRGB(230, 225, 240)
+                Textbox.PlaceholderColor3 = Color3.fromRGB(120, 110, 140)
+                Textbox.PlaceholderText = settings.placeholder
+                Textbox.Text = Library._config._flags[settings.flag] or ""
                 Textbox.ClearTextOnFocus = false
-                Textbox.Parent = Options
-                Textbox.LayoutOrder = LayoutOrderModule
-            
-                local UICorner = Instance.new('UICorner')
-                UICorner.CornerRadius = UDim.new(0, 4)
-                UICorner.Parent = Textbox
+                Textbox.TextXAlignment = Enum.TextXAlignment.Center
+                Textbox.Parent = Row
+
+                local BoxCorner = Instance.new("UICorner")
+                BoxCorner.CornerRadius = UDim.new(0, 8)
+                BoxCorner.Parent = Textbox
+
+                local BoxStroke = Instance.new("UIStroke")
+                BoxStroke.Color = Color3.fromRGB(90, 70, 130)
+                BoxStroke.Transparency = 0.55
+                BoxStroke.Thickness = 1
+                BoxStroke.Parent = Textbox
+
+                Textbox.Focused:Connect(function()
+                    TweenService:Create(BoxStroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(150, 100, 255),
+                        Transparency = 0.25
+                    }):Play()
+                    TweenService:Create(Textbox, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(42, 34, 58)
+                    }):Play()
+                end)
+
+                Textbox.FocusLost:Connect(function()
+                    TweenService:Create(BoxStroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(90, 70, 130),
+                        Transparency = 0.55
+                    }):Play()
+                    TweenService:Create(Textbox, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(32, 28, 42)
+                    }):Play()
+                    TextboxManager:update_text(Textbox.Text)
+                end)
             
                 function TextboxManager:update_text(text: string)
                     self._text = text
+                    Textbox.Text = text
                     Library._config._flags[settings.flag] = self._text
                     Config:save(game.GameId, Library._config)
                     settings.callback(self._text)
                 end
-            
-                if Library:flag_type(settings.flag, 'string') then
-                    TextboxManager:update_text(Library._config._flags[settings.flag])
+
+                function TextboxManager:Get()
+                    return self._text
+                end
+
+                function TextboxManager:Set(text)
+                    self:update_text(tostring(text or ""))
                 end
             
-                Textbox.FocusLost:Connect(function()
-                    TextboxManager:update_text(Textbox.Text)
-                end)
+                if Library:flag_type(settings.flag, "string") then
+                    TextboxManager:update_text(Library._config._flags[settings.flag])
+                end
             
                 return TextboxManager
             end   
@@ -2955,21 +3002,20 @@ if not settings or settings and not settings.disableline then
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 34
+                self._size += 32
 
                 Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
+                -- Row-style button (title left + chevron right)
                 local Button = Instance.new("TextButton")
                 Button.Name = "Button"
                 Button.Size = UDim2.new(0, 207, 0, 30)
-                Button.BackgroundColor3 = Color3.fromRGB(55, 42, 78)
+                Button.BackgroundColor3 = Color3.fromRGB(28, 24, 36)
+                Button.BackgroundTransparency = 0.25
                 Button.BorderSizePixel = 0
                 Button.AutoButtonColor = false
-                Button.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Button.TextSize = 13
-                Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-                Button.Text = settings.title
+                Button.Text = ""
                 Button.Parent = Options
                 Button.LayoutOrder = LayoutOrderModule
 
@@ -2978,43 +3024,93 @@ if not settings or settings and not settings.disableline then
                 Corner.Parent = Button
 
                 local Stroke = Instance.new("UIStroke")
-                Stroke.Color = Color3.fromRGB(110, 80, 160)
+                Stroke.Color = Color3.fromRGB(70, 55, 95)
                 Stroke.Transparency = 0.55
                 Stroke.Thickness = 1
                 Stroke.Parent = Button
 
+                local TitleLabel = Instance.new("TextLabel")
+                TitleLabel.Name = "Title"
+                TitleLabel.BackgroundTransparency = 1
+                TitleLabel.Size = UDim2.new(1, -36, 1, 0)
+                TitleLabel.Position = UDim2.new(0, 12, 0, 0)
+                TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                TitleLabel.TextSize = 13
+                TitleLabel.TextColor3 = Color3.fromRGB(235, 230, 245)
+                TitleLabel.TextTransparency = 0.05
+                TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+                TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+                TitleLabel.Text = settings.title
+                TitleLabel.Parent = Button
+
+                local Chevron = Instance.new("TextLabel")
+                Chevron.Name = "Chevron"
+                Chevron.BackgroundTransparency = 1
+                Chevron.Size = UDim2.new(0, 20, 1, 0)
+                Chevron.Position = UDim2.new(1, -24, 0, 0)
+                Chevron.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+                Chevron.TextSize = 16
+                Chevron.TextColor3 = Color3.fromRGB(160, 150, 180)
+                Chevron.TextTransparency = 0.15
+                Chevron.Text = "›"
+                Chevron.TextXAlignment = Enum.TextXAlignment.Center
+                Chevron.TextYAlignment = Enum.TextYAlignment.Center
+                Chevron.Parent = Button
+
                 Button.MouseEnter:Connect(function()
-                    TweenService:Create(Button, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(75, 55, 110)
+                    TweenService:Create(Button, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(42, 34, 58),
+                        BackgroundTransparency = 0.05
                     }):Play()
-                    TweenService:Create(Stroke, TweenInfo.new(0.2), {
-                        Transparency = 0.2
+                    TweenService:Create(Stroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(130, 90, 200),
+                        Transparency = 0.3
+                    }):Play()
+                    TweenService:Create(Chevron, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(210, 190, 255),
+                        TextTransparency = 0
+                    }):Play()
+                    TweenService:Create(TitleLabel, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(255, 255, 255)
                     }):Play()
                 end)
 
                 Button.MouseLeave:Connect(function()
-                    TweenService:Create(Button, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(55, 42, 78)
+                    TweenService:Create(Button, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(28, 24, 36),
+                        BackgroundTransparency = 0.25
                     }):Play()
-                    TweenService:Create(Stroke, TweenInfo.new(0.2), {
-                        Transparency = 0.45
+                    TweenService:Create(Stroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(70, 55, 95),
+                        Transparency = 0.55
+                    }):Play()
+                    TweenService:Create(Chevron, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(160, 150, 180),
+                        TextTransparency = 0.15
+                    }):Play()
+                    TweenService:Create(TitleLabel, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(235, 230, 245)
                     }):Play()
                 end)
 
                 Button.MouseButton1Click:Connect(function()
-                    -- click feedback
-                    TweenService:Create(Button, TweenInfo.new(0.08), {
-                        Size = UDim2.new(0, 203, 0, 28)
+                    TweenService:Create(Button, TweenInfo.new(0.06), {
+                        BackgroundTransparency = 0
                     }):Play()
-                    task.delay(0.08, function()
+                    task.delay(0.07, function()
                         TweenService:Create(Button, TweenInfo.new(0.12), {
-                            Size = UDim2.new(0, 207, 0, 30)
+                            BackgroundTransparency = 0.05
                         }):Play()
                     end)
                     settings.callback()
                 end)
 
-                return Button
+                return {
+                    Button = Button,
+                    SetText = function(_, text)
+                        TitleLabel.Text = tostring(text or "")
+                    end
+                }
             end
 
             function ModuleManager:create_feature(settings)
@@ -3023,84 +3119,112 @@ if not settings or settings and not settings.disableline then
                 settings.callback = settings.callback or function() end
                 settings.button_callback = settings.button_callback or function() end
 
-                local checked = false
                 LayoutOrderModule = LayoutOrderModule + 1
 
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 34
+                self._size += 32
 
                 Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
-                local FeatureContainer = Instance.new("Frame")
-                FeatureContainer.Size = UDim2.new(0, 207, 0, 30)
-                FeatureContainer.BackgroundTransparency = 1
-                FeatureContainer.Parent = Options
-                FeatureContainer.LayoutOrder = LayoutOrderModule
-
-                -- Main rounded button
+                -- Same row style as create_button
                 local FeatureButton = Instance.new("TextButton")
                 FeatureButton.Name = "FeatureButton"
-                FeatureButton.Size = UDim2.new(1, 0, 0, 30)
-                FeatureButton.BackgroundColor3 = Color3.fromRGB(55, 42, 78)
+                FeatureButton.Size = UDim2.new(0, 207, 0, 30)
+                FeatureButton.BackgroundColor3 = Color3.fromRGB(28, 24, 36)
+                FeatureButton.BackgroundTransparency = 0.25
                 FeatureButton.BorderSizePixel = 0
                 FeatureButton.AutoButtonColor = false
-                FeatureButton.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                FeatureButton.TextSize = 13
-                FeatureButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                FeatureButton.Text = settings.title
-                FeatureButton.Parent = FeatureContainer
+                FeatureButton.Text = ""
+                FeatureButton.Parent = Options
+                FeatureButton.LayoutOrder = LayoutOrderModule
 
                 local BtnCorner = Instance.new("UICorner")
                 BtnCorner.CornerRadius = UDim.new(0, 8)
                 BtnCorner.Parent = FeatureButton
 
                 local BtnStroke = Instance.new("UIStroke")
-                BtnStroke.Color = Color3.fromRGB(110, 80, 160)
+                BtnStroke.Color = Color3.fromRGB(70, 55, 95)
                 BtnStroke.Transparency = 0.55
                 BtnStroke.Thickness = 1
                 BtnStroke.Parent = FeatureButton
 
+                local TitleLabel = Instance.new("TextLabel")
+                TitleLabel.Name = "Title"
+                TitleLabel.BackgroundTransparency = 1
+                TitleLabel.Size = UDim2.new(1, -36, 1, 0)
+                TitleLabel.Position = UDim2.new(0, 12, 0, 0)
+                TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                TitleLabel.TextSize = 13
+                TitleLabel.TextColor3 = Color3.fromRGB(235, 230, 245)
+                TitleLabel.TextTransparency = 0.05
+                TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+                TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+                TitleLabel.Text = settings.title
+                TitleLabel.Parent = FeatureButton
+
+                local Chevron = Instance.new("TextLabel")
+                Chevron.Name = "Chevron"
+                Chevron.BackgroundTransparency = 1
+                Chevron.Size = UDim2.new(0, 20, 1, 0)
+                Chevron.Position = UDim2.new(1, -24, 0, 0)
+                Chevron.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+                Chevron.TextSize = 16
+                Chevron.TextColor3 = Color3.fromRGB(160, 150, 180)
+                Chevron.TextTransparency = 0.15
+                Chevron.Text = "›"
+                Chevron.TextXAlignment = Enum.TextXAlignment.Center
+                Chevron.TextYAlignment = Enum.TextYAlignment.Center
+                Chevron.Parent = FeatureButton
+
                 FeatureButton.MouseEnter:Connect(function()
-                    TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(75, 55, 110)
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(42, 34, 58),
+                        BackgroundTransparency = 0.05
                     }):Play()
-                    TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
-                        Transparency = 0.2
+                    TweenService:Create(BtnStroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(130, 90, 200),
+                        Transparency = 0.3
+                    }):Play()
+                    TweenService:Create(Chevron, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(210, 190, 255),
+                        TextTransparency = 0
                     }):Play()
                 end)
 
                 FeatureButton.MouseLeave:Connect(function()
-                    TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(55, 42, 78)
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.18), {
+                        BackgroundColor3 = Color3.fromRGB(28, 24, 36),
+                        BackgroundTransparency = 0.25
                     }):Play()
-                    TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
-                        Transparency = 0.45
+                    TweenService:Create(BtnStroke, TweenInfo.new(0.18), {
+                        Color = Color3.fromRGB(70, 55, 95),
+                        Transparency = 0.55
+                    }):Play()
+                    TweenService:Create(Chevron, TweenInfo.new(0.18), {
+                        TextColor3 = Color3.fromRGB(160, 150, 180),
+                        TextTransparency = 0.15
                     }):Play()
                 end)
 
                 FeatureButton.MouseButton1Click:Connect(function()
-                    TweenService:Create(FeatureButton, TweenInfo.new(0.08), {
-                        Size = UDim2.new(1, -4, 0, 28)
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.06), {
+                        BackgroundTransparency = 0
                     }):Play()
-                    task.delay(0.08, function()
+                    task.delay(0.07, function()
                         TweenService:Create(FeatureButton, TweenInfo.new(0.12), {
-                            Size = UDim2.new(1, 0, 0, 30)
+                            BackgroundTransparency = 0.05
                         }):Play()
                     end)
                     settings.button_callback()
-                    -- if no separate button_callback, also fire callback as click
-                    if not settings.disablecheck then
-                        -- just click action, checkbox is separate concept - treat as button primarily
-                    end
                 end)
 
                 return {
                     Button = FeatureButton,
                     SetText = function(_, text)
-                        FeatureButton.Text = tostring(text)
+                        TitleLabel.Text = tostring(text or "")
                     end
                 }
             end
