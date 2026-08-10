@@ -995,7 +995,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftSection.Parent = Sections
         
         local UIListLayout = Instance.new('UIListLayout')
-        UIListLayout.Padding = UDim.new(0, 14)
+        UIListLayout.Padding = UDim.new(0, 12)
         UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
         UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
         UIListLayout.Parent = LeftSection
@@ -1022,7 +1022,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         RightSection.Parent = Sections
         
         local UIListLayout = Instance.new('UIListLayout')
-        UIListLayout.Padding = UDim.new(0, 14)
+        UIListLayout.Padding = UDim.new(0, 12)
         UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
         UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
         UIListLayout.Parent = RightSection
@@ -1139,14 +1139,14 @@ else
 end
 
 ModuleName.Name = 'ModuleName'
-ModuleName.Size = UDim2.new(0, 205, 0, 18)
+ModuleName.Size = UDim2.new(0, 205, 0, 16)
 ModuleName.AnchorPoint = Vector2.new(0, 0.5)
 ModuleName.Position = UDim2.new(0.073, 0, 0.22, 0)
 ModuleName.BackgroundTransparency = 1
 ModuleName.TextXAlignment = Enum.TextXAlignment.Left
 ModuleName.BorderSizePixel = 0
 ModuleName.BorderColor3 = Color3.fromRGB(40, 40, 40) 
-ModuleName.TextSize = 16
+ModuleName.TextSize = 15
 ModuleName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 ModuleName.Parent = Header
             
@@ -1156,14 +1156,14 @@ Description.TextColor3 = Color3.fromRGB(150, 150, 150) -- GRIS SUAVE
 Description.TextTransparency = 0.5 -- Un poco más visible que antes
 Description.Text = settings.description
 Description.Name = 'Description'
-Description.Size = UDim2.new(0, 205, 0, 16)
+Description.Size = UDim2.new(0, 205, 0, 14)
 Description.AnchorPoint = Vector2.new(0, 0.5)
 Description.Position = UDim2.new(0.073, 0, 0.42, 0)
 Description.BackgroundTransparency = 1
 Description.TextXAlignment = Enum.TextXAlignment.Left
 Description.BorderSizePixel = 0
 Description.BorderColor3 = Color3.fromRGB(40, 40, 40)
-Description.TextSize = 13
+Description.TextSize = 12
 Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 Description.Parent = Header
             
@@ -1258,12 +1258,12 @@ Keybind.Active = true
             Options.Parent = Module
 
             local UIPadding = Instance.new('UIPadding')
-            UIPadding.PaddingTop = UDim.new(0, 10)
-            UIPadding.PaddingBottom = UDim.new(0, 12)
+            UIPadding.PaddingTop = UDim.new(0, 8)
+            UIPadding.PaddingBottom = UDim.new(0, 10)
             UIPadding.Parent = Options
 
             local UIListLayout = Instance.new('UIListLayout')
-            UIListLayout.Padding = UDim.new(0, 10)
+            UIListLayout.Padding = UDim.new(0, 7)
             UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout.Parent = Options
@@ -1273,8 +1273,8 @@ Keybind.Active = true
 
     -- Options always stay visible. Only the master toggle visual changes.
     -- Keep module expanded with all options
-    local targetSize = 108 + self._size + self._multiplier
-    if targetSize < 108 then targetSize = 108 end
+    local targetSize = 102 + self._size + self._multiplier
+    if targetSize < 102 then targetSize = 102 end
     TweenService:Create(Module, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         Size = UDim2.fromOffset(241, targetSize)
     }):Play()
@@ -1456,9 +1456,9 @@ end
                     self._size = 11
                 end
 
-                self._size += settings.customScale or 72
+                self._size += settings.customScale or 62
 
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Paragraph = Instance.new('Frame')
@@ -1497,7 +1497,7 @@ end
                 Title.BackgroundTransparency = 1
                 Title.TextXAlignment = Enum.TextXAlignment.Left
                 Title.TextYAlignment = Enum.TextYAlignment.Center
-                Title.TextSize = 14
+                Title.TextSize = 13
                 Title.TextWrapped = true
                 Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.Parent = Paragraph
@@ -1512,7 +1512,7 @@ end
                 Body.BackgroundTransparency = 1
                 Body.TextXAlignment = Enum.TextXAlignment.Left
                 Body.TextYAlignment = Enum.TextYAlignment.Top
-                Body.TextSize = 13
+                Body.TextSize = 12
                 Body.TextWrapped = true
                 Body.RichText = settings.rich == true
                 Body.AutomaticSize = Enum.AutomaticSize.Y
@@ -1554,7 +1554,7 @@ end
             
                 self._size += settings.customScale or 56 
             
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
             
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
@@ -1630,9 +1630,9 @@ end
                     self._size = 11
                 end
             
-                self._size += 40
+                self._size += 34
             
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
             
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
@@ -1648,7 +1648,7 @@ end
                 Label.TextXAlignment = Enum.TextXAlignment.Left
                 Label.BorderSizePixel = 0
                 Label.Parent = Options
-                Label.TextSize = 13;
+                Label.TextSize = 12;
                 Label.LayoutOrder = LayoutOrderModule
             
                 local Textbox = Instance.new('TextBox')
@@ -1660,7 +1660,7 @@ end
                 Textbox.Name = 'Textbox'
                 Textbox.Size = UDim2.new(0, 207, 0, 15)
                 Textbox.BorderSizePixel = 0
-                Textbox.TextSize = 13
+                Textbox.TextSize = 12
                 Textbox.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
                 Textbox.BackgroundTransparency = 0.9
                 Textbox.ClearTextOnFocus = false
@@ -1699,10 +1699,10 @@ end
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 40
+                self._size += 34
             
                 -- Always show options (modules stay expanded)
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
                 local Checkbox = Instance.new("TextButton")
@@ -1713,7 +1713,7 @@ Checkbox.Text = ""
 Checkbox.AutoButtonColor = false
 Checkbox.BackgroundTransparency = 1
 Checkbox.Name = "Checkbox"
-Checkbox.Size = UDim2.new(0, 207, 0, 22)
+Checkbox.Size = UDim2.new(0, 207, 0, 18)
 Checkbox.BorderSizePixel = 0
 Checkbox.TextSize = 14
 Checkbox.BackgroundColor3 = Color3.fromRGB(45, 45, 45) -- Fondo gris oscuro (coincide con tus otros elementos)
@@ -1724,10 +1724,10 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.Name = "TitleLabel"
                 if SelectedLanguage == "th" then
                     TitleLabel.FontFace = Font.new("rbxasset://fonts/families/NotoSansThai.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TitleLabel.TextSize = 15
+                    TitleLabel.TextSize = 14
                 else
                     TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TitleLabel.TextSize = 14
+                    TitleLabel.TextSize = 13
                 end
                 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TitleLabel.TextTransparency = 0.2
@@ -1745,7 +1745,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 Box.BackgroundTransparency = 0.9
                 Box.Position = UDim2.new(1, 0, 0.5, 0)
                 Box.Name = "Box"
-                Box.Size = UDim2.new(0, 18, 0, 18)
+                Box.Size = UDim2.new(0, 16, 0, 16)
                 Box.BorderSizePixel = 0
                 Box.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
                 Box.Parent = Checkbox
@@ -1775,7 +1775,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                             BackgroundTransparency = 0.55
                         }):Play()
                         TweenService:Create(Fill, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(11, 11)
+                            Size = UDim2.fromOffset(9, 9)
                         }):Play()
                     else
                         TweenService:Create(Box, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
@@ -1926,14 +1926,14 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 34
+                self._size += 28
 
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Row = Instance.new("TextButton")
                 Row.Name = "Toggle"
-                Row.Size = UDim2.new(0, 207, 0, 24)
+                Row.Size = UDim2.new(0, 207, 0, 22)
                 Row.BackgroundTransparency = 1
                 Row.BorderSizePixel = 0
                 Row.Text = ""
@@ -1947,9 +1947,9 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.Size = UDim2.new(1, -55, 1, 0)
                 TitleLabel.Position = UDim2.new(0, 0, 0, 0)
                 TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                TitleLabel.TextSize = 14
+                TitleLabel.TextSize = 13
                 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                TitleLabel.TextTransparency = 0
+                TitleLabel.TextTransparency = 0.05
                 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TitleLabel.Text = settings.title or "Toggle"
                 TitleLabel.Parent = Row
@@ -1957,7 +1957,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 -- Switch track
                 local Track = Instance.new("Frame")
                 Track.Name = "Track"
-                Track.Size = UDim2.fromOffset(44, 22)
+                Track.Size = UDim2.fromOffset(40, 20)
                 Track.Position = UDim2.new(1, 0, 0.5, 0)
                 Track.AnchorPoint = Vector2.new(1, 0.5)
                 Track.BackgroundColor3 = Color3.fromRGB(35, 28, 50)
@@ -1977,7 +1977,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 -- Circle knob
                 local Knob = Instance.new("Frame")
                 Knob.Name = "Knob"
-                Knob.Size = UDim2.fromOffset(18, 18)
+                Knob.Size = UDim2.fromOffset(16, 16)
                 Knob.Position = UDim2.new(0, 2, 0.5, 0)
                 Knob.AnchorPoint = Vector2.new(0, 0.5)
                 Knob.BackgroundColor3 = Color3.fromRGB(180, 170, 200)
@@ -1995,7 +1995,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                             BackgroundColor3 = Color3.fromRGB(130, 70, 220)
                         }):Play()
                         TweenService:Create(Knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Position = UDim2.new(1, -20, 0.5, 0),
+                            Position = UDim2.new(1, -18, 0.5, 0),
                             BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                         }):Play()
                         TweenService:Create(TrackStroke, TweenInfo.new(0.25), {
@@ -2143,9 +2143,9 @@ Checkbox.LayoutOrder = LayoutOrderModule
                     self._size = 11
                 end
             
-                self._size += 40
+                self._size += 34
             
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
 
                 local dividerHeight = 1
                 local dividerWidth = 207 
@@ -2230,9 +2230,9 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
 
-                self._size += 40
+                self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
 
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
@@ -2245,7 +2245,7 @@ if not settings or settings and not settings.disableline then
                 Slider.AutoButtonColor = false
                 Slider.BackgroundTransparency = 1
                 Slider.Name = 'Slider'
-                Slider.Size = UDim2.new(0, 207, 0, 28)
+                Slider.Size = UDim2.new(0, 207, 0, 24)
                 Slider.BorderSizePixel = 0
                 Slider.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
                 Slider.Parent = Options
@@ -2254,10 +2254,10 @@ if not settings or settings and not settings.disableline then
                 local TextLabel = Instance.new('TextLabel')
                 if GG.SelectedLanguage == "th" then
                     TextLabel.FontFace = Font.new("rbxasset://fonts/families/NotoSansThai.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TextLabel.TextSize = 14;
+                    TextLabel.TextSize = 12;
                 else
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TextLabel.TextSize = 14;
+                    TextLabel.TextSize = 12;
                 end;
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.TextTransparency = 0.20000000298023224
@@ -2335,7 +2335,7 @@ if not settings or settings and not settings.disableline then
                 Value.TextXAlignment = Enum.TextXAlignment.Right
                 Value.BorderSizePixel = 0
                 Value.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                Value.TextSize = 13
+                Value.TextSize = 12
                 Value.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Value.Parent = Slider
 
@@ -2430,11 +2430,11 @@ if not settings or settings and not settings.disableline then
                         self._size = 11
                     end
 
-                    self._size += 58
+                    self._size += 50
                 end;
 
                 if not settings.Order then
-                    Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                    Module.Size = UDim2.fromOffset(241, 102 + self._size)
                     Options.Size = UDim2.fromOffset(241, self._size + 8)
                 end
 
@@ -2446,7 +2446,7 @@ if not settings or settings and not settings.disableline then
                 Dropdown.AutoButtonColor = false
                 Dropdown.BackgroundTransparency = 1
                 Dropdown.Name = 'Dropdown'
-                Dropdown.Size = UDim2.new(0, 207, 0, 44)
+                Dropdown.Size = UDim2.new(0, 207, 0, 40)
                 Dropdown.BorderSizePixel = 0
                 Dropdown.TextSize = 14
                 Dropdown.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
@@ -2465,10 +2465,10 @@ if not settings or settings and not settings.disableline then
                 local TextLabel = Instance.new('TextLabel')
                 if GG.SelectedLanguage == "th" then
                     TextLabel.FontFace = Font.new("rbxasset://fonts/families/NotoSansThai.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TextLabel.TextSize = 14;
+                    TextLabel.TextSize = 12;
                 else
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                    TextLabel.TextSize = 14;
+                    TextLabel.TextSize = 12;
                 end;
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.TextTransparency = 0.20000000298023224
@@ -2520,7 +2520,7 @@ if not settings or settings and not settings.disableline then
                 CurrentOption.TextXAlignment = Enum.TextXAlignment.Left
                 CurrentOption.BorderSizePixel = 0
                 CurrentOption.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                CurrentOption.TextSize = 13
+                CurrentOption.TextSize = 12
                 CurrentOption.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 CurrentOption.Parent = Header
                 local UIGradient = Instance.new('UIGradient')
@@ -2744,7 +2744,7 @@ if not settings or settings and not settings.disableline then
                         Option.Active = false
                         Option.TextTransparency = 0.6000000238418579
                         Option.AnchorPoint = Vector2.new(0, 0.5)
-                        Option.TextSize = 13
+                        Option.TextSize = 12
                         Option.Size = UDim2.new(0, 186, 0, 16)
                         Option.TextColor3 = Color3.fromRGB(255, 255, 255)
                         Option.BorderColor3 = Color3.fromRGB(90, 50, 140)
@@ -2823,19 +2823,19 @@ if not settings or settings and not settings.disableline then
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 38
+                self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Button = Instance.new("TextButton")
                 Button.Name = "Button"
-                Button.Size = UDim2.new(0, 207, 0, 32)
+                Button.Size = UDim2.new(0, 207, 0, 30)
                 Button.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
                 Button.BorderSizePixel = 0
                 Button.AutoButtonColor = false
                 Button.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Button.TextSize = 14
+                Button.TextSize = 13
                 Button.TextColor3 = Color3.fromRGB(255, 255, 255)
                 Button.Text = settings.title
                 Button.Parent = Options
@@ -2872,11 +2872,11 @@ if not settings or settings and not settings.disableline then
                 Button.MouseButton1Click:Connect(function()
                     -- click feedback
                     TweenService:Create(Button, TweenInfo.new(0.08), {
-                        Size = UDim2.new(0, 203, 0, 30)
+                        Size = UDim2.new(0, 203, 0, 28)
                     }):Play()
                     task.delay(0.08, function()
                         TweenService:Create(Button, TweenInfo.new(0.12), {
-                            Size = UDim2.new(0, 207, 0, 32)
+                            Size = UDim2.new(0, 207, 0, 30)
                         }):Play()
                     end)
                     settings.callback()
@@ -2897,13 +2897,13 @@ if not settings or settings and not settings.disableline then
                 if self._size == 0 then
                     self._size = 11
                 end
-                self._size += 40
+                self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Module.Size = UDim2.fromOffset(241, 102 + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local FeatureContainer = Instance.new("Frame")
-                FeatureContainer.Size = UDim2.new(0, 207, 0, 32)
+                FeatureContainer.Size = UDim2.new(0, 207, 0, 30)
                 FeatureContainer.BackgroundTransparency = 1
                 FeatureContainer.Parent = Options
                 FeatureContainer.LayoutOrder = LayoutOrderModule
@@ -2911,12 +2911,12 @@ if not settings or settings and not settings.disableline then
                 -- Main rounded button
                 local FeatureButton = Instance.new("TextButton")
                 FeatureButton.Name = "FeatureButton"
-                FeatureButton.Size = UDim2.new(1, 0, 0, 32)
+                FeatureButton.Size = UDim2.new(1, 0, 0, 30)
                 FeatureButton.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
                 FeatureButton.BorderSizePixel = 0
                 FeatureButton.AutoButtonColor = false
                 FeatureButton.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                FeatureButton.TextSize = 14
+                FeatureButton.TextSize = 13
                 FeatureButton.TextColor3 = Color3.fromRGB(255, 255, 255)
                 FeatureButton.Text = settings.title
                 FeatureButton.Parent = FeatureContainer
@@ -2951,11 +2951,11 @@ if not settings or settings and not settings.disableline then
 
                 FeatureButton.MouseButton1Click:Connect(function()
                     TweenService:Create(FeatureButton, TweenInfo.new(0.08), {
-                        Size = UDim2.new(1, -4, 0, 30)
+                        Size = UDim2.new(1, -4, 0, 28)
                     }):Play()
                     task.delay(0.08, function()
                         TweenService:Create(FeatureButton, TweenInfo.new(0.12), {
-                            Size = UDim2.new(1, 0, 0, 32)
+                            Size = UDim2.new(1, 0, 0, 30)
                         }):Play()
                     end)
                     settings.button_callback()
