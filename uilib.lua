@@ -869,6 +869,7 @@ function Library:create_ui()
     Tabs.Name = 'Tabs'
     Tabs.Size = UDim2.new(0, 129, 0, 380)
     Tabs.Selectable = false
+    Tabs.Active = true -- mobile touch scroll
     Tabs.AutomaticCanvasSize = Enum.AutomaticSize.XY
     Tabs.BackgroundTransparency = 1
     Tabs.Position = UDim2.new(0.026, 0, 0.13, 0)
@@ -1018,6 +1019,7 @@ function Library:create_ui()
     Minimize.Parent = Handler
 
     -- Top bar strip (space for logo area + close button, keeps X out of content)
+    -- Active = true so it can receive drag input on mobile/PC without blocking scroll below
     local TopBar = Instance.new('Frame')
     TopBar.Name = 'TopBar'
     TopBar.BackgroundTransparency = 1
@@ -1025,6 +1027,7 @@ function Library:create_ui()
     TopBar.Size = UDim2.new(1, 0, 0, 42)
     TopBar.Position = UDim2.new(0, 0, 0, 0)
     TopBar.ZIndex = 40
+    TopBar.Active = true
     TopBar.Parent = Container
 
     -- Minimize button (hides UI completely)
@@ -1161,7 +1164,8 @@ function Library:create_ui()
         end
     end
 
-    Connections['container_input_began'] = Container.InputBegan:Connect(on_drag)
+    -- CRITICAL MOBILE FIX: drag only from TopBar so ScrollingFrames can receive touch scroll
+    Connections['container_input_began'] = TopBar.InputBegan:Connect(on_drag)
     Connections['input_changed'] = UserInputService.InputChanged:Connect(drag)
 
     self:removed(function()
@@ -1405,12 +1409,16 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             section.ScrollingDirection = Enum.ScrollingDirection.Y
             section.ClipsDescendants = true
             section.CanvasSize = UDim2.new(0, 0, 0, 0)
+            -- CRITICAL for mobile touch scrolling
+            section.Active = true
+            section.Selectable = false
 
             local layout = section:FindFirstChildOfClass("UIListLayout")
             local function refresh_canvas()
                 if not layout then return end
                 local contentY = layout.AbsoluteContentSize.Y
-                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 56)
+                -- Extra padding so last module is fully visible on mobile
+                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 80, section.AbsoluteSize.Y + 1))
             end
 
             if layout then
@@ -1424,6 +1432,10 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             section.ChildRemoved:Connect(function()
                 task.defer(refresh_canvas)
             end)
+
+            -- Force a refresh after a short delay (UIScale / AbsoluteSize settle on mobile)
+            task.delay(0.15, refresh_canvas)
+            task.delay(0.5, refresh_canvas)
         end
 
         local LeftSection = Instance.new('ScrollingFrame')
