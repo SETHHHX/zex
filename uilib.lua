@@ -3439,7 +3439,13 @@ if not settings or settings and not settings.disableline then
                     initialValue = Library._config._flags[settings.flag]
                 end
                 if initialValue == nil or initialValue == "" then
-                    initialValue = settings.options and settings.options[1]
+                    if settings.default ~= nil then
+                        initialValue = settings.default
+                    elseif settings.multi_dropdown then
+                        initialValue = {}
+                    else
+                        initialValue = settings.options and settings.options[1]
+                    end
                 end
                 if initialValue ~= nil then
                     DropdownManager:Set(initialValue)
