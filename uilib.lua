@@ -22,15 +22,23 @@ local SelectedLanguage = GG.Language
 
 function convertStringToTable(inputString)
     local result = {}
+    if type(inputString) ~= "string" or inputString == "" then
+        return result
+    end
     for value in string.gmatch(inputString, "([^,]+)") do
         local trimmedValue = value:match("^%s*(.-)%s*$")
-        table.insert(result, trimmedValue)
+        if trimmedValue and trimmedValue ~= "" then
+            table.insert(result, trimmedValue)
+        end
     end
 
     return result
 end
 
 function convertTableToString(inputTable)
+    if type(inputTable) ~= "table" then
+        return tostring(inputTable or "")
+    end
     return table.concat(inputTable, ", ")
 end
 
@@ -2882,6 +2890,7 @@ if not settings or settings and not settings.disableline then
                 CurrentOption.TextColor3 = Color3.fromRGB(255, 255, 255)
                 CurrentOption.TextTransparency = 0.20000000298023224
                 CurrentOption.Name = 'CurrentOption'
+                CurrentOption.Text = ""
                 CurrentOption.Size = UDim2.new(0, 161, 0, 13)
                 CurrentOption.AnchorPoint = Vector2.new(0, 0.5)
                 CurrentOption.Position = UDim2.new(0.04999988153576851, 0, 0.5, 0)
@@ -2985,12 +2994,14 @@ if not settings or settings and not settings.disableline then
                 
                         local CurrentTextGet = convertStringToTable(CurrentOption.Text);
 
-                        optionSkibidi = "nil";
-                        if typeof(option) ~= 'string' then
-                            optionSkibidi = option.Name;
-                        else
-                            optionSkibidi = option;
-                        end;
+                        local optionSkibidi = "nil"
+                        if typeof(option) == "string" then
+                            optionSkibidi = option
+                        elseif typeof(option) == "table" and option.Name then
+                            optionSkibidi = tostring(option.Name)
+                        elseif option ~= nil then
+                            optionSkibidi = tostring(option)
+                        end
 
                         local found = false
                         for i, v in pairs(CurrentTextGet) do
@@ -3026,11 +3037,22 @@ if not settings or settings and not settings.disableline then
                 
                         Library._config._flags[settings.flag] = convertStringToTable(CurrentOption.Text);
                     else
-                        
-                        CurrentOption.Text = (typeof(option) == "string" and option) or option.Name
+                        local textValue = ""
+                        if typeof(option) == "string" then
+                            textValue = option
+                        elseif typeof(option) == "table" and option.Name then
+                            textValue = tostring(option.Name)
+                        elseif option ~= nil then
+                            textValue = tostring(option)
+                        elseif settings.options and settings.options[1] then
+                            local first = settings.options[1]
+                            textValue = (typeof(first) == "string" and first) or (typeof(first) == "table" and first.Name) or tostring(first)
+                            option = first
+                        end
+
+                        CurrentOption.Text = textValue
                         for _, object in Options:GetChildren() do
                             if object.Name == "Option" then
-                                
                                 if object.Text == CurrentOption.Text then
                                     object.TextTransparency = 0.2
                                 else
@@ -3192,7 +3214,12 @@ if not settings or settings and not settings.disableline then
                         end
                         settings.callback(selected)
                     else
-                        self:update(value)
+                        if value == nil or value == "" then
+                            value = settings.options and settings.options[1]
+                        end
+                        if value ~= nil then
+                            self:update(value)
+                        end
                     end
                 end
 
@@ -3206,12 +3233,17 @@ if not settings or settings and not settings.disableline then
                     return DropdownManager:Get()
                 end)
 
-                if Library:flag_type(settings.flag, 'string') then
-                    DropdownManager:update(Library._config._flags[settings.flag])
-                elseif Library:flag_type(settings.flag, 'table') then
-                    DropdownManager:Set(Library._config._flags[settings.flag])
+                local initialValue = nil
+                if Library:flag_type(settings.flag, "string") or Library:flag_type(settings.flag, "table") then
+                    initialValue = Library._config._flags[settings.flag]
+                end
+                if initialValue == nil or initialValue == "" then
+                    initialValue = settings.options and settings.options[1]
+                end
+                if initialValue ~= nil then
+                    DropdownManager:Set(initialValue)
                 else
-                    DropdownManager:update(settings.options[1])
+                    CurrentOption.Text = "None"
                 end
     
                 Dropdown.MouseButton1Click:Connect(function()
