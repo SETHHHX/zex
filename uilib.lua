@@ -772,8 +772,9 @@ end
 
 function Library:get_screen_scale()
     local viewport_size_x = workspace.CurrentCamera.ViewportSize.X
-
-    self._ui_scale = viewport_size_x / 1400
+    -- Clamp so mobile doesn't become unusably small or oversized
+    local raw = viewport_size_x / 1400
+    self._ui_scale = math.clamp(raw, 0.55, 1.0)
 end
 
 
@@ -1402,23 +1403,32 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         Icon.Parent = Tab
 
         local function setup_section_scroll(section: ScrollingFrame)
-            section.AutomaticCanvasSize = Enum.AutomaticSize.None
             -- Invisible scrollbar (wheel / touch still work)
             section.ScrollBarThickness = 0
             section.ScrollBarImageTransparency = 1
             section.ScrollingDirection = Enum.ScrollingDirection.Y
             section.ClipsDescendants = true
-            section.CanvasSize = UDim2.new(0, 0, 0, 0)
-            -- CRITICAL for mobile touch scrolling
             section.Active = true
             section.Selectable = false
 
+            -- Under UIScale, AbsoluteContentSize is in SCREEN pixels while CanvasSize is LOCAL.
+            -- We must convert: localY = absoluteY / scale
+            section.AutomaticCanvasSize = Enum.AutomaticSize.None
+            section.CanvasSize = UDim2.new(0, 0, 0, 0)
+
             local layout = section:FindFirstChildOfClass("UIListLayout")
+
+            local function get_ui_scale()
+                return (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
+            end
+
             local function refresh_canvas()
                 if not layout then return end
-                local contentY = layout.AbsoluteContentSize.Y
-                -- Extra padding so last module is fully visible on mobile
-                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 80, section.AbsoluteSize.Y + 1))
+                local scale = get_ui_scale()
+                local contentY = layout.AbsoluteContentSize.Y / scale
+                -- Extra bottom padding so last module is fully reachable on mobile
+                local canvasY = math.max(contentY + 100, (section.AbsoluteSize.Y / scale) + 1)
+                section.CanvasSize = UDim2.new(0, 0, 0, canvasY)
             end
 
             if layout then
@@ -1433,9 +1443,10 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
                 task.defer(refresh_canvas)
             end)
 
-            -- Force a refresh after a short delay (UIScale / AbsoluteSize settle on mobile)
-            task.delay(0.15, refresh_canvas)
-            task.delay(0.5, refresh_canvas)
+            -- UIScale / AbsoluteSize settle a bit later on mobile
+            task.delay(0.1, refresh_canvas)
+            task.delay(0.35, refresh_canvas)
+            task.delay(0.8, refresh_canvas)
         end
 
         local LeftSection = Instance.new('ScrollingFrame')
@@ -1730,9 +1741,11 @@ Keybind.Active = showModuleToggle
             OptionsList.Parent = Options
 
             -- Keep module + parent section canvas tall enough for all content
+            -- IMPORTANT: AbsoluteContentSize is screen pixels when UIScale ≠ 1 → convert to local
             local function refresh_module_height()
+                local scale = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
                 local headerH = showModuleToggle and 93 or 52
-                local optionsH = math.max(OptionsList.AbsoluteContentSize.Y, 0) + 22
+                local optionsH = math.max(OptionsList.AbsoluteContentSize.Y / scale, 0) + 22
                 local total = headerH + optionsH + ModuleManager._multiplier
                 if total < headerH + 8 then
                     total = headerH + 8
@@ -1740,13 +1753,15 @@ Keybind.Active = showModuleToggle
                 Module.Size = UDim2.fromOffset(241, total)
                 Options.Size = UDim2.fromOffset(241, optionsH)
 
-                -- nudge parent section canvas
+                -- nudge parent section canvas (scale-aware)
                 local section = settings.section
                 if section and section:IsA("ScrollingFrame") then
                     local layout = section:FindFirstChildOfClass("UIListLayout")
                     if layout then
                         task.defer(function()
-                            section.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 56)
+                            local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
+                            local contentY = layout.AbsoluteContentSize.Y / s
+                            section.CanvasSize = UDim2.new(0, 0, 0, contentY + 100)
                         end)
                     end
                 end
@@ -4063,7 +4078,9 @@ if not settings or settings and not settings.disableline then
                         local layout = section:FindFirstChildOfClass("UIListLayout")
                         if layout then
                             task.defer(function()
-                                section.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 56)
+                                local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
+                                local contentY = layout.AbsoluteContentSize.Y / s
+                                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 100)
                             end)
                         end
                     end
