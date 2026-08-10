@@ -828,6 +828,7 @@ function Library:create_ui()
     click.ResetOnSpawn = false
     click.Name = 'ZexHub'
     click.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    click.DisplayOrder = 1000000 -- above black screen / game overlays
     click.Parent = CoreGui
     
     local Container = Instance.new('Frame')
