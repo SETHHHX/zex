@@ -2903,7 +2903,7 @@ if not settings or settings and not settings.disableline then
                 Value.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Value.Parent = Slider
 
-                function SliderManager:set_percentage(percentage: number)
+                function SliderManager:set_percentage(percentage: number, silent: boolean?)
                     local rounded_number = 0
 
                     if settings.round_number then
@@ -2924,7 +2924,9 @@ if not settings or settings and not settings.disableline then
                         Size = UDim2.fromOffset(slider_size, Drag.Size.Y.Offset)
                     }):Play()
     
-                    settings.callback(number_threshold)
+                    if not silent then
+                        settings.callback(number_threshold)
+                    end
                 end
 
                 function SliderManager:update()
@@ -2958,12 +2960,12 @@ if not settings or settings and not settings.disableline then
 
                 if Library:flag_type(settings.flag, 'number') then
                     if not settings.ignoresaved then
-                        SliderManager:set_percentage(Library._config._flags[settings.flag]);
+                        SliderManager:set_percentage(Library._config._flags[settings.flag], true);
                     else
-                        SliderManager:set_percentage(settings.value);
+                        SliderManager:set_percentage(settings.value, true);
                     end;
                 else
-                    SliderManager:set_percentage(settings.value);
+                    SliderManager:set_percentage(settings.value, true);
                 end;
     
                 Slider.MouseButton1Down:Connect(function()
