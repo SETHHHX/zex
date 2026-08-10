@@ -2536,7 +2536,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 KnobCorner.CornerRadius = UDim.new(1, 0)
                 KnobCorner.Parent = Knob
 
-                function ToggleManager:change_state(state: boolean)
+                function ToggleManager:change_state(state: boolean, silent: boolean?)
                     self._state = state and true or false
                     if self._state then
                         TweenService:Create(Track, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
@@ -2563,21 +2563,27 @@ Checkbox.LayoutOrder = LayoutOrderModule
                             Transparency = 0.55
                         }):Play()
                     end
-                    Library._config._flags[settings.flag] = self._state
-                    Config:save(game.GameId, Library._config)
-                    settings.callback(self._state)
+                    if settings.flag then
+                        Library._config._flags[settings.flag] = self._state
+                    end
+                    if not silent then
+                        pcall(function()
+                            Config:save(game.GameId, Library._config)
+                        end)
+                        settings.callback(self._state)
+                    end
                 end
 
                 function ToggleManager:Get()
                     return self._state
                 end
 
-                function ToggleManager:Set(state)
-                    self:change_state(state and true or false)
+                function ToggleManager:Set(state, silent)
+                    self:change_state(state and true or false, silent)
                 end
 
                 Library:RegisterElement(settings.flag, "toggle", function(v)
-                    ToggleManager:Set(v)
+                    ToggleManager:Set(v) -- fire callback on config load
                 end, function()
                     return ToggleManager:Get()
                 end)
@@ -2672,10 +2678,14 @@ Checkbox.LayoutOrder = LayoutOrderModule
                     return self
                 end
 
+                -- Apply initial visual state WITHOUT firing callback (avoids side-effects on UI build)
                 if Library:flag_type(settings.flag, "boolean") then
-                    ToggleManager:change_state(Library._config._flags[settings.flag])
+                    ToggleManager:change_state(Library._config._flags[settings.flag], true)
                 elseif settings.default ~= nil then
-                    ToggleManager:change_state(settings.default)
+                    ToggleManager:change_state(settings.default, true)
+                    if settings.flag then
+                        Library._config._flags[settings.flag] = ToggleManager._state
+                    end
                 end
 
                 Row.MouseButton1Click:Connect(function()
