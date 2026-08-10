@@ -3265,9 +3265,15 @@ if not settings or settings and not settings.disableline then
                 
                    
                     Config:save(game.GameId, Library._config)
-                
-                  
-                    settings.callback(option)
+
+                    -- Multi: pass full selected list; single: pass the chosen option
+                    if settings.multi_dropdown then
+                        local list = Library._config._flags[settings.flag]
+                        if type(list) ~= "table" then list = {} end
+                        settings.callback(list)
+                    else
+                        settings.callback(option)
+                    end
                 end
                 
                 local CurrentDropSizeState = 0;
@@ -3451,6 +3457,10 @@ if not settings or settings and not settings.disableline then
                 local initialValue = nil
                 if Library:flag_type(settings.flag, "string") or Library:flag_type(settings.flag, "table") then
                     initialValue = Library._config._flags[settings.flag]
+                end
+                -- Empty table = no real saved selection → allow default to apply
+                if type(initialValue) == "table" and next(initialValue) == nil then
+                    initialValue = nil
                 end
                 if initialValue == nil or initialValue == "" then
                     if settings.default ~= nil then
