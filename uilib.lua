@@ -1059,6 +1059,9 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
                 settings.section = LeftSection
             end
 
+            -- Pure section by default (no master toggle). Use showToggle = true to enable it.
+            local showModuleToggle = settings.showToggle == true
+
            local Module = Instance.new('Frame')
 Module.ClipsDescendants = true
 Module.Name = 'Module'
@@ -1078,7 +1081,7 @@ ModuleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 -- Ajustes de posición y tamaño que ya tenías
 Module.Position = UDim2.new(0.004, 0, 0, 0)
-Module.Size = UDim2.new(0, 241, 0, 100)
+Module.Size = UDim2.new(0, 241, 0, showModuleToggle and 100 or 56)
 
             local UIListLayout = Instance.new('UIListLayout')
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1102,7 +1105,7 @@ Module.Size = UDim2.new(0, 241, 0, 100)
             Header.AutoButtonColor = false
             Header.BackgroundTransparency = 1
             Header.Name = 'Header'
-            Header.Size = UDim2.new(0, 241, 0, 93)
+            Header.Size = UDim2.new(0, 241, 0, showModuleToggle and 93 or 52)
             Header.BorderSizePixel = 0
             Header.TextSize = 14
             Header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1121,6 +1124,7 @@ Module.Size = UDim2.new(0, 241, 0, 100)
             Icon.Size = UDim2.new(0, 15, 0, 15)
             Icon.BorderSizePixel = 0
             Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Icon.Visible = showModuleToggle
             Icon.Parent = Header
             
 local ModuleName = Instance.new('TextLabel')
@@ -1141,7 +1145,7 @@ end
 ModuleName.Name = 'ModuleName'
 ModuleName.Size = UDim2.new(0, 205, 0, 16)
 ModuleName.AnchorPoint = Vector2.new(0, 0.5)
-ModuleName.Position = UDim2.new(0.073, 0, 0.22, 0)
+ModuleName.Position = showModuleToggle and UDim2.new(0.073, 0, 0.22, 0) or UDim2.new(0.05, 0, 0.35, 0)
 ModuleName.BackgroundTransparency = 1
 ModuleName.TextXAlignment = Enum.TextXAlignment.Left
 ModuleName.BorderSizePixel = 0
@@ -1158,7 +1162,7 @@ Description.Text = settings.description
 Description.Name = 'Description'
 Description.Size = UDim2.new(0, 205, 0, 14)
 Description.AnchorPoint = Vector2.new(0, 0.5)
-Description.Position = UDim2.new(0.073, 0, 0.42, 0)
+Description.Position = showModuleToggle and UDim2.new(0.073, 0, 0.42, 0) or UDim2.new(0.05, 0, 0.68, 0)
 Description.BackgroundTransparency = 1
 Description.TextXAlignment = Enum.TextXAlignment.Left
 Description.BorderSizePixel = 0
@@ -1175,6 +1179,7 @@ Description.Parent = Header
             Toggle.Size = UDim2.new(0, 25, 0, 12)
             Toggle.BorderSizePixel = 0
             Toggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            Toggle.Visible = showModuleToggle
             Toggle.Parent = Header
             
             local UICorner = Instance.new('UICorner')
@@ -1203,8 +1208,9 @@ Keybind.Position = UDim2.new(0.15, 0, 0.735, 0)
 Keybind.Size = UDim2.new(0, 40, 0, 18)
 Keybind.BorderSizePixel = 0
 Keybind.BackgroundColor3 = Color3.fromRGB(50, 35, 75)
+Keybind.Visible = showModuleToggle
 Keybind.Parent = Header
-Keybind.Active = true
+Keybind.Active = showModuleToggle
             
             local UICorner = Instance.new('UICorner')
             UICorner.CornerRadius = UDim.new(0, 3)
@@ -1229,7 +1235,7 @@ Keybind.Active = true
             Divider.BorderColor3 = Color3.fromRGB(30, 30, 30)
             Divider.AnchorPoint = Vector2.new(0.5, 0)
             Divider.BackgroundTransparency = 0.55
-            Divider.Position = UDim2.new(0.5, 0, 0.6200000047683716, 0)
+            Divider.Position = UDim2.new(0.5, 0, showModuleToggle and 0.62 or 0.95, 0)
             Divider.Name = 'Divider'
             Divider.Size = UDim2.new(0, 241, 0, 1)
             Divider.BorderSizePixel = 0
@@ -1273,8 +1279,9 @@ Keybind.Active = true
 
     -- Options always stay visible. Only the master toggle visual changes.
     -- Keep module expanded with all options
-    local targetSize = 102 + self._size + self._multiplier
-    if targetSize < 102 then targetSize = 102 end
+    local headerBase = showModuleToggle and 102 or 56
+    local targetSize = headerBase + self._size + self._multiplier
+    if targetSize < headerBase then targetSize = headerBase end
     TweenService:Create(Module, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         Size = UDim2.fromOffset(241, targetSize)
     }):Play()
@@ -1435,9 +1442,11 @@ end
                 end
             end)
 
-            Header.MouseButton1Click:Connect(function()
-                ModuleManager:change_state(not ModuleManager._state)
-            end)
+            if showModuleToggle then
+                Header.MouseButton1Click:Connect(function()
+                    ModuleManager:change_state(not ModuleManager._state)
+                end)
+            end
 
             function ModuleManager:create_paragraph(settings: any)
                 settings = settings or {}
@@ -1458,7 +1467,7 @@ end
 
                 self._size += settings.customScale or 62
 
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Paragraph = Instance.new('Frame')
@@ -1554,7 +1563,7 @@ end
             
                 self._size += settings.customScale or 56 
             
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
             
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
@@ -1632,7 +1641,7 @@ end
             
                 self._size += 34
             
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
             
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
@@ -1702,7 +1711,7 @@ end
                 self._size += 34
             
                 -- Always show options (modules stay expanded)
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
             
                 local Checkbox = Instance.new("TextButton")
@@ -1928,7 +1937,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 end
                 self._size += 28
 
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Row = Instance.new("TextButton")
@@ -2145,7 +2154,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
             
                 self._size += 34
             
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
 
                 local dividerHeight = 1
                 local dividerWidth = 207 
@@ -2232,7 +2241,7 @@ if not settings or settings and not settings.disableline then
 
                 self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
 
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
@@ -2434,7 +2443,7 @@ if not settings or settings and not settings.disableline then
                 end;
 
                 if not settings.Order then
-                    Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                    Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                     Options.Size = UDim2.fromOffset(241, self._size + 8)
                 end
 
@@ -2825,7 +2834,7 @@ if not settings or settings and not settings.disableline then
                 end
                 self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local Button = Instance.new("TextButton")
@@ -2899,7 +2908,7 @@ if not settings or settings and not settings.disableline then
                 end
                 self._size += 34
 
-                Module.Size = UDim2.fromOffset(241, 102 + self._size)
+                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
 
                 local FeatureContainer = Instance.new("Frame")
@@ -2975,7 +2984,8 @@ if not settings or settings and not settings.disableline then
 
             -- Ensure module starts expanded so options are always visible
             if ModuleManager._size > 0 then
-                Module.Size = UDim2.fromOffset(241, 93 + ModuleManager._size + ModuleManager._multiplier)
+                local hb = showModuleToggle and 102 or 56
+                Module.Size = UDim2.fromOffset(241, hb + ModuleManager._size + ModuleManager._multiplier)
             end
 
             return ModuleManager
