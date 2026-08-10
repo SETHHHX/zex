@@ -1609,6 +1609,7 @@ Description.BorderSizePixel = 0
 Description.BorderColor3 = Color3.fromRGB(40, 40, 40)
 Description.TextSize = 12
 Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Description.RichText = true
 Description.Parent = Header
             
             local Toggle = Instance.new('Frame')
@@ -1977,6 +1978,7 @@ end
                 Title.TextYAlignment = Enum.TextYAlignment.Center
                 Title.TextSize = 13
                 Title.TextWrapped = true
+                Title.RichText = true
                 Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.Parent = Paragraph
 
@@ -1992,7 +1994,7 @@ end
                 Body.TextYAlignment = Enum.TextYAlignment.Top
                 Body.TextSize = 12
                 Body.TextWrapped = true
-                Body.RichText = settings.rich == true
+                Body.RichText = true -- always support <font color=...> etc
                 Body.AutomaticSize = Enum.AutomaticSize.Y
                 Body.Parent = Paragraph
 
