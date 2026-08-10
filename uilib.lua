@@ -1511,26 +1511,21 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             -- Pure section by default (no master toggle). Use showToggle = true to enable it.
             local showModuleToggle = settings.showToggle == true
 
-           local Module = Instance.new('Frame')
-Module.ClipsDescendants = true
-Module.Name = 'Module'
-Module.Parent = settings.section
+            local Module = Instance.new('Frame')
+            Module.ClipsDescendants = false -- don't cut off options / paragraph text
+            Module.Name = 'Module'
+            Module.Parent = settings.section
+            Module.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
+            Module.BackgroundTransparency = 0.1
+            Module.BorderColor3 = Color3.fromRGB(40, 40, 40)
+            Module.BorderSizePixel = 0
+            Module.Position = UDim2.new(0.004, 0, 0, 0)
+            Module.Size = UDim2.new(0, 241, 0, showModuleToggle and 100 or 56)
 
--- CAMBIOS AQUÍ:
-Module.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
-Module.BackgroundTransparency = 0.1 -- Menos transparente para que se vea sólido
-Module.BorderColor3 = Color3.fromRGB(40, 40, 40)    -- Borde gris oscuro en vez de verde
-Module.BorderSizePixel = 0 
-
--- Si tienes un UIStroke dentro del Module (muy probable), búscalo y cámbialo:
-local ModuleStroke = Module:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", Module)
-ModuleStroke.Color = Color3.fromRGB(90, 50, 150)
-ModuleStroke.Transparency = 0.5
-ModuleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
--- Ajustes de posición y tamaño que ya tenías
-Module.Position = UDim2.new(0.004, 0, 0, 0)
-Module.Size = UDim2.new(0, 241, 0, showModuleToggle and 100 or 56)
+            local ModuleStroke = Module:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", Module)
+            ModuleStroke.Color = Color3.fromRGB(90, 50, 150)
+            ModuleStroke.Transparency = 0.5
+            ModuleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
             local UIListLayout = Instance.new('UIListLayout')
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1710,18 +1705,47 @@ Keybind.Active = showModuleToggle
             Options.Size = UDim2.new(0, 241, 0, 8)
             Options.BorderSizePixel = 0
             Options.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Options.AutomaticSize = Enum.AutomaticSize.Y
             Options.Parent = Module
 
             local UIPadding = Instance.new('UIPadding')
             UIPadding.PaddingTop = UDim.new(0, 8)
-            UIPadding.PaddingBottom = UDim.new(0, 10)
+            UIPadding.PaddingBottom = UDim.new(0, 14)
             UIPadding.Parent = Options
 
-            local UIListLayout = Instance.new('UIListLayout')
-            UIListLayout.Padding = UDim.new(0, 7)
-            UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-            UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-            UIListLayout.Parent = Options
+            local OptionsList = Instance.new('UIListLayout')
+            OptionsList.Padding = UDim.new(0, 7)
+            OptionsList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
+            OptionsList.Parent = Options
+
+            -- Keep module + parent section canvas tall enough for all content
+            local function refresh_module_height()
+                local headerH = showModuleToggle and 93 or 52
+                local optionsH = math.max(OptionsList.AbsoluteContentSize.Y, 0) + 22
+                local total = headerH + optionsH + ModuleManager._multiplier
+                if total < headerH + 8 then
+                    total = headerH + 8
+                end
+                Module.Size = UDim2.fromOffset(241, total)
+                Options.Size = UDim2.fromOffset(241, optionsH)
+
+                -- nudge parent section canvas
+                local section = settings.section
+                if section and section:IsA("ScrollingFrame") then
+                    local layout = section:FindFirstChildOfClass("UIListLayout")
+                    if layout then
+                        task.defer(function()
+                            section.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 56)
+                        end)
+                    end
+                end
+            end
+
+            OptionsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                task.defer(refresh_module_height)
+            end)
+            task.defer(refresh_module_height)
 
             function ModuleManager:change_state(state: boolean)
     self._state = state
