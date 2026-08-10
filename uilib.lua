@@ -1461,15 +1461,15 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftSection.Parent = Sections
         
         local LeftList = Instance.new('UIListLayout')
-        LeftList.Padding = UDim.new(0, 12)
+        LeftList.Padding = UDim.new(0, 14) -- a bit more space between modules on mobile
         LeftList.HorizontalAlignment = Enum.HorizontalAlignment.Center
         LeftList.SortOrder = Enum.SortOrder.LayoutOrder
         LeftList.Parent = LeftSection
         
         -- Padding so module border/stroke is visible on all sides
         local LeftPad = Instance.new('UIPadding')
-        LeftPad.PaddingTop = UDim.new(0, 6)
-        LeftPad.PaddingBottom = UDim.new(0, 40)
+        LeftPad.PaddingTop = UDim.new(0, 8)
+        LeftPad.PaddingBottom = UDim.new(0, 80) -- extra bottom so last module is fully reachable
         LeftPad.PaddingLeft = UDim.new(0, 5)
         LeftPad.PaddingRight = UDim.new(0, 5)
         LeftPad.Parent = LeftSection
@@ -1488,14 +1488,14 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         RightSection.Parent = Sections
         
         local RightList = Instance.new('UIListLayout')
-        RightList.Padding = UDim.new(0, 12)
+        RightList.Padding = UDim.new(0, 14)
         RightList.HorizontalAlignment = Enum.HorizontalAlignment.Center
         RightList.SortOrder = Enum.SortOrder.LayoutOrder
         RightList.Parent = RightSection
         
         local RightPad = Instance.new('UIPadding')
-        RightPad.PaddingTop = UDim.new(0, 6)
-        RightPad.PaddingBottom = UDim.new(0, 40)
+        RightPad.PaddingTop = UDim.new(0, 8)
+        RightPad.PaddingBottom = UDim.new(0, 80)
         RightPad.PaddingLeft = UDim.new(0, 5)
         RightPad.PaddingRight = UDim.new(0, 5)
         RightPad.Parent = RightSection
@@ -1504,14 +1504,34 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
 
         self._tab += 1
 
+        local function force_section_refresh(section)
+            if not section or not section:IsA("ScrollingFrame") then return end
+            local layout = section:FindFirstChildOfClass("UIListLayout")
+            if not layout then return end
+            task.defer(function()
+                local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
+                local contentY = layout.AbsoluteContentSize.Y / s
+                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
+            end)
+        end
+
         if first_tab then
             self:update_tabs(Tab, LeftSection, RightSection)
             self:update_sections(LeftSection, RightSection)
+            force_section_refresh(LeftSection)
+            force_section_refresh(RightSection)
         end
 
         Tab.MouseButton1Click:Connect(function()
             self:update_tabs(Tab, LeftSection, RightSection)
             self:update_sections(LeftSection, RightSection)
+            -- Recalculate canvas after tab switch (mobile scale can leave stale sizes)
+            force_section_refresh(LeftSection)
+            force_section_refresh(RightSection)
+            task.delay(0.1, function()
+                force_section_refresh(LeftSection)
+                force_section_refresh(RightSection)
+            end)
         end)
 
         function TabManager:create_module(settings: any)
@@ -1534,7 +1554,8 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             local showModuleToggle = settings.showToggle == true
 
             local Module = Instance.new('Frame')
-            Module.ClipsDescendants = false -- don't cut off options / paragraph text
+            -- ClipsDescendants true prevents modules from visually overlapping each other on mobile
+            Module.ClipsDescendants = true
             Module.Name = 'Module'
             Module.Parent = settings.section
             Module.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
@@ -1726,34 +1747,42 @@ Keybind.Active = showModuleToggle
             Options.Size = UDim2.new(0, 241, 0, 8)
             Options.BorderSizePixel = 0
             Options.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            Options.AutomaticSize = Enum.AutomaticSize.Y
+            -- Manual size control via refresh_module_height (AutomaticSize fights UIScale)
+            Options.AutomaticSize = Enum.AutomaticSize.None
+            Options.ClipsDescendants = false
             Options.Parent = Module
 
             local UIPadding = Instance.new('UIPadding')
             UIPadding.PaddingTop = UDim.new(0, 8)
-            UIPadding.PaddingBottom = UDim.new(0, 14)
+            UIPadding.PaddingBottom = UDim.new(0, 16)
             UIPadding.Parent = Options
 
             local OptionsList = Instance.new('UIListLayout')
-            OptionsList.Padding = UDim.new(0, 7)
+            OptionsList.Padding = UDim.new(0, 8)
             OptionsList.HorizontalAlignment = Enum.HorizontalAlignment.Center
             OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
             OptionsList.Parent = Options
 
             -- Keep module + parent section canvas tall enough for all content
-            -- IMPORTANT: AbsoluteContentSize is screen pixels when UIScale ≠ 1 → convert to local
+            -- AbsoluteContentSize is in SCREEN pixels under UIScale → always divide by scale
             local function refresh_module_height()
                 local scale = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
+
+                -- Measure real content height from the Options list (local units)
+                local rawOptions = OptionsList.AbsoluteContentSize.Y
+                local optionsH = math.max(rawOptions / scale, 0) + 28 -- padding top+bottom
+                if optionsH < 8 then optionsH = 8 end
+
                 local headerH = showModuleToggle and 93 or 52
-                local optionsH = math.max(OptionsList.AbsoluteContentSize.Y / scale, 0) + 22
-                local total = headerH + optionsH + ModuleManager._multiplier
+                local total = headerH + optionsH + (ModuleManager._multiplier or 0)
                 if total < headerH + 8 then
                     total = headerH + 8
                 end
+
                 Module.Size = UDim2.fromOffset(241, total)
                 Options.Size = UDim2.fromOffset(241, optionsH)
 
-                -- nudge parent section canvas (scale-aware)
+                -- Update parent ScrollingFrame canvas (scale-aware)
                 local section = settings.section
                 if section and section:IsA("ScrollingFrame") then
                     local layout = section:FindFirstChildOfClass("UIListLayout")
@@ -1761,7 +1790,8 @@ Keybind.Active = showModuleToggle
                         task.defer(function()
                             local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
                             local contentY = layout.AbsoluteContentSize.Y / s
-                            section.CanvasSize = UDim2.new(0, 0, 0, contentY + 100)
+                            -- Generous bottom padding so last module is fully reachable
+                            section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
                         end)
                     end
                 end
@@ -1770,7 +1800,12 @@ Keybind.Active = showModuleToggle
             OptionsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 task.defer(refresh_module_height)
             end)
+
+            -- Multiple refreshes: scale + AbsoluteSize settle over a few frames on mobile
             task.defer(refresh_module_height)
+            task.delay(0.05, refresh_module_height)
+            task.delay(0.2, refresh_module_height)
+            task.delay(0.5, refresh_module_height)
 
             function ModuleManager:change_state(state: boolean)
     self._state = state
@@ -4080,7 +4115,7 @@ if not settings or settings and not settings.disableline then
                             task.defer(function()
                                 local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
                                 local contentY = layout.AbsoluteContentSize.Y / s
-                                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 100)
+                                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
                             end)
                         end
                     end
