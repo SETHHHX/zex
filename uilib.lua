@@ -1411,42 +1411,9 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             section.Active = true
             section.Selectable = false
 
-            -- Under UIScale, AbsoluteContentSize is in SCREEN pixels while CanvasSize is LOCAL.
-            -- We must convert: localY = absoluteY / scale
-            section.AutomaticCanvasSize = Enum.AutomaticSize.None
+            -- AutomaticCanvasSize works correctly with UIScale (manual CanvasSize was fighting scroll on mobile)
+            section.AutomaticCanvasSize = Enum.AutomaticSize.Y
             section.CanvasSize = UDim2.new(0, 0, 0, 0)
-
-            local layout = section:FindFirstChildOfClass("UIListLayout")
-
-            local function get_ui_scale()
-                return (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
-            end
-
-            local function refresh_canvas()
-                if not layout then return end
-                local scale = get_ui_scale()
-                local contentY = layout.AbsoluteContentSize.Y / scale
-                -- Extra bottom padding so last module is fully reachable on mobile
-                local canvasY = math.max(contentY + 100, (section.AbsoluteSize.Y / scale) + 1)
-                section.CanvasSize = UDim2.new(0, 0, 0, canvasY)
-            end
-
-            if layout then
-                layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refresh_canvas)
-                task.defer(refresh_canvas)
-            end
-
-            section.ChildAdded:Connect(function()
-                task.defer(refresh_canvas)
-            end)
-            section.ChildRemoved:Connect(function()
-                task.defer(refresh_canvas)
-            end)
-
-            -- UIScale / AbsoluteSize settle a bit later on mobile
-            task.delay(0.1, refresh_canvas)
-            task.delay(0.35, refresh_canvas)
-            task.delay(0.8, refresh_canvas)
         end
 
         local LeftSection = Instance.new('ScrollingFrame')
@@ -1504,34 +1471,14 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
 
         self._tab += 1
 
-        local function force_section_refresh(section)
-            if not section or not section:IsA("ScrollingFrame") then return end
-            local layout = section:FindFirstChildOfClass("UIListLayout")
-            if not layout then return end
-            task.defer(function()
-                local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
-                local contentY = layout.AbsoluteContentSize.Y / s
-                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
-            end)
-        end
-
         if first_tab then
             self:update_tabs(Tab, LeftSection, RightSection)
             self:update_sections(LeftSection, RightSection)
-            force_section_refresh(LeftSection)
-            force_section_refresh(RightSection)
         end
 
         Tab.MouseButton1Click:Connect(function()
             self:update_tabs(Tab, LeftSection, RightSection)
             self:update_sections(LeftSection, RightSection)
-            -- Recalculate canvas after tab switch (mobile scale can leave stale sizes)
-            force_section_refresh(LeftSection)
-            force_section_refresh(RightSection)
-            task.delay(0.1, function()
-                force_section_refresh(LeftSection)
-                force_section_refresh(RightSection)
-            end)
         end)
 
         function TabManager:create_module(settings: any)
@@ -1554,8 +1501,8 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             local showModuleToggle = settings.showToggle == true
 
             local Module = Instance.new('Frame')
-            -- ClipsDescendants true prevents modules from visually overlapping each other on mobile
-            Module.ClipsDescendants = true
+            -- false so long paragraph text isn't cut; heights are correct so modules shouldn't overlap
+            Module.ClipsDescendants = false
             Module.Name = 'Module'
             Module.Parent = settings.section
             Module.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
@@ -1763,49 +1710,35 @@ Keybind.Active = showModuleToggle
             OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
             OptionsList.Parent = Options
 
-            -- Keep module + parent section canvas tall enough for all content
-            -- AbsoluteContentSize is in SCREEN pixels under UIScale → always divide by scale
+            -- Keep module tall enough for all content.
+            -- AbsoluteContentSize is SCREEN pixels under UIScale → divide by scale for local units.
+            -- Do NOT touch section.CanvasSize here (AutomaticCanvasSize handles it; manual sets cause scroll snap-back on mobile).
             local function refresh_module_height()
                 local scale = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
 
-                -- Measure real content height from the Options list (local units)
                 local rawOptions = OptionsList.AbsoluteContentSize.Y
-                local optionsH = math.max(rawOptions / scale, 0) + 28 -- padding top+bottom
-                if optionsH < 8 then optionsH = 8 end
+                -- Generous padding so wrapped text / paragraphs aren't clipped on mobile
+                local optionsH = math.max(rawOptions / scale, 0) + 40
+                if optionsH < 12 then optionsH = 12 end
 
                 local headerH = showModuleToggle and 93 or 52
                 local total = headerH + optionsH + (ModuleManager._multiplier or 0)
-                if total < headerH + 8 then
-                    total = headerH + 8
+                if total < headerH + 12 then
+                    total = headerH + 12
                 end
 
                 Module.Size = UDim2.fromOffset(241, total)
                 Options.Size = UDim2.fromOffset(241, optionsH)
-
-                -- Update parent ScrollingFrame canvas (scale-aware)
-                local section = settings.section
-                if section and section:IsA("ScrollingFrame") then
-                    local layout = section:FindFirstChildOfClass("UIListLayout")
-                    if layout then
-                        task.defer(function()
-                            local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
-                            local contentY = layout.AbsoluteContentSize.Y / s
-                            -- Generous bottom padding so last module is fully reachable
-                            section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
-                        end)
-                    end
-                end
             end
 
             OptionsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 task.defer(refresh_module_height)
             end)
 
-            -- Multiple refreshes: scale + AbsoluteSize settle over a few frames on mobile
+            -- Settle after scale/layout (only a couple of times, not continuous)
             task.defer(refresh_module_height)
-            task.delay(0.05, refresh_module_height)
-            task.delay(0.2, refresh_module_height)
-            task.delay(0.5, refresh_module_height)
+            task.delay(0.15, refresh_module_height)
+            task.delay(0.4, refresh_module_height)
 
             function ModuleManager:change_state(state: boolean)
     self._state = state
@@ -4108,17 +4041,7 @@ if not settings or settings and not settings.disableline then
                 local function refreshModuleAndSection()
                     Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + ModuleManager._size + ModuleManager._multiplier)
                     Options.Size = UDim2.fromOffset(241, ModuleManager._size + 8)
-                    local section = Module.Parent
-                    if section and section:IsA("ScrollingFrame") then
-                        local layout = section:FindFirstChildOfClass("UIListLayout")
-                        if layout then
-                            task.defer(function()
-                                local s = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
-                                local contentY = layout.AbsoluteContentSize.Y / s
-                                section.CanvasSize = UDim2.new(0, 0, 0, math.max(contentY + 120, 1))
-                            end)
-                        end
-                    end
+                    -- Do not touch section.CanvasSize — AutomaticCanvasSize handles it
                 end
 
                 function ColorManager:SetOpen(state)
