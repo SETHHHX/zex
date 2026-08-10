@@ -636,14 +636,14 @@ function Library.SendNotification(settings)
     Notification.AutomaticSize = Enum.AutomaticSize.Y
 
     local InnerFrame = Instance.new("Frame")
-    InnerFrame.Size = UDim2.new(1, 0, 0, 0)
-    InnerFrame.Position = UDim2.new(1, 20, 0, 0)
+    InnerFrame.Size = UDim2.new(1, 0, 0, 56)
+    InnerFrame.Position = UDim2.new(1, 24, 0, 0)
     InnerFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
-    InnerFrame.BackgroundTransparency = 0.08
+    InnerFrame.BackgroundTransparency = 0.05
     InnerFrame.BorderSizePixel = 0
     InnerFrame.Name = "InnerFrame"
+    InnerFrame.ClipsDescendants = true
     InnerFrame.Parent = Notification
-    InnerFrame.AutomaticSize = Enum.AutomaticSize.Y
 
     local InnerUICorner = Instance.new("UICorner")
     InnerUICorner.CornerRadius = UDim.new(0, 10)
@@ -655,6 +655,7 @@ function Library.SendNotification(settings)
     Stroke.Thickness = 1.2
     Stroke.Parent = InnerFrame
 
+    -- Accent bar on the far left edge (does not share layout with text)
     local Accent = Instance.new("Frame")
     Accent.Size = UDim2.new(0, 4, 1, 0)
     Accent.Position = UDim2.new(0, 0, 0, 0)
@@ -667,12 +668,14 @@ function Library.SendNotification(settings)
     AccentCorner.CornerRadius = UDim.new(0, 2)
     AccentCorner.Parent = Accent
 
-    local Pad = Instance.new("UIPadding")
-    Pad.PaddingTop = UDim.new(0, 12)
-    Pad.PaddingBottom = UDim.new(0, 12)
-    Pad.PaddingLeft = UDim.new(0, 16) -- clear of accent bar
-    Pad.PaddingRight = UDim.new(0, 14)
-    Pad.Parent = InnerFrame
+    -- Text content starts AFTER the accent (left = 14px)
+    local Content = Instance.new("Frame")
+    Content.Name = "Content"
+    Content.BackgroundTransparency = 1
+    Content.Position = UDim2.new(0, 14, 0, 0)
+    Content.Size = UDim2.new(1, -28, 1, 0)
+    Content.ZIndex = 2
+    Content.Parent = InnerFrame
 
     local Title = Instance.new("TextLabel")
     Title.Text = tostring(settings.title or "Notification")
@@ -680,12 +683,13 @@ function Library.SendNotification(settings)
     Title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
     Title.TextSize = 14
     Title.Size = UDim2.new(1, 0, 0, 18)
+    Title.Position = UDim2.new(0, 0, 0, 10)
     Title.BackgroundTransparency = 1
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.TextYAlignment = Enum.TextYAlignment.Center
     Title.TextWrapped = true
-    Title.ZIndex = 2
-    Title.Parent = InnerFrame
+    Title.ZIndex = 3
+    Title.Parent = Content
 
     local Body = Instance.new("TextLabel")
     Body.Text = tostring(settings.text or "")
@@ -693,18 +697,18 @@ function Library.SendNotification(settings)
     Body.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
     Body.TextSize = 12
     Body.Size = UDim2.new(1, 0, 0, 0)
-    Body.Position = UDim2.new(0, 0, 0, 22)
+    Body.Position = UDim2.new(0, 0, 0, 30)
     Body.BackgroundTransparency = 1
     Body.TextXAlignment = Enum.TextXAlignment.Left
     Body.TextYAlignment = Enum.TextYAlignment.Top
     Body.TextWrapped = true
     Body.AutomaticSize = Enum.AutomaticSize.Y
-    Body.ZIndex = 2
-    Body.Parent = InnerFrame
+    Body.ZIndex = 3
+    Body.Parent = Content
 
     task.spawn(function()
         task.wait()
-        local h = math.max(44, Title.TextBounds.Y + Body.TextBounds.Y + 24)
+        local h = math.max(52, 10 + Title.TextBounds.Y + 4 + Body.TextBounds.Y + 12)
         InnerFrame.Size = UDim2.new(1, 0, 0, h)
         Notification.Size = UDim2.new(1, 0, 0, h)
 
@@ -1392,12 +1396,38 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         Icon.Parent = Tab
 
+        local function setup_section_scroll(section: ScrollingFrame)
+            section.AutomaticCanvasSize = Enum.AutomaticSize.None
+            section.ScrollBarThickness = 4
+            section.ScrollBarImageColor3 = Color3.fromRGB(140, 90, 220)
+            section.ScrollBarImageTransparency = 0.3
+            section.ScrollingDirection = Enum.ScrollingDirection.Y
+            section.ClipsDescendants = true
+            section.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+            local layout = section:FindFirstChildOfClass("UIListLayout")
+            local function refresh_canvas()
+                if not layout then return end
+                local contentY = layout.AbsoluteContentSize.Y
+                -- Extra bottom space so last module is fully visible
+                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 48)
+            end
+
+            if layout then
+                layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refresh_canvas)
+                task.defer(refresh_canvas)
+            end
+
+            section.ChildAdded:Connect(function()
+                task.defer(refresh_canvas)
+            end)
+            section.ChildRemoved:Connect(function()
+                task.defer(refresh_canvas)
+            end)
+        end
+
         local LeftSection = Instance.new('ScrollingFrame')
         LeftSection.Name = 'LeftSection'
-        LeftSection.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        LeftSection.ScrollBarThickness = 3
-        LeftSection.ScrollBarImageColor3 = Color3.fromRGB(140, 90, 220)
-        LeftSection.ScrollBarImageTransparency = 0.35
         LeftSection.Size = UDim2.new(0, 243, 0, 420)
         LeftSection.Selectable = false
         LeftSection.AnchorPoint = Vector2.new(0, 0.5)
@@ -1406,31 +1436,25 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
         LeftSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         LeftSection.BorderSizePixel = 0
-        LeftSection.CanvasSize = UDim2.new(0, 0, 0, 0)
-        LeftSection.ScrollingDirection = Enum.ScrollingDirection.Y
-        LeftSection.ClipsDescendants = true
         LeftSection.Visible = false
         LeftSection.Parent = Sections
         
-        local UIListLayout = Instance.new('UIListLayout')
-        UIListLayout.Padding = UDim.new(0, 12)
-        UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        UIListLayout.Parent = LeftSection
+        local LeftList = Instance.new('UIListLayout')
+        LeftList.Padding = UDim.new(0, 12)
+        LeftList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        LeftList.SortOrder = Enum.SortOrder.LayoutOrder
+        LeftList.Parent = LeftSection
         
-        local UIPadding = Instance.new('UIPadding')
-        UIPadding.PaddingTop = UDim.new(0, 4)
-        UIPadding.PaddingBottom = UDim.new(0, 24) -- extra space so last module isn't clipped
-        UIPadding.PaddingLeft = UDim.new(0, 0)
-        UIPadding.PaddingRight = UDim.new(0, 4)
-        UIPadding.Parent = LeftSection
+        local LeftPad = Instance.new('UIPadding')
+        LeftPad.PaddingTop = UDim.new(0, 6)
+        LeftPad.PaddingBottom = UDim.new(0, 40)
+        LeftPad.PaddingRight = UDim.new(0, 6)
+        LeftPad.Parent = LeftSection
+
+        setup_section_scroll(LeftSection)
 
         local RightSection = Instance.new('ScrollingFrame')
         RightSection.Name = 'RightSection'
-        RightSection.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        RightSection.ScrollBarThickness = 3
-        RightSection.ScrollBarImageColor3 = Color3.fromRGB(140, 90, 220)
-        RightSection.ScrollBarImageTransparency = 0.35
         RightSection.Size = UDim2.new(0, 243, 0, 420)
         RightSection.Selectable = false
         RightSection.AnchorPoint = Vector2.new(0, 0.5)
@@ -1439,24 +1463,22 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         RightSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
         RightSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         RightSection.BorderSizePixel = 0
-        RightSection.CanvasSize = UDim2.new(0, 0, 0, 0)
-        RightSection.ScrollingDirection = Enum.ScrollingDirection.Y
-        RightSection.ClipsDescendants = true
         RightSection.Visible = false
         RightSection.Parent = Sections
         
-        local UIListLayout = Instance.new('UIListLayout')
-        UIListLayout.Padding = UDim.new(0, 12)
-        UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        UIListLayout.Parent = RightSection
+        local RightList = Instance.new('UIListLayout')
+        RightList.Padding = UDim.new(0, 12)
+        RightList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        RightList.SortOrder = Enum.SortOrder.LayoutOrder
+        RightList.Parent = RightSection
         
-        local UIPadding = Instance.new('UIPadding')
-        UIPadding.PaddingTop = UDim.new(0, 4)
-        UIPadding.PaddingBottom = UDim.new(0, 24)
-        UIPadding.PaddingLeft = UDim.new(0, 0)
-        UIPadding.PaddingRight = UDim.new(0, 4)
-        UIPadding.Parent = RightSection
+        local RightPad = Instance.new('UIPadding')
+        RightPad.PaddingTop = UDim.new(0, 6)
+        RightPad.PaddingBottom = UDim.new(0, 40)
+        RightPad.PaddingRight = UDim.new(0, 6)
+        RightPad.Parent = RightSection
+
+        setup_section_scroll(RightSection)
 
         self._tab += 1
 
