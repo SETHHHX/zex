@@ -2813,187 +2813,165 @@ if not settings or settings and not settings.disableline then
                 return DropdownManager
             end
 
-            function ModuleManager:create_feature(settings)
+            function ModuleManager:create_button(settings: any)
+                settings = settings or {}
+                settings.callback = settings.callback or settings.button_callback or function() end
+                settings.title = settings.title or "Button"
 
-                local checked = false;
-                
                 LayoutOrderModule = LayoutOrderModule + 1
-            
+
                 if self._size == 0 then
                     self._size = 11
                 end
-            
-                self._size += 20
-            
+                self._size += 38
+
                 Module.Size = UDim2.fromOffset(241, 108 + self._size)
-            
                 Options.Size = UDim2.fromOffset(241, self._size + 8)
-            
+
+                local Button = Instance.new("TextButton")
+                Button.Name = "Button"
+                Button.Size = UDim2.new(0, 207, 0, 32)
+                Button.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                Button.BorderSizePixel = 0
+                Button.AutoButtonColor = false
+                Button.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                Button.TextSize = 14
+                Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                Button.Text = settings.title
+                Button.Parent = Options
+                Button.LayoutOrder = LayoutOrderModule
+
+                local Corner = Instance.new("UICorner")
+                Corner.CornerRadius = UDim.new(0, 8)
+                Corner.Parent = Button
+
+                local Stroke = Instance.new("UIStroke")
+                Stroke.Color = Color3.fromRGB(160, 100, 255)
+                Stroke.Transparency = 0.45
+                Stroke.Thickness = 1
+                Stroke.Parent = Button
+
+                Button.MouseEnter:Connect(function()
+                    TweenService:Create(Button, TweenInfo.new(0.2), {
+                        BackgroundColor3 = Color3.fromRGB(145, 85, 240)
+                    }):Play()
+                    TweenService:Create(Stroke, TweenInfo.new(0.2), {
+                        Transparency = 0.2
+                    }):Play()
+                end)
+
+                Button.MouseLeave:Connect(function()
+                    TweenService:Create(Button, TweenInfo.new(0.2), {
+                        BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                    }):Play()
+                    TweenService:Create(Stroke, TweenInfo.new(0.2), {
+                        Transparency = 0.45
+                    }):Play()
+                end)
+
+                Button.MouseButton1Click:Connect(function()
+                    -- click feedback
+                    TweenService:Create(Button, TweenInfo.new(0.08), {
+                        Size = UDim2.new(0, 203, 0, 30)
+                    }):Play()
+                    task.delay(0.08, function()
+                        TweenService:Create(Button, TweenInfo.new(0.12), {
+                            Size = UDim2.new(0, 207, 0, 32)
+                        }):Play()
+                    end)
+                    settings.callback()
+                end)
+
+                return Button
+            end
+
+            function ModuleManager:create_feature(settings)
+                settings = settings or {}
+                settings.title = settings.title or "Feature"
+                settings.callback = settings.callback or function() end
+                settings.button_callback = settings.button_callback or function() end
+
+                local checked = false
+                LayoutOrderModule = LayoutOrderModule + 1
+
+                if self._size == 0 then
+                    self._size = 11
+                end
+                self._size += 40
+
+                Module.Size = UDim2.fromOffset(241, 108 + self._size)
+                Options.Size = UDim2.fromOffset(241, self._size + 8)
+
                 local FeatureContainer = Instance.new("Frame")
-                FeatureContainer.Size = UDim2.new(0, 207, 0, 16)
+                FeatureContainer.Size = UDim2.new(0, 207, 0, 32)
                 FeatureContainer.BackgroundTransparency = 1
                 FeatureContainer.Parent = Options
                 FeatureContainer.LayoutOrder = LayoutOrderModule
-            
-                local UIListLayout = Instance.new("UIListLayout")
-                UIListLayout.FillDirection = Enum.FillDirection.Horizontal
-                UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                UIListLayout.Parent = FeatureContainer
-            
+
+                -- Main rounded button
                 local FeatureButton = Instance.new("TextButton")
-                FeatureButton.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                FeatureButton.TextSize = 14;
-                FeatureButton.Size = UDim2.new(1, -35, 0, 16)
-                FeatureButton.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
-                FeatureButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                FeatureButton.Text = "    " .. settings.title or "    " .. "Feature"
+                FeatureButton.Name = "FeatureButton"
+                FeatureButton.Size = UDim2.new(1, 0, 0, 32)
+                FeatureButton.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                FeatureButton.BorderSizePixel = 0
                 FeatureButton.AutoButtonColor = false
-                FeatureButton.TextXAlignment = Enum.TextXAlignment.Left
-                FeatureButton.TextTransparency = 0.05
+                FeatureButton.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                 FeatureButton.TextSize = 14
+                FeatureButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                FeatureButton.Text = settings.title
                 FeatureButton.Parent = FeatureContainer
-            
-                local RightContainer = Instance.new("Frame")
-                RightContainer.Size = UDim2.new(0, 45, 0, 16)
-                RightContainer.BackgroundTransparency = 1
-                RightContainer.Parent = FeatureContainer
-            
-                local RightLayout = Instance.new("UIListLayout")
-                RightLayout.Padding = UDim.new(0.1, 0)
-                RightLayout.FillDirection = Enum.FillDirection.Horizontal
-                RightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-                RightLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                RightLayout.Parent = RightContainer
-            
-                local KeybindBox = Instance.new("TextLabel")
-                KeybindBox.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                KeybindBox.Size = UDim2.new(0, 15, 0, 15)
-                KeybindBox.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
-                KeybindBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-                KeybindBox.TextSize = 11
-                KeybindBox.BackgroundTransparency = 1
-                KeybindBox.LayoutOrder = 2;
-                KeybindBox.Parent = RightContainer
-            
-                local KeybindButton = Instance.new("TextButton")
-                KeybindButton.Size = UDim2.new(1, 0, 1, 0)
-                KeybindButton.BackgroundTransparency = 1
-                KeybindButton.TextTransparency = 1
-                KeybindButton.Parent = KeybindBox
 
-                local CheckboxCorner = Instance.new("UICorner", KeybindBox)
-                CheckboxCorner.CornerRadius = UDim.new(0, 3)
+                local BtnCorner = Instance.new("UICorner")
+                BtnCorner.CornerRadius = UDim.new(0, 8)
+                BtnCorner.Parent = FeatureButton
 
-                local UIStroke = Instance.new("UIStroke", KeybindBox)
-                UIStroke.Color = Color3.fromRGB(150, 90, 255)
-                UIStroke.Thickness = 1
-                UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-            
-                if not Library._config._flags then
-                    Library._config._flags = {}
-                end
-            
-                if not Library._config._flags[settings.flag] then
-                    Library._config._flags[settings.flag] = {
-                        checked = false,
-                        BIND = settings.default or "Unknown"
-                    }
-                end
-            
-                checked = Library._config._flags[settings.flag].checked
-                KeybindBox.Text = Library._config._flags[settings.flag].BIND
+                local BtnStroke = Instance.new("UIStroke")
+                BtnStroke.Color = Color3.fromRGB(160, 100, 255)
+                BtnStroke.Transparency = 0.45
+                BtnStroke.Thickness = 1
+                BtnStroke.Parent = FeatureButton
 
-                if KeybindBox.Text == "Unknown" then
-                    KeybindBox.Text = "..."
-                end
-
-                local UseF_Var = nil;
-            
-                if not settings.disablecheck then
-                    local Checkbox = Instance.new("TextButton")
-                    Checkbox.Size = UDim2.new(0, 15, 0, 15)
-                    Checkbox.BackgroundColor3 = checked and Color3.fromRGB(150, 90, 255) or Color3.fromRGB(90, 50, 140)
-                    Checkbox.Text = ""
-                    Checkbox.Parent = RightContainer
-                    Checkbox.LayoutOrder = 1;
-
-                    local UIStroke = Instance.new("UIStroke", Checkbox)
-                    UIStroke.Color = Color3.fromRGB(150, 90, 255)
-                    UIStroke.Thickness = 1
-                    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                
-                    local CheckboxCorner = Instance.new("UICorner")
-                    CheckboxCorner.CornerRadius = UDim.new(0, 3)
-                    CheckboxCorner.Parent = Checkbox
-            
-                    local function toggleState()
-                        checked = not checked
-                        Checkbox.BackgroundColor3 = checked and Color3.fromRGB(150, 90, 255) or Color3.fromRGB(90, 50, 140)
-                        Library._config._flags[settings.flag].checked = checked
-                        Config:save(game.GameId, Library._config)
-                        if settings.callback then
-                            settings.callback(checked)
-                        end
-                    end
-
-                    UseF_Var = toggleState
-                
-                    Checkbox.MouseButton1Click:Connect(toggleState)
-
-                else
-
-                    UseF_Var = function()
-                        settings.button_callback();
-                    end;
-
-                end;
-            
-                KeybindButton.MouseButton1Click:Connect(function()
-                    KeybindBox.Text = "..."
-                    local inputConnection
-                    inputConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-                        if gameProcessed then return end
-                        if input.UserInputType == Enum.UserInputType.Keyboard then
-                            local newKey = input.KeyCode.Name
-                            Library._config._flags[settings.flag].BIND = newKey
-                            if newKey ~= "Unknown" then
-                                KeybindBox.Text = newKey;
-                            end;
-                            Config:save(game.GameId, Library._config) 
-                            inputConnection:Disconnect()
-                        elseif input.UserInputType == Enum.UserInputType.MouseButton3 then
-                            Library._config._flags[settings.flag].BIND = "Unknown"
-                            KeybindBox.Text = "..."
-                            Config:save(game.GameId, Library._config)
-                            inputConnection:Disconnect()
-                        end
-                    end)
-                    Connections["keybind_input_" .. settings.flag] = inputConnection
+                FeatureButton.MouseEnter:Connect(function()
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
+                        BackgroundColor3 = Color3.fromRGB(145, 85, 240)
+                    }):Play()
+                    TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
+                        Transparency = 0.2
+                    }):Play()
                 end)
-            
-                local keyPressConnection
-                keyPressConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType == Enum.UserInputType.Keyboard then
-                        if input.KeyCode.Name == Library._config._flags[settings.flag].BIND then
-                            UseF_Var();
-                        end
-                    end
+
+                FeatureButton.MouseLeave:Connect(function()
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
+                        BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                    }):Play()
+                    TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
+                        Transparency = 0.45
+                    }):Play()
                 end)
-                Connections["keybind_press_" .. settings.flag] = keyPressConnection
-            
+
                 FeatureButton.MouseButton1Click:Connect(function()
-                    if settings.button_callback then
-                        settings.button_callback()
+                    TweenService:Create(FeatureButton, TweenInfo.new(0.08), {
+                        Size = UDim2.new(1, -4, 0, 30)
+                    }):Play()
+                    task.delay(0.08, function()
+                        TweenService:Create(FeatureButton, TweenInfo.new(0.12), {
+                            Size = UDim2.new(1, 0, 0, 32)
+                        }):Play()
+                    end)
+                    settings.button_callback()
+                    -- if no separate button_callback, also fire callback as click
+                    if not settings.disablecheck then
+                        -- just click action, checkbox is separate concept - treat as button primarily
                     end
                 end)
 
-                if not settings.disablecheck then
-                    settings.callback(checked);
-                end;
-            
-                return FeatureContainer
-            end                    
+                return {
+                    Button = FeatureButton,
+                    SetText = function(_, text)
+                        FeatureButton.Text = tostring(text)
+                    end
+                }
+            end
 
             -- Ensure module starts expanded so options are always visible
             if ModuleManager._size > 0 then
