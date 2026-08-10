@@ -280,14 +280,8 @@ end
 
 local Config = setmetatable({
     save = function(self: any, file_name: any, config: any)
-        local success_save, result = pcall(function()
-            local flags = HttpService:JSONEncode(config)
-            writefile('ZexHub/'..file_name..'.json', flags)
-        end)
-    
-        if not success_save then
-            warn('failed to save config', result)
-        end
+        -- Auto-save disabled: settings reset every execute
+        return
     end,
     load = function(self: any, file_name: any, config: any)
         local success_load, result = pcall(function()
@@ -326,7 +320,11 @@ local Config = setmetatable({
 
 
 local Library = {
-    _config = Config:load(game.GameId),
+    _config = {
+        _flags = {},
+        _keybinds = {},
+        _library = {}
+    },
 
     _choosing_keybind = false,
     _device = nil,
@@ -678,6 +676,48 @@ function Library:create_ui()
     TopBar.ZIndex = 40
     TopBar.Parent = Container
 
+    -- Minimize button (hides UI completely)
+    local MinBtn = Instance.new('TextButton')
+    MinBtn.Name = 'MinimizeBtn'
+    MinBtn.Text = '–'
+    MinBtn.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+    MinBtn.TextSize = 18
+    MinBtn.TextColor3 = Color3.fromRGB(200, 190, 220)
+    MinBtn.AutoButtonColor = false
+    MinBtn.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
+    MinBtn.BackgroundTransparency = 0.15
+    MinBtn.BorderSizePixel = 0
+    MinBtn.Size = UDim2.new(0, 28, 0, 28)
+    MinBtn.Position = UDim2.new(1, -48, 0.5, 0)
+    MinBtn.AnchorPoint = Vector2.new(1, 0.5)
+    MinBtn.ZIndex = 50
+    MinBtn.Parent = TopBar
+
+    local MinCorner = Instance.new('UICorner')
+    MinCorner.CornerRadius = UDim.new(0, 7)
+    MinCorner.Parent = MinBtn
+
+    local MinStroke = Instance.new('UIStroke')
+    MinStroke.Color = Color3.fromRGB(130, 80, 200)
+    MinStroke.Transparency = 0.55
+    MinStroke.Thickness = 1
+    MinStroke.Parent = MinBtn
+
+    MinBtn.MouseEnter:Connect(function()
+        TweenService:Create(MinBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(70, 55, 100),
+            TextColor3 = Color3.fromRGB(255, 255, 255),
+            BackgroundTransparency = 0
+        }):Play()
+    end)
+    MinBtn.MouseLeave:Connect(function()
+        TweenService:Create(MinBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(40, 30, 55),
+            TextColor3 = Color3.fromRGB(200, 190, 220),
+            BackgroundTransparency = 0.15
+        }):Play()
+    end)
+
     -- Close button (X) inside top bar, far right
     local CloseBtn = Instance.new('TextButton')
     CloseBtn.Name = 'Close'
@@ -793,13 +833,42 @@ function Library:create_ui()
     end;
 
     function self:change_visiblity(state: boolean)
+        -- Full hide / show (used by RightControl + Minimize button)
+        self._ui_open = state
         if state then
-            TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                Size = UDim2.fromOffset(698, 479)
+            click.Enabled = true
+            Container.Visible = true
+            TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(698, 479),
+                BackgroundTransparency = 0.05
             }):Play()
         else
-            TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                Size = UDim2.fromOffset(158, 52)
+            TweenService:Create(Container, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+                Size = UDim2.fromOffset(0, 0),
+                BackgroundTransparency = 1
+            }):Play()
+            task.delay(0.26, function()
+                if not self._ui_open then
+                    click.Enabled = false
+                end
+            end)
+        end
+    end
+
+    function self:shrink_to_bar(state: boolean)
+        -- Compact bar mode (only via logo/icon click)
+        self._ui_open = state
+        click.Enabled = true
+        Container.Visible = true
+        if state then
+            TweenService:Create(Container, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(698, 479),
+                BackgroundTransparency = 0.05
+            }):Play()
+        else
+            TweenService:Create(Container, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(158, 52),
+                BackgroundTransparency = 0.05
             }):Play()
         end
     end
@@ -2840,7 +2909,7 @@ if not settings or settings and not settings.disableline then
                 local Button = Instance.new("TextButton")
                 Button.Name = "Button"
                 Button.Size = UDim2.new(0, 207, 0, 30)
-                Button.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                Button.BackgroundColor3 = Color3.fromRGB(55, 42, 78)
                 Button.BorderSizePixel = 0
                 Button.AutoButtonColor = false
                 Button.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
@@ -2855,14 +2924,14 @@ if not settings or settings and not settings.disableline then
                 Corner.Parent = Button
 
                 local Stroke = Instance.new("UIStroke")
-                Stroke.Color = Color3.fromRGB(160, 100, 255)
-                Stroke.Transparency = 0.45
+                Stroke.Color = Color3.fromRGB(110, 80, 160)
+                Stroke.Transparency = 0.55
                 Stroke.Thickness = 1
                 Stroke.Parent = Button
 
                 Button.MouseEnter:Connect(function()
                     TweenService:Create(Button, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(145, 85, 240)
+                        BackgroundColor3 = Color3.fromRGB(75, 55, 110)
                     }):Play()
                     TweenService:Create(Stroke, TweenInfo.new(0.2), {
                         Transparency = 0.2
@@ -2871,7 +2940,7 @@ if not settings or settings and not settings.disableline then
 
                 Button.MouseLeave:Connect(function()
                     TweenService:Create(Button, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                        BackgroundColor3 = Color3.fromRGB(55, 42, 78)
                     }):Play()
                     TweenService:Create(Stroke, TweenInfo.new(0.2), {
                         Transparency = 0.45
@@ -2921,7 +2990,7 @@ if not settings or settings and not settings.disableline then
                 local FeatureButton = Instance.new("TextButton")
                 FeatureButton.Name = "FeatureButton"
                 FeatureButton.Size = UDim2.new(1, 0, 0, 30)
-                FeatureButton.BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                FeatureButton.BackgroundColor3 = Color3.fromRGB(55, 42, 78)
                 FeatureButton.BorderSizePixel = 0
                 FeatureButton.AutoButtonColor = false
                 FeatureButton.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
@@ -2935,14 +3004,14 @@ if not settings or settings and not settings.disableline then
                 BtnCorner.Parent = FeatureButton
 
                 local BtnStroke = Instance.new("UIStroke")
-                BtnStroke.Color = Color3.fromRGB(160, 100, 255)
-                BtnStroke.Transparency = 0.45
+                BtnStroke.Color = Color3.fromRGB(110, 80, 160)
+                BtnStroke.Transparency = 0.55
                 BtnStroke.Thickness = 1
                 BtnStroke.Parent = FeatureButton
 
                 FeatureButton.MouseEnter:Connect(function()
                     TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(145, 85, 240)
+                        BackgroundColor3 = Color3.fromRGB(75, 55, 110)
                     }):Play()
                     TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
                         Transparency = 0.2
@@ -2951,7 +3020,7 @@ if not settings or settings and not settings.disableline then
 
                 FeatureButton.MouseLeave:Connect(function()
                     TweenService:Create(FeatureButton, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(120, 65, 210)
+                        BackgroundColor3 = Color3.fromRGB(55, 42, 78)
                     }):Play()
                     TweenService:Create(BtnStroke, TweenInfo.new(0.2), {
                         Transparency = 0.45
@@ -2994,19 +3063,41 @@ if not settings or settings and not settings.disableline then
         return TabManager
     end
 
+    -- RightControl = fully hide / show UI
     Connections['library_visiblity'] = UserInputService.InputBegan:Connect(function(input: InputObject, process: boolean)
         if input.KeyCode ~= Enum.KeyCode.RightControl then
             return
         end
-
-        self._ui_open = not self._ui_open
-        self:change_visiblity(self._ui_open)
+        self:change_visiblity(not self._ui_open)
     end)
 
-    self._ui.Container.Handler.Minimize.MouseButton1Click:Connect(function()
-        self._ui_open = not self._ui_open
-        self:change_visiblity(self._ui_open)
-    end)
+    -- TopBar MinimizeBtn = fully hide
+    local minBtn = self._ui.Container:FindFirstChild('MinimizeBtn', true)
+    if minBtn then
+        minBtn.MouseButton1Click:Connect(function()
+            self:change_visiblity(false)
+        end)
+    end
+
+    -- Old Handler.Minimize stays unused / or also hide
+    if self._ui.Container.Handler:FindFirstChild('Minimize') then
+        self._ui.Container.Handler.Minimize.MouseButton1Click:Connect(function()
+            self:change_visiblity(not self._ui_open)
+        end)
+    end
+
+    -- Logo / Icon click = shrink to compact bar (not full hide)
+    local logoIcon = self._ui.Container.Handler:FindFirstChild('Icon')
+    if logoIcon then
+        logoIcon.Active = true
+        logoIcon.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                -- toggle compact bar
+                local isFull = Container.Size.X.Offset > 200
+                self:shrink_to_bar(not isFull)
+            end
+        end)
+    end
 
     -- Close button: destroy the whole UI
     local closeBtn = self._ui.Container:FindFirstChild('Close', true)
