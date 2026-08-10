@@ -341,10 +341,19 @@ local Library = {
 Library.__index = Library
 
 
-function Library.new()
+function Library.new(settings)
+    settings = settings or {}
     local self = setmetatable({
         _loaded = false,
         _tab = 0,
+        _settings = {
+            Title = settings.Title or "Zex Hub",
+            Subtitle = settings.Subtitle or "",
+            Keybind = settings.Keybind or Enum.KeyCode.RightControl,
+            ToggleIcon = settings.ToggleIcon == true,
+            ToggleIconImage = settings.ToggleIconImage or "rbxassetid://130655920174103",
+            ToggleIconSize = settings.ToggleIconSize or 60,
+        },
     }, Library)
     
     self:create_ui()
@@ -576,39 +585,66 @@ function Library:create_ui()
     UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     UIListLayout.Parent = Tabs
     
+    -- Title (supports RichText)
     local ClientName = Instance.new('TextLabel')
     ClientName.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
     ClientName.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ClientName.TextTransparency = 0.2
+    ClientName.TextTransparency = 0
     ClientName.Name = 'ClientName'
-    ClientName.Size = UDim2.new(0, 150, 0, 20)
-    ClientName.AnchorPoint = Vector2.new(0, 0.5)
-    ClientName.Position = UDim2.new(0.056, 0, 0.055, 0)
+    ClientName.Size = UDim2.new(0, 420, 0, 18)
+    ClientName.AnchorPoint = Vector2.new(0, 0)
+    ClientName.Position = UDim2.new(0.056, 0, 0.018, 0)
     ClientName.BackgroundTransparency = 1
     ClientName.TextXAlignment = Enum.TextXAlignment.Left
+    ClientName.TextYAlignment = Enum.TextYAlignment.Center
     ClientName.BorderSizePixel = 0
-    ClientName.TextSize = 14
+    ClientName.TextSize = 15
+    ClientName.RichText = true
+    ClientName.Text = self._settings.Title or "Zex Hub"
     ClientName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     ClientName.Parent = Handler
 
-    local spinChars = {"/", "-", "\\", "|"}
-    local i = 1
-    local executorName = (identifyexecutor and select(1, identifyexecutor())) or "Unknown"
+    -- Subtitle (supports RichText) — game name / extra info
+    local SubtitleLabel = Instance.new('TextLabel')
+    SubtitleLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+    SubtitleLabel.TextColor3 = Color3.fromRGB(180, 170, 210)
+    SubtitleLabel.TextTransparency = 0.15
+    SubtitleLabel.Name = 'Subtitle'
+    SubtitleLabel.Size = UDim2.new(0, 420, 0, 14)
+    SubtitleLabel.AnchorPoint = Vector2.new(0, 0)
+    SubtitleLabel.Position = UDim2.new(0.056, 0, 0.055, 0)
+    SubtitleLabel.BackgroundTransparency = 1
+    SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SubtitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+    SubtitleLabel.BorderSizePixel = 0
+    SubtitleLabel.TextSize = 11
+    SubtitleLabel.RichText = true
+    SubtitleLabel.Text = self._settings.Subtitle or ""
+    SubtitleLabel.Visible = (self._settings.Subtitle ~= nil and self._settings.Subtitle ~= "")
+    SubtitleLabel.Parent = Handler
 
-    task.spawn(function()
-        while ClientName and ClientName.Parent do
-            ClientName.Text = " Zex Hub " .. spinChars[i] .. " " .. tostring(executorName)
-            i = i % #spinChars + 1
-            task.wait(0.2)
+    self._titleLabel = ClientName
+    self._subtitleLabel = SubtitleLabel
+
+    function self:SetTitle(text)
+        if self._titleLabel then
+            self._titleLabel.Text = tostring(text or "")
+            self._settings.Title = tostring(text or "")
         end
-    end)
-    
-    local UIGradient = Instance.new('UIGradient')
-    UIGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(200, 200, 200)), -- Gris claro
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 100, 100))  -- Gris medio
-    }
-    UIGradient.Parent = ClientName
+    end
+
+    function self:SetSubtitle(text)
+        if self._subtitleLabel then
+            local t = tostring(text or "")
+            self._subtitleLabel.Text = t
+            self._subtitleLabel.Visible = (t ~= "")
+            self._settings.Subtitle = t
+        end
+    end
+
+    function self:SetState(state)
+        self:change_visiblity(state and true or false)
+    end
     
     local Pin = Instance.new('Frame')
     Pin.Name = 'Pin'
@@ -3063,9 +3099,11 @@ if not settings or settings and not settings.disableline then
         return TabManager
     end
 
-    -- RightControl = fully hide / show UI
+    -- Configurable keybind = fully hide / show UI
+    local toggleKey = self._settings.Keybind or Enum.KeyCode.RightControl
     Connections['library_visiblity'] = UserInputService.InputBegan:Connect(function(input: InputObject, process: boolean)
-        if input.KeyCode ~= Enum.KeyCode.RightControl then
+        if process then return end
+        if input.KeyCode ~= toggleKey then
             return
         end
         self:change_visiblity(not self._ui_open)
@@ -3092,7 +3130,6 @@ if not settings or settings and not settings.disableline then
         logoIcon.Active = true
         logoIcon.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                -- toggle compact bar
                 local isFull = Container.Size.X.Offset > 200
                 self:shrink_to_bar(not isFull)
             end
@@ -3108,12 +3145,167 @@ if not settings or settings and not settings.disableline then
                 BackgroundTransparency = 1
             }):Play()
             task.delay(0.35, function()
+                if self._toggleGui then
+                    self._toggleGui:Destroy()
+                    self._toggleGui = nil
+                end
                 if self._ui then
                     self._ui:Destroy()
                     self._ui = nil
                 end
                 Connections:disconnect_all()
             end)
+        end)
+    end
+
+    -- ============================================
+    --  Optional floating Toggle Icon (topmost)
+    -- ============================================
+    if self._settings.ToggleIcon then
+        local oldToggle = CoreGui:FindFirstChild("ZexHubToggle")
+        if oldToggle then
+            oldToggle:Destroy()
+        end
+
+        local ToggleGui = Instance.new("ScreenGui")
+        ToggleGui.Name = "ZexHubToggle"
+        ToggleGui.ResetOnSpawn = false
+        ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        ToggleGui.DisplayOrder = 999999999
+        ToggleGui.IgnoreGuiInset = true
+        ToggleGui.Parent = CoreGui
+        self._toggleGui = ToggleGui
+
+        local BASE_SIZE = self._settings.ToggleIconSize or 60
+        local CLICK_SIZE = math.floor(BASE_SIZE * 0.83)
+        local HOVER_SIZE = math.floor(BASE_SIZE * 1.08)
+
+        local Button = Instance.new("ImageButton")
+        Button.Name = "ToggleButton"
+        Button.Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+        Button.Position = UDim2.new(0.5, -BASE_SIZE / 2, 0, 18)
+        Button.BackgroundTransparency = 0.45
+        Button.BackgroundColor3 = Color3.fromRGB(28, 20, 42)
+        Button.Image = self._settings.ToggleIconImage or "rbxassetid://130655920174103"
+        Button.ImageColor3 = Color3.fromRGB(230, 220, 255)
+        Button.ScaleType = Enum.ScaleType.Fit
+        Button.Active = true
+        Button.Draggable = true
+        Button.ZIndex = 999999999
+        Button.Parent = ToggleGui
+
+        local BtnCorner = Instance.new("UICorner")
+        BtnCorner.CornerRadius = UDim.new(1, 0)
+        BtnCorner.Parent = Button
+
+        local glow = Instance.new("UIStroke")
+        glow.Parent = Button
+        glow.Thickness = 2
+        glow.Color = Color3.fromRGB(150, 80, 255)
+        glow.Transparency = 0.45
+
+        task.spawn(function()
+            while Button and Button.Parent do
+                TweenService:Create(glow, TweenInfo.new(0.65, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                    Transparency = 0.12
+                }):Play()
+                task.wait(0.65)
+                TweenService:Create(glow, TweenInfo.new(0.65, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                    Transparency = 0.55
+                }):Play()
+                task.wait(0.65)
+            end
+        end)
+
+        local function ClickAnimation()
+            local shrink = TweenService:Create(Button, TweenInfo.new(0.05), {
+                Size = UDim2.fromOffset(CLICK_SIZE, CLICK_SIZE)
+            })
+            local expand = TweenService:Create(Button, TweenInfo.new(0.12, Enum.EasingStyle.Back), {
+                Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+            })
+            shrink:Play()
+            shrink.Completed:Connect(function()
+                expand:Play()
+            end)
+        end
+
+        local function RippleEffect()
+            local ripple = Instance.new("Frame")
+            ripple.Parent = Button
+            ripple.BackgroundColor3 = Color3.fromRGB(160, 80, 255)
+            ripple.BackgroundTransparency = 0.45
+            ripple.Size = UDim2.fromOffset(0, 0)
+            ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+            ripple.Position = UDim2.new(0.5, 0, 0.5, 0)
+            ripple.ZIndex = Button.ZIndex + 1
+            local rc = Instance.new("UICorner")
+            rc.CornerRadius = UDim.new(1, 0)
+            rc.Parent = ripple
+            local tween = TweenService:Create(ripple, TweenInfo.new(0.32), {
+                Size = UDim2.fromOffset(BASE_SIZE * 2, BASE_SIZE * 2),
+                BackgroundTransparency = 1
+            })
+            tween:Play()
+            tween.Completed:Connect(function()
+                ripple:Destroy()
+            end)
+        end
+
+        local function FlashEffect()
+            local tween = TweenService:Create(Button, TweenInfo.new(0.08), {
+                BackgroundTransparency = 0.15
+            })
+            local back = TweenService:Create(Button, TweenInfo.new(0.18), {
+                BackgroundTransparency = 0.45
+            })
+            tween:Play()
+            tween.Completed:Connect(function()
+                back:Play()
+            end)
+        end
+
+        local function ColorPulse()
+            local tween = TweenService:Create(Button, TweenInfo.new(0.1), {
+                BackgroundColor3 = Color3.fromRGB(70, 40, 110)
+            })
+            local back = TweenService:Create(Button, TweenInfo.new(0.15), {
+                BackgroundColor3 = Color3.fromRGB(28, 20, 42)
+            })
+            tween:Play()
+            tween.Completed:Connect(function()
+                back:Play()
+            end)
+        end
+
+        Button.MouseEnter:Connect(function()
+            TweenService:Create(Button, TweenInfo.new(0.12), {
+                Size = UDim2.fromOffset(HOVER_SIZE, HOVER_SIZE)
+            }):Play()
+        end)
+
+        Button.MouseLeave:Connect(function()
+            TweenService:Create(Button, TweenInfo.new(0.12), {
+                Size = UDim2.fromOffset(BASE_SIZE, BASE_SIZE)
+            }):Play()
+        end)
+
+        Button.MouseButton1Click:Connect(function()
+            task.spawn(ClickAnimation)
+            task.spawn(FlashEffect)
+            task.spawn(ColorPulse)
+            RippleEffect()
+            TweenService:Create(Button, TweenInfo.new(0.15), {
+                Rotation = Button.Rotation + 18
+            }):Play()
+            self:change_visiblity(not self._ui_open)
+        end)
+
+        self:removed(function()
+            if self._toggleGui then
+                self._toggleGui:Destroy()
+                self._toggleGui = nil
+            end
         end)
     end
 
@@ -3124,10 +3316,28 @@ end
 -- ============================================
 --  ZexHub UI Library (Clean Version)
 --  Solo la librería, sin scripts de juego.
+--
 --  Uso:
 --      local Library = loadstring(game:HttpGet("RAW_GITHUB_URL"))()
---      local Window = Library.new()
+--
+--      local Window = Library.new({
+--          Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
+--          Subtitle = "<font color='#33ff00'><b>San Diego Border Roleplay</b></font>",
+--          Keybind = Enum.KeyCode.RightControl,
+--          ToggleIcon = true,
+--          ToggleIconImage = "rbxassetid://130655920174103",
+--          ToggleIconSize = 60,
+--      })
+--
 --      Window:load()
+--
+--      -- Cambiar título / subtítulo en runtime:
+--      Window:SetTitle("ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>")
+--      Window:SetSubtitle("<font color='#33ff00'><b>Mi Juego</b></font>")
+--
+--      -- Abrir / cerrar desde código:
+--      Window:SetState(true)
+--      Window:SetState(false)
 -- ============================================
 
 return Library
