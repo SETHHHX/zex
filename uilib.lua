@@ -1501,7 +1501,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             local showModuleToggle = settings.showToggle == true
 
             local Module = Instance.new('Frame')
-            -- false so long paragraph text isn't cut; heights are correct so modules shouldn't overlap
+            -- Auto height: grows with content (no fixed size that clips options on mobile)
             Module.ClipsDescendants = false
             Module.Name = 'Module'
             Module.Parent = settings.section
@@ -1510,7 +1510,8 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             Module.BorderColor3 = Color3.fromRGB(40, 40, 40)
             Module.BorderSizePixel = 0
             Module.Position = UDim2.new(0.004, 0, 0, 0)
-            Module.Size = UDim2.new(0, 241, 0, showModuleToggle and 100 or 56)
+            Module.Size = UDim2.new(0, 241, 0, 0) -- height driven by AutomaticSize
+            Module.AutomaticSize = Enum.AutomaticSize.Y
 
             local UIListLayout = Instance.new('UIListLayout')
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1691,11 +1692,10 @@ Keybind.Active = showModuleToggle
             Options.BackgroundTransparency = 1
             Options.Position = UDim2.new(0, 0, 1, 0)
             Options.BorderColor3 = Color3.fromRGB(90, 50, 140)
-            Options.Size = UDim2.new(0, 241, 0, 8)
+            Options.Size = UDim2.new(0, 241, 0, 0)
             Options.BorderSizePixel = 0
             Options.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            -- Manual size control via refresh_module_height (AutomaticSize fights UIScale)
-            Options.AutomaticSize = Enum.AutomaticSize.None
+            Options.AutomaticSize = Enum.AutomaticSize.Y -- grow with checkboxes/sliders/etc
             Options.ClipsDescendants = false
             Options.Parent = Module
 
@@ -1710,47 +1710,16 @@ Keybind.Active = showModuleToggle
             OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
             OptionsList.Parent = Options
 
-            -- Keep module tall enough for all content.
-            -- AbsoluteContentSize is SCREEN pixels under UIScale → divide by scale for local units.
-            -- Do NOT touch section.CanvasSize here (AutomaticCanvasSize handles it; manual sets cause scroll snap-back on mobile).
+            -- Module + Options use AutomaticSize.Y — no manual height management needed.
+            -- Kept as no-op so any leftover calls don't break.
             local function refresh_module_height()
-                local scale = (Library._ui_scale and Library._ui_scale > 0) and Library._ui_scale or 1
-
-                local rawOptions = OptionsList.AbsoluteContentSize.Y
-                -- Generous padding so wrapped text / paragraphs aren't clipped on mobile
-                local optionsH = math.max(rawOptions / scale, 0) + 40
-                if optionsH < 12 then optionsH = 12 end
-
-                local headerH = showModuleToggle and 93 or 52
-                local total = headerH + optionsH + (ModuleManager._multiplier or 0)
-                if total < headerH + 12 then
-                    total = headerH + 12
-                end
-
-                Module.Size = UDim2.fromOffset(241, total)
-                Options.Size = UDim2.fromOffset(241, optionsH)
             end
-
-            OptionsList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                task.defer(refresh_module_height)
-            end)
-
-            -- Settle after scale/layout (only a couple of times, not continuous)
-            task.defer(refresh_module_height)
-            task.delay(0.15, refresh_module_height)
-            task.delay(0.4, refresh_module_height)
 
             function ModuleManager:change_state(state: boolean)
     self._state = state
 
     -- Options always stay visible. Only the master toggle visual changes.
-    -- Keep module expanded with all options
-    local headerBase = showModuleToggle and 102 or 56
-    local targetSize = headerBase + self._size + self._multiplier
-    if targetSize < headerBase then targetSize = headerBase end
-    TweenService:Create(Module, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(241, targetSize)
-    }):Play()
+    -- Module height is AutomaticSize — no size tween needed.
 
     if self._state then
         TweenService:Create(Toggle, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
@@ -1932,10 +1901,6 @@ end
                 end
 
                 self._size += settings.customScale or 62
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 local Paragraph = Instance.new('Frame')
                 Paragraph.BackgroundColor3 = Color3.fromRGB(28, 22, 40)
                 Paragraph.BackgroundTransparency = 0.15
@@ -2029,12 +1994,6 @@ end
                 end
             
                 self._size += settings.customScale or 56 
-            
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-            
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-            
-              
                 local TextFrame = Instance.new('Frame')
                 TextFrame.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
                 TextFrame.BackgroundTransparency = 0.3
@@ -2113,10 +2072,6 @@ end
                 end
             
                 self._size += 32
-            
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 -- Row container (label left + input right)
                 local Row = Instance.new("Frame")
                 Row.Name = "TextboxRow"
@@ -2232,9 +2187,6 @@ end
                 self._size += 34
             
                 -- Always show options (modules stay expanded)
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-            
                 local Checkbox = Instance.new("TextButton")
 Checkbox.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
 Checkbox.TextColor3 = Color3.fromRGB(200, 200, 200) -- Gris claro para el texto
@@ -2471,10 +2423,6 @@ Checkbox.LayoutOrder = LayoutOrderModule
                     self._size = 11
                 end
                 self._size += 28
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 local Row = Instance.new("TextButton")
                 Row.Name = "Toggle"
                 Row.Size = UDim2.new(0, 207, 0, 22)
@@ -2704,9 +2652,6 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 end
             
                 self._size += 34
-            
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-
                 local dividerHeight = 1
                 local dividerWidth = 207 
             
@@ -2791,11 +2736,6 @@ if not settings or settings and not settings.disableline then
                 end
 
                 self._size += 34
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 local Slider = Instance.new('TextButton')
                 Slider.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal);
                 Slider.TextSize = 14;
@@ -3010,8 +2950,6 @@ if not settings or settings and not settings.disableline then
                 end;
 
                 if not settings.Order then
-                    Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                    Options.Size = UDim2.fromOffset(241, self._size + 8)
                 end
 
                 local Dropdown = Instance.new('TextButton')
@@ -3277,18 +3215,10 @@ if not settings or settings and not settings.disableline then
                 function DropdownManager:unfold_settings()
                     self._state = not self._state
 
+                    -- Only animate the dropdown itself. Module/Options use AutomaticSize.Y
+                    -- so they grow/shrink automatically when Box expands — no fixed Module size.
                     if self._state then
-                        ModuleManager._multiplier += self._size
-
-                        CurrentDropSizeState = self._size;
-
-                        TweenService:Create(Module, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(241, 93 + ModuleManager._size + ModuleManager._multiplier)
-                        }):Play()
-
-                        TweenService:Create(Module.Options, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(241, ModuleManager._size + ModuleManager._multiplier)
-                        }):Play()
+                        CurrentDropSizeState = self._size
 
                         TweenService:Create(Dropdown, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             Size = UDim2.fromOffset(207, 39 + self._size)
@@ -3302,17 +3232,7 @@ if not settings or settings and not settings.disableline then
                             Rotation = 180
                         }):Play()
                     else
-                        ModuleManager._multiplier -= self._size
-
-                        CurrentDropSizeState = 0;
-
-                        TweenService:Create(Module, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(241, 93 + ModuleManager._size + ModuleManager._multiplier)
-                        }):Play()
-
-                        TweenService:Create(Module.Options, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(241, ModuleManager._size + ModuleManager._multiplier)
-                        }):Play()
+                        CurrentDropSizeState = 0
 
                         TweenService:Create(Dropdown, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             Size = UDim2.fromOffset(207, 39)
@@ -3491,10 +3411,6 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
                 self._size += 32
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 -- Row-style button (title left + chevron right)
                 local Button = Instance.new("TextButton")
                 Button.Name = "Button"
@@ -3613,10 +3529,6 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
                 self._size += 32
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 -- Same row style as create_button
                 local FeatureButton = Instance.new("TextButton")
                 FeatureButton.Name = "FeatureButton"
@@ -3731,10 +3643,6 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
                 self._size += 34
-
-                Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + self._size)
-                Options.Size = UDim2.fromOffset(241, self._size + 8)
-
                 local h, s, v = defaultColor:ToHSV()
                 local currentColor = defaultColor
                 local open = false
@@ -4039,8 +3947,6 @@ if not settings or settings and not settings.disableline then
                 local PANEL_EXTRA = 132
 
                 local function refreshModuleAndSection()
-                    Module.Size = UDim2.fromOffset(241, (showModuleToggle and 102 or 56) + ModuleManager._size + ModuleManager._multiplier)
-                    Options.Size = UDim2.fromOffset(241, ModuleManager._size + 8)
                     -- Do not touch section.CanvasSize — AutomaticCanvasSize handles it
                 end
 
@@ -4084,11 +3990,7 @@ if not settings or settings and not settings.disableline then
                 return ColorManager
             end
 
-            -- Ensure module starts expanded so options are always visible
-            if ModuleManager._size > 0 then
-                local hb = showModuleToggle and 102 or 56
-                Module.Size = UDim2.fromOffset(241, hb + ModuleManager._size + ModuleManager._multiplier)
-            end
+            -- Module height is AutomaticSize.Y — always expanded with content
 
             if showModuleToggle and settings.flag then
                 Library:RegisterElement(settings.flag, "module", function(v)
