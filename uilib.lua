@@ -1398,9 +1398,9 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
 
         local function setup_section_scroll(section: ScrollingFrame)
             section.AutomaticCanvasSize = Enum.AutomaticSize.None
-            section.ScrollBarThickness = 4
-            section.ScrollBarImageColor3 = Color3.fromRGB(140, 90, 220)
-            section.ScrollBarImageTransparency = 0.3
+            -- Invisible scrollbar (wheel / touch still work)
+            section.ScrollBarThickness = 0
+            section.ScrollBarImageTransparency = 1
             section.ScrollingDirection = Enum.ScrollingDirection.Y
             section.ClipsDescendants = true
             section.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -1409,8 +1409,7 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             local function refresh_canvas()
                 if not layout then return end
                 local contentY = layout.AbsoluteContentSize.Y
-                -- Extra bottom space so last module is fully visible
-                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 48)
+                section.CanvasSize = UDim2.new(0, 0, 0, contentY + 56)
             end
 
             if layout then
@@ -1428,13 +1427,11 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
 
         local LeftSection = Instance.new('ScrollingFrame')
         LeftSection.Name = 'LeftSection'
-        LeftSection.Size = UDim2.new(0, 243, 0, 420)
+        LeftSection.Size = UDim2.new(0, 252, 0, 420)
         LeftSection.Selectable = false
         LeftSection.AnchorPoint = Vector2.new(0, 0.5)
         LeftSection.BackgroundTransparency = 1
-        LeftSection.Position = UDim2.new(0.2594326436519623, 0, 0.53, 0)
-        LeftSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
-        LeftSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        LeftSection.Position = UDim2.new(0.252, 0, 0.53, 0)
         LeftSection.BorderSizePixel = 0
         LeftSection.Visible = false
         LeftSection.Parent = Sections
@@ -1445,23 +1442,23 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         LeftList.SortOrder = Enum.SortOrder.LayoutOrder
         LeftList.Parent = LeftSection
         
+        -- Padding so module border/stroke is visible on all sides
         local LeftPad = Instance.new('UIPadding')
         LeftPad.PaddingTop = UDim.new(0, 6)
         LeftPad.PaddingBottom = UDim.new(0, 40)
-        LeftPad.PaddingRight = UDim.new(0, 6)
+        LeftPad.PaddingLeft = UDim.new(0, 5)
+        LeftPad.PaddingRight = UDim.new(0, 5)
         LeftPad.Parent = LeftSection
 
         setup_section_scroll(LeftSection)
 
         local RightSection = Instance.new('ScrollingFrame')
         RightSection.Name = 'RightSection'
-        RightSection.Size = UDim2.new(0, 243, 0, 420)
+        RightSection.Size = UDim2.new(0, 252, 0, 420)
         RightSection.Selectable = false
         RightSection.AnchorPoint = Vector2.new(0, 0.5)
         RightSection.BackgroundTransparency = 1
-        RightSection.Position = UDim2.new(0.6290000081062317, 0, 0.53, 0)
-        RightSection.BorderColor3 = Color3.fromRGB(90, 50, 140)
-        RightSection.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        RightSection.Position = UDim2.new(0.622, 0, 0.53, 0)
         RightSection.BorderSizePixel = 0
         RightSection.Visible = false
         RightSection.Parent = Sections
@@ -1475,7 +1472,8 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
         local RightPad = Instance.new('UIPadding')
         RightPad.PaddingTop = UDim.new(0, 6)
         RightPad.PaddingBottom = UDim.new(0, 40)
-        RightPad.PaddingRight = UDim.new(0, 6)
+        RightPad.PaddingLeft = UDim.new(0, 5)
+        RightPad.PaddingRight = UDim.new(0, 5)
         RightPad.Parent = RightSection
 
         setup_section_scroll(RightSection)
@@ -1522,23 +1520,21 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             Module.Position = UDim2.new(0.004, 0, 0, 0)
             Module.Size = UDim2.new(0, 241, 0, showModuleToggle and 100 or 56)
 
-            local ModuleStroke = Module:FindFirstChildOfClass("UIStroke") or Instance.new("UIStroke", Module)
-            ModuleStroke.Color = Color3.fromRGB(90, 50, 150)
-            ModuleStroke.Transparency = 0.5
-            ModuleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
             local UIListLayout = Instance.new('UIListLayout')
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout.Parent = Module
             
             local UICorner = Instance.new('UICorner')
-            UICorner.CornerRadius = UDim.new(0, 5)
+            UICorner.CornerRadius = UDim.new(0, 8)
             UICorner.Parent = Module
             
+            -- Single clean border (visible on all sides including left)
             local UIStroke = Instance.new('UIStroke')
-            UIStroke.Color = Color3.fromRGB(100, 55, 170)
-            UIStroke.Transparency = 0.55
+            UIStroke.Color = Color3.fromRGB(110, 70, 180)
+            UIStroke.Transparency = 0.4
+            UIStroke.Thickness = 1.2
             UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            UIStroke.LineJoinMode = Enum.LineJoinMode.Round
             UIStroke.Parent = Module
             
             local Header = Instance.new('TextButton')
