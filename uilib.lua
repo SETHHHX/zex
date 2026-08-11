@@ -964,12 +964,35 @@ function Library:create_ui()
     
     local Pin = Instance.new('Frame')
     Pin.Name = 'Pin'
-    Pin.Position = UDim2.new(0.026000000536441803, 0, 0.13600000739097595, 0)
+    Pin.Position = UDim2.new(0.026, 0, 0.136, 0)
     Pin.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Pin.Size = UDim2.new(0, 2, 0, 16)
     Pin.BorderSizePixel = 0
     Pin.BackgroundColor3 = Color3.fromRGB(150, 80, 255)
+    Pin.ZIndex = 5
     Pin.Parent = Handler
+
+    -- Keep pin synced when user scrolls the tabs list
+    local function refreshPinPosition()
+        local selectedTab = nil
+        for _, obj in ipairs(Tabs:GetChildren()) do
+            if obj.Name == "Tab" and obj.BackgroundTransparency < 0.7 then
+                selectedTab = obj
+                break
+            end
+        end
+        if selectedTab then
+            local tabAbsY = selectedTab.AbsolutePosition.Y
+            local tabsAbsY = Tabs.AbsolutePosition.Y
+            local relativeY = tabAbsY - tabsAbsY + (selectedTab.AbsoluteSize.Y / 2) - 8
+            relativeY = math.clamp(relativeY, 0, math.max(0, Tabs.AbsoluteSize.Y - 16))
+            Pin.Position = UDim2.new(0.026, 0, 0, relativeY + Tabs.Position.Y.Offset)
+        end
+    end
+
+    Tabs:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+        refreshPinPosition()
+    end)
     
     local UICorner = Instance.new('UICorner')
     UICorner.CornerRadius = UDim.new(1, 0)
@@ -1267,11 +1290,17 @@ function Library:create_ui()
 
             if object == tab then
                 if object.BackgroundTransparency ~= 0.5 then
-                    local offset = object.LayoutOrder * (0.113 / 1.3)
-
-                    TweenService:Create(Pin, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        Position = UDim2.fromScale(0.026, 0.135 + offset)
-                    }):Play()    
+                    -- Sync pin to the actual visual position of the tab (handles scrolling)
+                    task.defer(function()
+                        local tabAbsY = object.AbsolutePosition.Y
+                        local tabsAbsY = Tabs.AbsolutePosition.Y
+                        local relativeY = tabAbsY - tabsAbsY + (object.AbsoluteSize.Y / 2) - (Pin.AbsoluteSize.Y / 2)
+                        -- Clamp so pin stays inside the tabs area
+                        relativeY = math.clamp(relativeY, 0, math.max(0, Tabs.AbsoluteSize.Y - Pin.AbsoluteSize.Y))
+                        TweenService:Create(Pin, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                            Position = UDim2.new(0.026, 0, 0, relativeY + (Tabs.Position.Y.Offset or 0))
+                        }):Play()
+                    end)    
 
                     TweenService:Create(object, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                         BackgroundTransparency = 0.55
@@ -2103,6 +2132,7 @@ end
                 Textbox.BackgroundColor3 = Color3.fromRGB(32, 28, 42)
                 Textbox.BackgroundTransparency = 0.15
                 Textbox.BorderSizePixel = 0
+                Textbox.ClipsDescendants = true
                 Textbox.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
                 Textbox.TextSize = 12
                 Textbox.TextColor3 = Color3.fromRGB(230, 225, 240)
@@ -2110,8 +2140,15 @@ end
                 Textbox.PlaceholderText = settings.placeholder
                 Textbox.Text = value_to_display(Library._config._flags[settings.flag])
                 Textbox.ClearTextOnFocus = false
-                Textbox.TextXAlignment = Enum.TextXAlignment.Center
+                Textbox.TextXAlignment = Enum.TextXAlignment.Left
+                Textbox.TextTruncate = Enum.TextTruncate.AtEnd
                 Textbox.Parent = Row
+
+                -- Padding inside the textbox so text doesn't touch edges
+                local TextPadding = Instance.new("UIPadding")
+                TextPadding.PaddingLeft = UDim.new(0, 8)
+                TextPadding.PaddingRight = UDim.new(0, 8)
+                TextPadding.Parent = Textbox
 
                 local BoxCorner = Instance.new("UICorner")
                 BoxCorner.CornerRadius = UDim.new(0, 8)
