@@ -1944,6 +1944,7 @@ end
                 Paragraph.BorderSizePixel = 0
                 Paragraph.Name = "Paragraph"
                 Paragraph.AutomaticSize = Enum.AutomaticSize.Y
+                Paragraph.ClipsDescendants = false
                 Paragraph.Parent = Options
                 Paragraph.LayoutOrder = LayoutOrderModule
 
@@ -1964,35 +1965,43 @@ end
                 UIPadding.PaddingRight = UDim.new(0, 10)
                 UIPadding.Parent = Paragraph
 
+                -- Stack Header + Body automatically (no fixed Y positions)
+                local List = Instance.new('UIListLayout')
+                List.FillDirection = Enum.FillDirection.Vertical
+                List.SortOrder = Enum.SortOrder.LayoutOrder
+                List.Padding = UDim.new(0, 6)
+                List.Parent = Paragraph
+
                 local Title = Instance.new('TextLabel')
                 Title.Name = "Header"
+                Title.LayoutOrder = 1
                 Title.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                 Title.TextColor3 = Color3.fromRGB(230, 220, 255)
                 Title.Text = headerText
-                Title.Size = UDim2.new(1, 0, 0, 16)
+                Title.Size = UDim2.new(1, 0, 0, 0)
+                Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.BackgroundTransparency = 1
                 Title.TextXAlignment = Enum.TextXAlignment.Left
-                Title.TextYAlignment = Enum.TextYAlignment.Center
+                Title.TextYAlignment = Enum.TextYAlignment.Top
                 Title.TextSize = 13
                 Title.TextWrapped = true
                 Title.RichText = true
-                Title.AutomaticSize = Enum.AutomaticSize.Y
                 Title.Parent = Paragraph
 
                 local Body = Instance.new('TextLabel')
                 Body.Name = "Body"
+                Body.LayoutOrder = 2
                 Body.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
                 Body.TextColor3 = Color3.fromRGB(160, 145, 190)
                 Body.Text = bodyText
-                Body.Size = UDim2.new(1, 0, 0, 14)
-                Body.Position = UDim2.new(0, 0, 0, 20)
+                Body.Size = UDim2.new(1, 0, 0, 0)
+                Body.AutomaticSize = Enum.AutomaticSize.Y
                 Body.BackgroundTransparency = 1
                 Body.TextXAlignment = Enum.TextXAlignment.Left
                 Body.TextYAlignment = Enum.TextYAlignment.Top
                 Body.TextSize = 12
                 Body.TextWrapped = true
-                Body.RichText = true -- always support <font color=...> etc
-                Body.AutomaticSize = Enum.AutomaticSize.Y
+                Body.RichText = true
                 Body.Parent = Paragraph
 
                 function ParagraphManager:UpdateHeader(text)
