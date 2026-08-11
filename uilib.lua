@@ -2926,15 +2926,16 @@ if not settings or settings and not settings.disableline then
             end
 
             function ModuleManager:create_dropdown(settings: any)
-                -- Defaults to avoid nil comparison errors
+                -- Defaults
                 settings.options = settings.options or {}
                 settings.maximum_options = settings.maximum_options or 999
                 settings.multi_dropdown = settings.multi_dropdown or false
                 settings.callback = settings.callback or function() end
+                settings.searchable = settings.searchable ~= false -- default true
 
                 if not settings.Order then
-                    LayoutOrderModule = LayoutOrderModule + 1;
-                end;
+                    LayoutOrderModule = LayoutOrderModule + 1
+                end
 
                 local DropdownManager = {
                     _state = false,
@@ -2945,11 +2946,7 @@ if not settings or settings and not settings.disableline then
                     if self._size == 0 then
                         self._size = 11
                     end
-
                     self._size += 50
-                end;
-
-                if not settings.Order then
                 end
 
                 local Dropdown = Instance.new('TextButton')
@@ -2967,50 +2964,48 @@ if not settings or settings and not settings.disableline then
                 Dropdown.Parent = Options
 
                 if not settings.Order then
-                    Dropdown.LayoutOrder = LayoutOrderModule;
+                    Dropdown.LayoutOrder = LayoutOrderModule
                 else
-                    Dropdown.LayoutOrder = settings.OrderValue;
-                end;
+                    Dropdown.LayoutOrder = settings.OrderValue
+                end
 
                 if not Library._config._flags[settings.flag] then
-                    Library._config._flags[settings.flag] = {};
-                end;
-                
+                    Library._config._flags[settings.flag] = settings.multi_dropdown and {} or nil
+                end
+
                 local TextLabel = Instance.new('TextLabel')
                 if GG.SelectedLanguage == "th" then
                     TextLabel.FontFace = Font.new("rbxasset://fonts/families/NotoSansThai.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                    TextLabel.TextSize = 12;
+                    TextLabel.TextSize = 12
                 else
-                    TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal);
-                    TextLabel.TextSize = 12;
-                end;
+                    TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+                    TextLabel.TextSize = 12
+                end
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                TextLabel.TextTransparency = 0.20000000298023224
+                TextLabel.TextTransparency = 0.2
                 TextLabel.Text = settings.title
                 TextLabel.Size = UDim2.new(0, 207, 0, 13)
                 TextLabel.BackgroundTransparency = 1
                 TextLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TextLabel.BorderSizePixel = 0
-                TextLabel.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.Parent = Dropdown
-                
+
                 local Box = Instance.new('Frame')
                 Box.ClipsDescendants = true
                 Box.BorderColor3 = Color3.fromRGB(60, 60, 60)
                 Box.AnchorPoint = Vector2.new(0.5, 0)
-                Box.BackgroundTransparency = 0.8999999761581421
-                Box.Position = UDim2.new(0.5, 0, 1.2000000476837158, 0)
+                Box.BackgroundTransparency = 0.9
+                Box.Position = UDim2.new(0.5, 0, 1.2, 0)
                 Box.Name = 'Box'
                 Box.Size = UDim2.new(0, 207, 0, 22)
                 Box.BorderSizePixel = 0
                 Box.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
                 Box.Parent = TextLabel
-                
+
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 4)
                 UICorner.Parent = Box
-                
+
                 local Header = Instance.new('Frame')
                 Header.BorderColor3 = Color3.fromRGB(90, 50, 140)
                 Header.AnchorPoint = Vector2.new(0.5, 0)
@@ -3019,160 +3014,172 @@ if not settings or settings and not settings.disableline then
                 Header.Name = 'Header'
                 Header.Size = UDim2.new(0, 207, 0, 22)
                 Header.BorderSizePixel = 0
-                Header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Header.Parent = Box
-                
+
                 local CurrentOption = Instance.new('TextLabel')
                 CurrentOption.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                 CurrentOption.TextColor3 = Color3.fromRGB(255, 255, 255)
-                CurrentOption.TextTransparency = 0.20000000298023224
+                CurrentOption.TextTransparency = 0.2
                 CurrentOption.Name = 'CurrentOption'
                 CurrentOption.Text = ""
                 CurrentOption.Size = UDim2.new(0, 161, 0, 13)
                 CurrentOption.AnchorPoint = Vector2.new(0, 0.5)
-                CurrentOption.Position = UDim2.new(0.04999988153576851, 0, 0.5, 0)
+                CurrentOption.Position = UDim2.new(0.05, 0, 0.5, 0)
                 CurrentOption.BackgroundTransparency = 1
                 CurrentOption.TextXAlignment = Enum.TextXAlignment.Left
                 CurrentOption.BorderSizePixel = 0
-                CurrentOption.BorderColor3 = Color3.fromRGB(90, 50, 140)
                 CurrentOption.TextSize = 12
-                CurrentOption.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 CurrentOption.Parent = Header
+
                 local UIGradient = Instance.new('UIGradient')
                 UIGradient.Transparency = NumberSequence.new{
                     NumberSequenceKeypoint.new(0, 0),
                     NumberSequenceKeypoint.new(0.704, 0),
-                    NumberSequenceKeypoint.new(0.872, 0.36250001192092896),
+                    NumberSequenceKeypoint.new(0.872, 0.3625),
                     NumberSequenceKeypoint.new(1, 1)
                 }
                 UIGradient.Parent = CurrentOption
-                
+
                 local Arrow = Instance.new('ImageLabel')
                 Arrow.BorderColor3 = Color3.fromRGB(90, 50, 140)
                 Arrow.AnchorPoint = Vector2.new(0, 0.5)
                 Arrow.Image = 'rbxassetid://84232453189324'
                 Arrow.BackgroundTransparency = 1
-                Arrow.Position = UDim2.new(0.9100000262260437, 0, 0.5, 0)
+                Arrow.Position = UDim2.new(0.91, 0, 0.5, 0)
                 Arrow.Name = 'Arrow'
                 Arrow.Size = UDim2.new(0, 8, 0, 8)
                 Arrow.BorderSizePixel = 0
-                Arrow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Arrow.Parent = Header
-                
+
                 local Options = Instance.new('ScrollingFrame')
                 Options.ScrollBarImageColor3 = Color3.fromRGB(140, 80, 220)
                 Options.Active = true
                 Options.ScrollBarImageTransparency = 1
-                Options.AutomaticCanvasSize = Enum.AutomaticSize.XY
+                Options.AutomaticCanvasSize = Enum.AutomaticSize.Y
                 Options.ScrollBarThickness = 0
                 Options.Name = 'Options'
                 Options.Size = UDim2.new(0, 207, 0, 0)
                 Options.BackgroundTransparency = 1
                 Options.Position = UDim2.new(0, 0, 1, 0)
-                Options.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                Options.BorderColor3 = Color3.fromRGB(90, 50, 140)
                 Options.BorderSizePixel = 0
-                Options.CanvasSize = UDim2.new(0, 0, 0.5, 0)
+                Options.CanvasSize = UDim2.new(0, 0, 0, 0)
                 Options.Parent = Box
-                
-                local UIListLayout = Instance.new('UIListLayout')
-                UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                UIListLayout.Parent = Options
-                
-                local UIPadding = Instance.new('UIPadding')
-                UIPadding.PaddingTop = UDim.new(0, -1)
-                UIPadding.PaddingLeft = UDim.new(0, 10)
-                UIPadding.Parent = Options
-                
-                local UIListLayout = Instance.new('UIListLayout')
-                UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                UIListLayout.Parent = Box
 
-                function DropdownManager:update(option: string)
-                    
-                    if settings.multi_dropdown then
-                     
+                local OptionsList = Instance.new('UIListLayout')
+                OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
+                OptionsList.Padding = UDim.new(0, 2)
+                OptionsList.Parent = Options
 
-                        if not Library._config._flags[settings.flag] then
-                            Library._config._flags[settings.flag] = {};
-                        end;
+                local OptionsPadding = Instance.new('UIPadding')
+                OptionsPadding.PaddingTop = UDim.new(0, 4)
+                OptionsPadding.PaddingLeft = UDim.new(0, 8)
+                OptionsPadding.PaddingRight = UDim.new(0, 8)
+                OptionsPadding.PaddingBottom = UDim.new(0, 4)
+                OptionsPadding.Parent = Options
 
-                        local CurrentTargetValue = nil;
-                        
-                        if #Library._config._flags[settings.flag] > 0 then
+                local BoxList = Instance.new('UIListLayout')
+                BoxList.SortOrder = Enum.SortOrder.LayoutOrder
+                BoxList.Parent = Box
 
-                            CurrentTargetValue = convertTableToString(Library._config._flags[settings.flag]);
+                -------------------------------------------------
+                -- SEARCH BAR
+                -------------------------------------------------
+                local SearchBox = nil
+                local SearchFrame = nil
 
-                        end;
+                if settings.searchable then
+                    SearchFrame = Instance.new('Frame')
+                    SearchFrame.Name = 'SearchFrame'
+                    SearchFrame.Size = UDim2.new(1, -4, 0, 26)
+                    SearchFrame.BackgroundColor3 = Color3.fromRGB(30, 24, 42)
+                    SearchFrame.BackgroundTransparency = 0.15
+                    SearchFrame.BorderSizePixel = 0
+                    SearchFrame.LayoutOrder = 0
+                    SearchFrame.Parent = Options
 
-                        local selected = {}
+                    local SearchCorner = Instance.new('UICorner')
+                    SearchCorner.CornerRadius = UDim.new(0, 6)
+                    SearchCorner.Parent = SearchFrame
 
-                        if CurrentTargetValue then
-                            for value in string.gmatch(CurrentTargetValue, "([^,]+)") do
-                               
-                                local trimmedValue = value:match("^%s*(.-)%s*$")  
-                                
-                              
-                                if trimmedValue ~= "Label" then
-                                    table.insert(selected, trimmedValue)
-                                end
-                            end
-                        else
-                            for value in string.gmatch(CurrentOption.Text, "([^,]+)") do
-                             
-                                local trimmedValue = value:match("^%s*(.-)%s*$") 
-                                
-                                
-                                if trimmedValue ~= "Label" then
-                                    table.insert(selected, trimmedValue)
-                                end
-                            end
-                        end;
-                
-                        local CurrentTextGet = convertStringToTable(CurrentOption.Text);
+                    local SearchStroke = Instance.new('UIStroke')
+                    SearchStroke.Color = Color3.fromRGB(110, 70, 180)
+                    SearchStroke.Transparency = 0.5
+                    SearchStroke.Thickness = 1
+                    SearchStroke.Parent = SearchFrame
 
-                        local optionSkibidi = "nil"
-                        if typeof(option) == "string" then
-                            optionSkibidi = option
-                        elseif typeof(option) == "table" and option.Name then
-                            optionSkibidi = tostring(option.Name)
-                        elseif option ~= nil then
-                            optionSkibidi = tostring(option)
-                        end
+                    SearchBox = Instance.new('TextBox')
+                    SearchBox.Name = 'SearchBox'
+                    SearchBox.Size = UDim2.new(1, -12, 1, 0)
+                    SearchBox.Position = UDim2.new(0, 6, 0, 0)
+                    SearchBox.BackgroundTransparency = 1
+                    SearchBox.Text = ""
+                    SearchBox.PlaceholderText = "Search..."
+                    SearchBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 160)
+                    SearchBox.TextColor3 = Color3.fromRGB(240, 235, 255)
+                    SearchBox.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Medium, Enum.FontStyle.Normal)
+                    SearchBox.TextSize = 12
+                    SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+                    SearchBox.ClearTextOnFocus = false
+                    SearchBox.Parent = SearchFrame
 
-                        local found = false
-                        for i, v in pairs(CurrentTextGet) do
-                            if v == optionSkibidi then
-                                table.remove(CurrentTextGet, i);
-                                break;
-                            end
-                        end
-
-                        CurrentOption.Text = table.concat(selected, ", ")
-                        local OptionsChild = {}
-                       
-                        for _, object in Options:GetChildren() do
-                            if object.Name == "Option" then
-                                table.insert(OptionsChild, object.Text)
-                                if table.find(selected, object.Text) then
-                                    object.TextTransparency = 0.2
+                    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                        local query = string.lower(SearchBox.Text or "")
+                        for _, child in ipairs(Options:GetChildren()) do
+                            if child.Name == "Option" and child:IsA("TextButton") then
+                                if query == "" then
+                                    child.Visible = true
                                 else
-                                    object.TextTransparency = 0.6
+                                    local optText = string.lower(child.Text or "")
+                                    child.Visible = string.find(optText, query, 1, true) ~= nil
                                 end
                             end
                         end
+                    end)
+                end
 
-                        CurrentTargetValue = convertStringToTable(CurrentOption.Text);
+                -------------------------------------------------
+                -- UPDATE (clean + supports empty multi)
+                -------------------------------------------------
+                function DropdownManager:update(option)
+                    if settings.multi_dropdown then
+                        if not Library._config._flags[settings.flag] then
+                            Library._config._flags[settings.flag] = {}
+                        end
 
-                        for _, v in CurrentTargetValue do
-                            if not table.find(OptionsChild, v) and table.find(selected, v) then
-                                table.remove(selected, _)
-                            end;
-                        end;
+                        local selected = Library._config._flags[settings.flag]
+                        if type(selected) ~= "table" then
+                            selected = {}
+                            Library._config._flags[settings.flag] = selected
+                        end
 
-                        CurrentOption.Text = table.concat(selected, ", ");
-                
-                        Library._config._flags[settings.flag] = convertStringToTable(CurrentOption.Text);
+                        -- Build display text
+                        local displayParts = {}
+                        for _, v in ipairs(selected) do
+                            local s = value_to_display(v)
+                            if s ~= "" then
+                                table.insert(displayParts, s)
+                            end
+                        end
+
+                        local display = table.concat(displayParts, ", ")
+                        CurrentOption.Text = (display ~= "" and display) or "None"
+
+                        -- Update visual state of options
+                        for _, object in ipairs(Options:GetChildren()) do
+                            if object.Name == "Option" and object:IsA("TextButton") then
+                                local isSelected = false
+                                for _, sel in ipairs(selected) do
+                                    if value_to_display(sel) == object.Text then
+                                        isSelected = true
+                                        break
+                                    end
+                                end
+                                object.TextTransparency = isSelected and 0.15 or 0.6
+                            end
+                        end
+
+                        Config:save(game.GameId, Library._config)
+                        settings.callback(selected)
                     else
                         local textValue = value_to_display(option)
                         if textValue == "" and settings.options and settings.options[1] then
@@ -3184,41 +3191,31 @@ if not settings or settings and not settings.disableline then
                         end
 
                         CurrentOption.Text = textValue
-                        for _, object in Options:GetChildren() do
-                            if object.Name == "Option" then
-                                if object.Text == CurrentOption.Text then
-                                    object.TextTransparency = 0.2
-                                else
-                                    object.TextTransparency = 0.6
-                                end
+
+                        for _, object in ipairs(Options:GetChildren()) do
+                            if object.Name == "Option" and object:IsA("TextButton") then
+                                object.TextTransparency = (object.Text == CurrentOption.Text) and 0.15 or 0.6
                             end
                         end
-                        -- Always store a string for single dropdowns (never a table ref)
-                        Library._config._flags[settings.flag] = textValue
-                    end
-                
-                   
-                    Config:save(game.GameId, Library._config)
 
-                    -- Multi: pass full selected list; single: pass the chosen option
-                    if settings.multi_dropdown then
-                        local list = Library._config._flags[settings.flag]
-                        if type(list) ~= "table" then list = {} end
-                        settings.callback(list)
-                    else
+                        Library._config._flags[settings.flag] = textValue
+                        Config:save(game.GameId, Library._config)
                         settings.callback(option)
                     end
                 end
-                
-                local CurrentDropSizeState = 0;
+
+                local CurrentDropSizeState = 0
 
                 function DropdownManager:unfold_settings()
                     self._state = not self._state
 
-                    -- Only animate the dropdown itself. Module/Options use AutomaticSize.Y
-                    -- so they grow/shrink automatically when Box expands — no fixed Module size.
                     if self._state then
                         CurrentDropSizeState = self._size
+
+                        -- Clear search when opening
+                        if SearchBox then
+                            SearchBox.Text = ""
+                        end
 
                         TweenService:Create(Dropdown, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             Size = UDim2.fromOffset(207, 39 + self._size)
@@ -3248,62 +3245,76 @@ if not settings or settings and not settings.disableline then
                     end
                 end
 
+                -------------------------------------------------
+                -- CREATE OPTIONS
+                -------------------------------------------------
                 if #settings.options > 0 then
-                    DropdownManager._size = 3
+                    -- Base size for search bar + padding
+                    DropdownManager._size = settings.searchable and 32 or 6
 
-                    for index, value in settings.options do
+                    for index, value in ipairs(settings.options) do
                         local Option = Instance.new('TextButton')
                         Option.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                         Option.Active = false
-                        Option.TextTransparency = 0.6000000238418579
-                        Option.AnchorPoint = Vector2.new(0, 0.5)
+                        Option.TextTransparency = 0.6
                         Option.TextSize = 12
-                        Option.Size = UDim2.new(0, 186, 0, 16)
+                        Option.Size = UDim2.new(1, 0, 0, 18)
                         Option.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        Option.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                        Option.Text = (typeof(value) == "string" and value) or value.Name;
+                        Option.Text = (typeof(value) == "string" and value) or (value and value.Name) or tostring(value)
                         Option.AutoButtonColor = false
                         Option.Name = 'Option'
                         Option.BackgroundTransparency = 1
                         Option.TextXAlignment = Enum.TextXAlignment.Left
                         Option.Selectable = false
-                        Option.Position = UDim2.new(0.04999988153576851, 0, 0.34210526943206787, 0)
                         Option.BorderSizePixel = 0
-                        Option.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                        Option.LayoutOrder = index
                         Option.Parent = Options
-                        
-                        local UIGradient = Instance.new('UIGradient')
-                        UIGradient.Transparency = NumberSequence.new{
+
+                        local OptGradient = Instance.new('UIGradient')
+                        OptGradient.Transparency = NumberSequence.new{
                             NumberSequenceKeypoint.new(0, 0),
                             NumberSequenceKeypoint.new(0.704, 0),
-                            NumberSequenceKeypoint.new(0.872, 0.36250001192092896),
+                            NumberSequenceKeypoint.new(0.872, 0.3625),
                             NumberSequenceKeypoint.new(1, 1)
                         }
-                        UIGradient.Parent = Option
+                        OptGradient.Parent = Option
 
                         Option.MouseButton1Click:Connect(function()
                             if not Library._config._flags[settings.flag] then
-                                Library._config._flags[settings.flag] = {};
-                            end;
+                                Library._config._flags[settings.flag] = settings.multi_dropdown and {} or nil
+                            end
 
                             if settings.multi_dropdown then
-                                if table.find(Library._config._flags[settings.flag], value) then
-                                    Library:remove_table_value(Library._config._flags[settings.flag], value)
+                                local list = Library._config._flags[settings.flag]
+                                if type(list) ~= "table" then
+                                    list = {}
+                                    Library._config._flags[settings.flag] = list
+                                end
+
+                                local foundIndex = nil
+                                for i, v in ipairs(list) do
+                                    if value_to_display(v) == Option.Text or v == value then
+                                        foundIndex = i
+                                        break
+                                    end
+                                end
+
+                                if foundIndex then
+                                    table.remove(list, foundIndex) -- permite dejar vacío
                                 else
-                                    table.insert(Library._config._flags[settings.flag], value)
+                                    table.insert(list, value)
                                 end
                             end
 
                             DropdownManager:update(value)
                         end)
-    
-                        if index > settings.maximum_options then
-                            continue
+
+                        if index <= settings.maximum_options then
+                            DropdownManager._size += 18
                         end
-    
-                        DropdownManager._size += 16
-                        Options.Size = UDim2.fromOffset(207, DropdownManager._size)
                     end
+
+                    Options.Size = UDim2.fromOffset(207, DropdownManager._size)
                 end
 
                 function DropdownManager:New(value)
@@ -3313,7 +3324,7 @@ if not settings or settings and not settings.disableline then
                     value.OrderValue = oldOrder
                     ModuleManager._multiplier -= CurrentDropSizeState
                     return ModuleManager:create_dropdown(value)
-                end;
+                end
 
                 function DropdownManager:Set(value)
                     if settings.multi_dropdown then
@@ -3331,13 +3342,11 @@ if not settings or settings and not settings.disableline then
                         Library._config._flags[settings.flag] = selected
                         local display = table.concat(selected, ", ")
                         CurrentOption.Text = (display ~= "" and display) or "None"
-                        for _, object in Options:GetChildren() do
-                            if object.Name == "Option" then
-                                if table.find(selected, object.Text) then
-                                    object.TextTransparency = 0.2
-                                else
-                                    object.TextTransparency = 0.6
-                                end
+
+                        for _, object in ipairs(Options:GetChildren()) do
+                            if object.Name == "Option" and object:IsA("TextButton") then
+                                local isSelected = table.find(selected, object.Text) ~= nil
+                                object.TextTransparency = isSelected and 0.15 or 0.6
                             end
                         end
                         settings.callback(selected)
@@ -3370,11 +3379,11 @@ if not settings or settings and not settings.disableline then
                     return DropdownManager:Get()
                 end)
 
+                -- Initial value
                 local initialValue = nil
                 if Library:flag_type(settings.flag, "string") or Library:flag_type(settings.flag, "table") then
                     initialValue = Library._config._flags[settings.flag]
                 end
-                -- Empty table = no real saved selection → allow default to apply
                 if type(initialValue) == "table" and next(initialValue) == nil then
                     initialValue = nil
                 end
@@ -3392,7 +3401,7 @@ if not settings or settings and not settings.disableline then
                 else
                     CurrentOption.Text = "None"
                 end
-    
+
                 Dropdown.MouseButton1Click:Connect(function()
                     DropdownManager:unfold_settings()
                 end)
