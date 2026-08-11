@@ -964,39 +964,51 @@ function Library:create_ui()
     
     local Pin = Instance.new('Frame')
     Pin.Name = 'Pin'
-    Pin.Position = UDim2.new(0.026, 0, 0.136, 0)
-    Pin.BorderColor3 = Color3.fromRGB(90, 50, 140)
-    Pin.Size = UDim2.new(0, 2, 0, 16)
+    Pin.Size = UDim2.new(0, 2, 0, 18)
     Pin.BorderSizePixel = 0
     Pin.BackgroundColor3 = Color3.fromRGB(150, 80, 255)
-    Pin.ZIndex = 5
-    Pin.Parent = Handler
+    Pin.ZIndex = 10
+    Pin.Visible = false
+    Pin.Parent = Handler  -- NOT inside Tabs (UIListLayout would break it)
 
-    -- Keep pin synced when user scrolls the tabs list
-    local function refreshPinPosition()
-        local selectedTab = nil
-        for _, obj in ipairs(Tabs:GetChildren()) do
-            if obj.Name == "Tab" and obj.BackgroundTransparency < 0.7 then
-                selectedTab = obj
-                break
+    local PinCorner = Instance.new('UICorner')
+    PinCorner.CornerRadius = UDim.new(1, 0)
+    PinCorner.Parent = Pin
+
+    local function refreshPinPosition(targetTab)
+        local tab = targetTab
+        if not tab then
+            for _, obj in ipairs(Tabs:GetChildren()) do
+                if obj.Name == "Tab" and obj.BackgroundTransparency < 0.75 then
+                    tab = obj
+                    break
+                end
             end
         end
-        if selectedTab then
-            local tabAbsY = selectedTab.AbsolutePosition.Y
-            local tabsAbsY = Tabs.AbsolutePosition.Y
-            local relativeY = tabAbsY - tabsAbsY + (selectedTab.AbsoluteSize.Y / 2) - 8
-            relativeY = math.clamp(relativeY, 0, math.max(0, Tabs.AbsoluteSize.Y - 16))
-            Pin.Position = UDim2.new(0.026, 0, 0, relativeY + Tabs.Position.Y.Offset)
+        if not tab or not tab.Parent then
+            Pin.Visible = false
+            return
         end
+
+        -- Convert tab AbsolutePosition -> position relative to Handler
+        local handlerAbs = Handler.AbsolutePosition
+        local tabAbs = tab.AbsolutePosition
+        local tabSize = tab.AbsoluteSize
+
+        local x = 8  -- small left margin
+        local y = (tabAbs.Y - handlerAbs.Y) + (tabSize.Y * 0.5) - (Pin.AbsoluteSize.Y * 0.5)
+
+        Pin.Position = UDim2.fromOffset(x, y)
+        Pin.Visible = true
     end
 
     Tabs:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
         refreshPinPosition()
     end)
-    
-    local UICorner = Instance.new('UICorner')
-    UICorner.CornerRadius = UDim.new(1, 0)
-    UICorner.Parent = Pin
+
+    -- expose for update_tabs
+    self._refreshPin = refreshPinPosition
+    self._pin = Pin
     
     local Icon = Instance.new('ImageLabel')
     Icon.ImageColor3 = Color3.fromRGB(220, 220, 220)
@@ -1290,16 +1302,11 @@ function Library:create_ui()
 
             if object == tab then
                 if object.BackgroundTransparency ~= 0.5 then
-                    -- Sync pin to the actual visual position of the tab (handles scrolling)
+                    -- Sync pin exactly to this tab
                     task.defer(function()
-                        local tabAbsY = object.AbsolutePosition.Y
-                        local tabsAbsY = Tabs.AbsolutePosition.Y
-                        local relativeY = tabAbsY - tabsAbsY + (object.AbsoluteSize.Y / 2) - (Pin.AbsoluteSize.Y / 2)
-                        -- Clamp so pin stays inside the tabs area
-                        relativeY = math.clamp(relativeY, 0, math.max(0, Tabs.AbsoluteSize.Y - Pin.AbsoluteSize.Y))
-                        TweenService:Create(Pin, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Position = UDim2.new(0.026, 0, 0, relativeY + (Tabs.Position.Y.Offset or 0))
-                        }):Play()
+                        if self._refreshPin then
+                            self._refreshPin(object)
+                        end
                     end)    
 
                     TweenService:Create(object, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
