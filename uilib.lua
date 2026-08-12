@@ -2984,7 +2984,11 @@ if not settings or settings and not settings.disableline then
                 settings.maximum_options = settings.maximum_options or 999
                 settings.multi_dropdown = settings.multi_dropdown or false
                 settings.callback = settings.callback or function() end
-                settings.searchable = settings.searchable ~= false -- default true
+                -- Accept both searchable and Searchable
+                if settings.Searchable ~= nil then
+                    settings.searchable = settings.Searchable
+                end
+                settings.searchable = settings.searchable == true -- default FALSE (no searchbar)
 
                 if not settings.Order then
                     LayoutOrderModule = LayoutOrderModule + 1
@@ -3120,14 +3124,14 @@ if not settings or settings and not settings.disableline then
 
                 local OptionsList = Instance.new('UIListLayout')
                 OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
-                OptionsList.Padding = UDim.new(0, 2)
+                OptionsList.Padding = UDim.new(0, 3)
                 OptionsList.Parent = Options
 
                 local OptionsPadding = Instance.new('UIPadding')
-                OptionsPadding.PaddingTop = UDim.new(0, 4)
+                OptionsPadding.PaddingTop = UDim.new(0, 6)
                 OptionsPadding.PaddingLeft = UDim.new(0, 8)
                 OptionsPadding.PaddingRight = UDim.new(0, 8)
-                OptionsPadding.PaddingBottom = UDim.new(0, 4)
+                OptionsPadding.PaddingBottom = UDim.new(0, 6)
                 OptionsPadding.Parent = Options
 
                 local BoxList = Instance.new('UIListLayout')
@@ -3303,15 +3307,15 @@ if not settings or settings and not settings.disableline then
                 -------------------------------------------------
                 if #settings.options > 0 then
                     -- Base size for search bar + padding
-                    DropdownManager._size = settings.searchable and 32 or 6
+                    DropdownManager._size = settings.searchable and 36 or 12
 
                     for index, value in ipairs(settings.options) do
                         local Option = Instance.new('TextButton')
                         Option.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                         Option.Active = false
                         Option.TextTransparency = 0.6
-                        Option.TextSize = 12
-                        Option.Size = UDim2.new(1, 0, 0, 18)
+                        Option.TextSize = 13
+                        Option.Size = UDim2.new(1, 0, 0, 24) -- taller options (was 18)
                         Option.TextColor3 = Color3.fromRGB(255, 255, 255)
                         Option.Text = (typeof(value) == "string" and value) or (value and value.Name) or tostring(value)
                         Option.AutoButtonColor = false
@@ -3363,7 +3367,7 @@ if not settings or settings and not settings.disableline then
                         end)
 
                         if index <= settings.maximum_options then
-                            DropdownManager._size += 18
+                            DropdownManager._size += 24 -- was 18, matches new option height
                         end
                     end
 
