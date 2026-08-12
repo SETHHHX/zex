@@ -2979,33 +2979,12 @@ if not settings or settings and not settings.disableline then
             end
 
             function ModuleManager:create_dropdown(settings: any)
-                -- Normalize capital / alternate keys from public API
-                if settings.Options ~= nil then settings.options = settings.Options end
-                if settings.Callback ~= nil then settings.callback = settings.Callback end
-                if settings.Multi ~= nil then settings.multi_dropdown = settings.Multi end
-                if settings.MultiDropdown ~= nil then settings.multi_dropdown = settings.MultiDropdown end
-                if settings.Max ~= nil then settings.maximum_options = settings.Max end
-                if settings.MaximumOptions ~= nil then settings.maximum_options = settings.MaximumOptions end
-                if settings.Flag ~= nil then settings.flag = settings.Flag end
-                if settings.Default ~= nil and settings.default == nil then settings.default = settings.Default end
-                if settings.Name ~= nil and settings.title == nil then settings.title = settings.Name end
-
-                -- searchable: accept searchable / Searchable / search
-                local searchableVal = settings.searchable
-                if searchableVal == nil then searchableVal = settings.Searchable end
-                if searchableVal == nil then searchableVal = settings.search end
-                -- default FALSE (no searchbar). Only true if explicitly true / "true" / 1
-                if searchableVal == true or searchableVal == "true" or searchableVal == 1 then
-                    settings.searchable = true
-                else
-                    settings.searchable = false
-                end
-
                 -- Defaults
                 settings.options = settings.options or {}
                 settings.maximum_options = settings.maximum_options or 999
                 settings.multi_dropdown = settings.multi_dropdown or false
                 settings.callback = settings.callback or function() end
+                settings.searchable = settings.searchable ~= false -- default true
 
                 if not settings.Order then
                     LayoutOrderModule = LayoutOrderModule + 1
@@ -3141,14 +3120,14 @@ if not settings or settings and not settings.disableline then
 
                 local OptionsList = Instance.new('UIListLayout')
                 OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
-                OptionsList.Padding = UDim.new(0, 3)
+                OptionsList.Padding = UDim.new(0, 2)
                 OptionsList.Parent = Options
 
                 local OptionsPadding = Instance.new('UIPadding')
-                OptionsPadding.PaddingTop = UDim.new(0, 6)
+                OptionsPadding.PaddingTop = UDim.new(0, 4)
                 OptionsPadding.PaddingLeft = UDim.new(0, 8)
                 OptionsPadding.PaddingRight = UDim.new(0, 8)
-                OptionsPadding.PaddingBottom = UDim.new(0, 6)
+                OptionsPadding.PaddingBottom = UDim.new(0, 4)
                 OptionsPadding.Parent = Options
 
                 local BoxList = Instance.new('UIListLayout')
@@ -3324,15 +3303,15 @@ if not settings or settings and not settings.disableline then
                 -------------------------------------------------
                 if #settings.options > 0 then
                     -- Base size for search bar + padding
-                    DropdownManager._size = settings.searchable and 36 or 12
+                    DropdownManager._size = settings.searchable and 32 or 6
 
                     for index, value in ipairs(settings.options) do
                         local Option = Instance.new('TextButton')
                         Option.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                         Option.Active = false
                         Option.TextTransparency = 0.6
-                        Option.TextSize = 13
-                        Option.Size = UDim2.new(1, 0, 0, 24) -- taller options (was 18)
+                        Option.TextSize = 12
+                        Option.Size = UDim2.new(1, 0, 0, 18)
                         Option.TextColor3 = Color3.fromRGB(255, 255, 255)
                         Option.Text = (typeof(value) == "string" and value) or (value and value.Name) or tostring(value)
                         Option.AutoButtonColor = false
@@ -3384,7 +3363,7 @@ if not settings or settings and not settings.disableline then
                         end)
 
                         if index <= settings.maximum_options then
-                            DropdownManager._size += 24 -- was 18, matches new option height
+                            DropdownManager._size += 18
                         end
                     end
 
@@ -4081,67 +4060,6 @@ if not settings or settings and not settings.disableline then
                 end, function()
                     return ModuleManager._state
                 end)
-            end
-
-            -------------------------------------------------
-            -- Public aliases: Section:Dropdown / :Toggle / etc.
-            -- Supports both styles:
-            --   Section:Dropdown({ Name=..., Options=..., Searchable=true, Callback=... }, "flag")
-            --   Section:create_dropdown({ title=..., options=..., searchable=true, flag="..." })
-            -------------------------------------------------
-            local function applyFlag(settings, flag)
-                if type(settings) ~= "table" then
-                    settings = {}
-                end
-                if flag ~= nil and flag ~= "" then
-                    settings.flag = flag
-                    settings.Flag = flag
-                end
-                return settings
-            end
-
-            function ModuleManager:Dropdown(settings, flag)
-                return self:create_dropdown(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Toggle(settings, flag)
-                return self:create_toggle(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Slider(settings, flag)
-                return self:create_slider(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Button(settings, flag)
-                return self:create_button(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Paragraph(settings, flag)
-                return self:create_paragraph(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Checkbox(settings, flag)
-                return self:create_checkbox(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Textbox(settings, flag)
-                return self:create_textbox(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Text(settings, flag)
-                return self:create_text(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Divider(settings, flag)
-                return self:create_divider(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Colorpicker(settings, flag)
-                return self:create_colorpicker(applyFlag(settings, flag))
-            end
-
-            function ModuleManager:Feature(settings, flag)
-                return self:create_feature(applyFlag(settings, flag))
             end
 
             return ModuleManager
