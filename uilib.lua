@@ -4083,6 +4083,67 @@ if not settings or settings and not settings.disableline then
                 end)
             end
 
+            -------------------------------------------------
+            -- Public aliases: Section:Dropdown / :Toggle / etc.
+            -- Supports both styles:
+            --   Section:Dropdown({ Name=..., Options=..., Searchable=true, Callback=... }, "flag")
+            --   Section:create_dropdown({ title=..., options=..., searchable=true, flag="..." })
+            -------------------------------------------------
+            local function applyFlag(settings, flag)
+                if type(settings) ~= "table" then
+                    settings = {}
+                end
+                if flag ~= nil and flag ~= "" then
+                    settings.flag = flag
+                    settings.Flag = flag
+                end
+                return settings
+            end
+
+            function ModuleManager:Dropdown(settings, flag)
+                return self:create_dropdown(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Toggle(settings, flag)
+                return self:create_toggle(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Slider(settings, flag)
+                return self:create_slider(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Button(settings, flag)
+                return self:create_button(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Paragraph(settings, flag)
+                return self:create_paragraph(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Checkbox(settings, flag)
+                return self:create_checkbox(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Textbox(settings, flag)
+                return self:create_textbox(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Text(settings, flag)
+                return self:create_text(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Divider(settings, flag)
+                return self:create_divider(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Colorpicker(settings, flag)
+                return self:create_colorpicker(applyFlag(settings, flag))
+            end
+
+            function ModuleManager:Feature(settings, flag)
+                return self:create_feature(applyFlag(settings, flag))
+            end
+
             return ModuleManager
         end
 
