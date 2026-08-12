@@ -2979,16 +2979,33 @@ if not settings or settings and not settings.disableline then
             end
 
             function ModuleManager:create_dropdown(settings: any)
+                -- Normalize capital / alternate keys from public API
+                if settings.Options ~= nil then settings.options = settings.Options end
+                if settings.Callback ~= nil then settings.callback = settings.Callback end
+                if settings.Multi ~= nil then settings.multi_dropdown = settings.Multi end
+                if settings.MultiDropdown ~= nil then settings.multi_dropdown = settings.MultiDropdown end
+                if settings.Max ~= nil then settings.maximum_options = settings.Max end
+                if settings.MaximumOptions ~= nil then settings.maximum_options = settings.MaximumOptions end
+                if settings.Flag ~= nil then settings.flag = settings.Flag end
+                if settings.Default ~= nil and settings.default == nil then settings.default = settings.Default end
+                if settings.Name ~= nil and settings.title == nil then settings.title = settings.Name end
+
+                -- searchable: accept searchable / Searchable / search
+                local searchableVal = settings.searchable
+                if searchableVal == nil then searchableVal = settings.Searchable end
+                if searchableVal == nil then searchableVal = settings.search end
+                -- default FALSE (no searchbar). Only true if explicitly true / "true" / 1
+                if searchableVal == true or searchableVal == "true" or searchableVal == 1 then
+                    settings.searchable = true
+                else
+                    settings.searchable = false
+                end
+
                 -- Defaults
                 settings.options = settings.options or {}
                 settings.maximum_options = settings.maximum_options or 999
                 settings.multi_dropdown = settings.multi_dropdown or false
                 settings.callback = settings.callback or function() end
-                -- Accept both searchable and Searchable
-                if settings.Searchable ~= nil then
-                    settings.searchable = settings.Searchable
-                end
-                settings.searchable = settings.searchable == true -- default FALSE (no searchbar)
 
                 if not settings.Order then
                     LayoutOrderModule = LayoutOrderModule + 1
