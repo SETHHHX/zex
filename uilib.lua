@@ -1042,6 +1042,7 @@ UIListLayout.Parent = NotificationContainer
 
 function Library.SendNotification(settings)
     settings = settings or {}
+    local th = Library._theme or Themes.Purple
 
     local Notification = Instance.new("Frame")
     Notification.Size = UDim2.new(1, 0, 0, 0)
@@ -1054,7 +1055,7 @@ function Library.SendNotification(settings)
     local InnerFrame = Instance.new("Frame")
     InnerFrame.Size = UDim2.new(1, 0, 0, 56)
     InnerFrame.Position = UDim2.new(1, 24, 0, 0)
-    InnerFrame.BackgroundColor3 = Color3.fromRGB(22, 18, 32)
+    InnerFrame.BackgroundColor3 = th.BackgroundSecondary
     InnerFrame.BackgroundTransparency = 0.05
     InnerFrame.BorderSizePixel = 0
     InnerFrame.Name = "InnerFrame"
@@ -1066,7 +1067,7 @@ function Library.SendNotification(settings)
     InnerUICorner.Parent = InnerFrame
 
     local Stroke = Instance.new("UIStroke")
-    Stroke.Color = Color3.fromRGB(140, 90, 220)
+    Stroke.Color = th.Stroke
     Stroke.Transparency = 0.35
     Stroke.Thickness = 1.2
     Stroke.Parent = InnerFrame
@@ -1075,7 +1076,7 @@ function Library.SendNotification(settings)
     local Accent = Instance.new("Frame")
     Accent.Size = UDim2.new(0, 4, 1, 0)
     Accent.Position = UDim2.new(0, 0, 0, 0)
-    Accent.BackgroundColor3 = Color3.fromRGB(150, 90, 255)
+    Accent.BackgroundColor3 = th.Accent
     Accent.BorderSizePixel = 0
     Accent.ZIndex = 1
     Accent.Parent = InnerFrame
@@ -1095,7 +1096,7 @@ function Library.SendNotification(settings)
 
     local Title = Instance.new("TextLabel")
     Title.Text = tostring(settings.title or "Notification")
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextColor3 = th.Text
     Title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
     Title.TextSize = 14
     Title.Size = UDim2.new(1, 0, 0, 18)
@@ -1109,7 +1110,7 @@ function Library.SendNotification(settings)
 
     local Body = Instance.new("TextLabel")
     Body.Text = tostring(settings.text or "")
-    Body.TextColor3 = Color3.fromRGB(190, 180, 210)
+    Body.TextColor3 = th.TextDim
     Body.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
     Body.TextSize = 12
     Body.Size = UDim2.new(1, 0, 0, 0)
@@ -1494,12 +1495,12 @@ function Library:create_ui()
     TopBar.Active = true
     TopBar.Parent = Container
 
-    -- Window control cluster (minimize + close) — premium look
+    -- Window control cluster (minimize + close) — premium themed
     local Controls = Instance.new('Frame')
     Controls.Name = 'WindowControls'
     Controls.BackgroundTransparency = 1
-    Controls.Size = UDim2.fromOffset(72, 28)
-    Controls.Position = UDim2.new(1, -14, 0.5, 0)
+    Controls.Size = UDim2.fromOffset(78, 30)
+    Controls.Position = UDim2.new(1, -12, 0.5, 0)
     Controls.AnchorPoint = Vector2.new(1, 0.5)
     Controls.ZIndex = 50
     Controls.Parent = TopBar
@@ -1508,73 +1509,101 @@ function Library:create_ui()
     ControlsLayout.FillDirection = Enum.FillDirection.Horizontal
     ControlsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     ControlsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    ControlsLayout.Padding = UDim.new(0, 8)
+    ControlsLayout.Padding = UDim.new(0, 10)
     ControlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     ControlsLayout.Parent = Controls
+
+    local function applyControlIdle(btn, stroke, iconParts)
+        local th = self._theme or Themes.Purple
+        btn.BackgroundColor3 = th.BackgroundInput
+        btn.BackgroundTransparency = 0.1
+        stroke.Color = th.Stroke
+        stroke.Transparency = 0.4
+        for _, part in ipairs(iconParts) do
+            part.BackgroundColor3 = th.TextDim
+        end
+    end
 
     -- Minimize button (hides UI completely)
     local MinBtn = Instance.new('TextButton')
     MinBtn.Name = 'MinimizeBtn'
     MinBtn.Text = ''
     MinBtn.AutoButtonColor = false
-    MinBtn.BackgroundColor3 = Color3.fromRGB(32, 26, 48)
-    MinBtn.BackgroundTransparency = 0.05
+    MinBtn.BackgroundColor3 = theme.BackgroundInput
+    MinBtn.BackgroundTransparency = 0.1
     MinBtn.BorderSizePixel = 0
-    MinBtn.Size = UDim2.fromOffset(28, 28)
+    MinBtn.Size = UDim2.fromOffset(30, 30)
     MinBtn.LayoutOrder = 1
     MinBtn.ZIndex = 51
     MinBtn.Parent = Controls
+    self:RegisterThemeTarget("ControlBtn", MinBtn)
 
     local MinCorner = Instance.new('UICorner')
-    MinCorner.CornerRadius = UDim.new(1, 0) -- circular
+    MinCorner.CornerRadius = UDim.new(1, 0)
     MinCorner.Parent = MinBtn
 
     local MinStroke = Instance.new('UIStroke')
-    MinStroke.Color = Color3.fromRGB(120, 85, 190)
-    MinStroke.Transparency = 0.45
-    MinStroke.Thickness = 1.2
+    MinStroke.Color = theme.Stroke
+    MinStroke.Transparency = 0.4
+    MinStroke.Thickness = 1.4
     MinStroke.Parent = MinBtn
+    self:RegisterThemeTarget("ControlStroke", MinStroke)
 
-    -- Horizontal dash icon for minimize
+    -- Soft inner highlight ring
+    local MinGlow = Instance.new('UIStroke')
+    MinGlow.Name = 'InnerGlow'
+    MinGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    MinGlow.Color = theme.Accent
+    MinGlow.Transparency = 0.85
+    MinGlow.Thickness = 0 -- idle hidden; grows on hover via transparency
+    MinGlow.Parent = MinBtn
+
     local MinIcon = Instance.new('Frame')
     MinIcon.Name = 'Dash'
     MinIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     MinIcon.Position = UDim2.fromScale(0.5, 0.5)
-    MinIcon.Size = UDim2.fromOffset(12, 2)
-    MinIcon.BackgroundColor3 = Color3.fromRGB(210, 200, 235)
+    MinIcon.Size = UDim2.fromOffset(11, 2.5)
+    MinIcon.BackgroundColor3 = theme.TextDim
     MinIcon.BorderSizePixel = 0
     MinIcon.ZIndex = 52
     MinIcon.Parent = MinBtn
     local MinIconCorner = Instance.new('UICorner')
     MinIconCorner.CornerRadius = UDim.new(1, 0)
     MinIconCorner.Parent = MinIcon
+    self:RegisterThemeTarget("LabelDim", MinIcon)
 
     MinBtn.MouseEnter:Connect(function()
+        local th = self._theme or Themes.Purple
         TweenService:Create(MinBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = Color3.fromRGB(90, 70, 140),
-            BackgroundTransparency = 0
+            BackgroundColor3 = th.AccentDark,
+            BackgroundTransparency = 0,
+            Size = UDim2.fromOffset(32, 32)
         }):Play()
         TweenService:Create(MinStroke, TweenInfo.new(0.18), {
-            Color = Color3.fromRGB(180, 140, 255),
-            Transparency = 0.1
+            Color = th.Accent,
+            Transparency = 0.05,
+            Thickness = 1.8
         }):Play()
         TweenService:Create(MinIcon, TweenInfo.new(0.18), {
-            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-            Size = UDim2.fromOffset(14, 2.5)
+            BackgroundColor3 = th.Text,
+            Size = UDim2.fromOffset(13, 2.5)
         }):Play()
     end)
     MinBtn.MouseLeave:Connect(function()
+        local th = self._theme or Themes.Purple
         TweenService:Create(MinBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = Color3.fromRGB(32, 26, 48),
-            BackgroundTransparency = 0.05
+            BackgroundColor3 = th.BackgroundInput,
+            BackgroundTransparency = 0.1,
+            Size = UDim2.fromOffset(30, 30)
         }):Play()
         TweenService:Create(MinStroke, TweenInfo.new(0.2), {
-            Color = Color3.fromRGB(120, 85, 190),
-            Transparency = 0.45
+            Color = th.Stroke,
+            Transparency = 0.4,
+            Thickness = 1.4
         }):Play()
         TweenService:Create(MinIcon, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
-            Size = UDim2.fromOffset(12, 2)
+            BackgroundColor3 = th.TextDim,
+            Size = UDim2.fromOffset(11, 2.5)
         }):Play()
     end)
 
@@ -1583,31 +1612,32 @@ function Library:create_ui()
     CloseBtn.Name = 'Close'
     CloseBtn.Text = ''
     CloseBtn.AutoButtonColor = false
-    CloseBtn.BackgroundColor3 = Color3.fromRGB(32, 26, 48)
-    CloseBtn.BackgroundTransparency = 0.05
+    CloseBtn.BackgroundColor3 = theme.BackgroundInput
+    CloseBtn.BackgroundTransparency = 0.1
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Size = UDim2.fromOffset(28, 28)
+    CloseBtn.Size = UDim2.fromOffset(30, 30)
     CloseBtn.LayoutOrder = 2
     CloseBtn.ZIndex = 51
     CloseBtn.Parent = Controls
+    self:RegisterThemeTarget("ControlBtn", CloseBtn)
 
     local CloseCorner = Instance.new('UICorner')
-    CloseCorner.CornerRadius = UDim.new(1, 0) -- circular
+    CloseCorner.CornerRadius = UDim.new(1, 0)
     CloseCorner.Parent = CloseBtn
 
     local CloseStroke = Instance.new('UIStroke')
-    CloseStroke.Color = Color3.fromRGB(120, 85, 190)
-    CloseStroke.Transparency = 0.45
-    CloseStroke.Thickness = 1.2
+    CloseStroke.Color = theme.Stroke
+    CloseStroke.Transparency = 0.4
+    CloseStroke.Thickness = 1.4
     CloseStroke.Parent = CloseBtn
+    self:RegisterThemeTarget("ControlStroke", CloseStroke)
 
-    -- X made of two rotated bars for a cleaner look
     local function makeXBar(rotation)
         local bar = Instance.new('Frame')
         bar.AnchorPoint = Vector2.new(0.5, 0.5)
         bar.Position = UDim2.fromScale(0.5, 0.5)
-        bar.Size = UDim2.fromOffset(12, 2)
-        bar.BackgroundColor3 = Color3.fromRGB(210, 200, 235)
+        bar.Size = UDim2.fromOffset(11, 2.5)
+        bar.BackgroundColor3 = theme.TextDim
         bar.BorderSizePixel = 0
         bar.Rotation = rotation
         bar.ZIndex = 52
@@ -1615,19 +1645,24 @@ function Library:create_ui()
         local c = Instance.new('UICorner')
         c.CornerRadius = UDim.new(1, 0)
         c.Parent = bar
+        self:RegisterThemeTarget("LabelDim", bar)
         return bar
     end
     local CloseBar1 = makeXBar(45)
     local CloseBar2 = makeXBar(-45)
 
     CloseBtn.MouseEnter:Connect(function()
+        local th = self._theme or Themes.Purple
+        local danger = th.Danger or Color3.fromRGB(200, 60, 90)
         TweenService:Create(CloseBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = Color3.fromRGB(180, 45, 75),
-            BackgroundTransparency = 0
+            BackgroundColor3 = danger,
+            BackgroundTransparency = 0,
+            Size = UDim2.fromOffset(32, 32)
         }):Play()
         TweenService:Create(CloseStroke, TweenInfo.new(0.18), {
-            Color = Color3.fromRGB(255, 100, 140),
-            Transparency = 0.05
+            Color = Color3.fromRGB(255, 140, 160),
+            Transparency = 0.05,
+            Thickness = 1.8
         }):Play()
         TweenService:Create(CloseBar1, TweenInfo.new(0.18), {
             BackgroundColor3 = Color3.fromRGB(255, 255, 255),
@@ -1640,21 +1675,24 @@ function Library:create_ui()
     end)
 
     CloseBtn.MouseLeave:Connect(function()
+        local th = self._theme or Themes.Purple
         TweenService:Create(CloseBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = Color3.fromRGB(32, 26, 48),
-            BackgroundTransparency = 0.05
+            BackgroundColor3 = th.BackgroundInput,
+            BackgroundTransparency = 0.1,
+            Size = UDim2.fromOffset(30, 30)
         }):Play()
         TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
-            Color = Color3.fromRGB(120, 85, 190),
-            Transparency = 0.45
+            Color = th.Stroke,
+            Transparency = 0.4,
+            Thickness = 1.4
         }):Play()
         TweenService:Create(CloseBar1, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
-            Size = UDim2.fromOffset(12, 2)
+            BackgroundColor3 = th.TextDim,
+            Size = UDim2.fromOffset(11, 2.5)
         }):Play()
         TweenService:Create(CloseBar2, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
-            Size = UDim2.fromOffset(12, 2)
+            BackgroundColor3 = th.TextDim,
+            Size = UDim2.fromOffset(11, 2.5)
         }):Play()
     end)
     
@@ -2574,8 +2612,9 @@ end
                 end
 
                 self._size += settings.customScale or 62
+                local pTheme = Library._theme or Themes.Purple
                 local Paragraph = Instance.new('Frame')
-                Paragraph.BackgroundColor3 = Color3.fromRGB(28, 22, 40)
+                Paragraph.BackgroundColor3 = pTheme.BackgroundTertiary
                 Paragraph.BackgroundTransparency = 0.15
                 Paragraph.Size = UDim2.new(0, 207, 0, 0)
                 Paragraph.BorderSizePixel = 0
@@ -2584,16 +2623,18 @@ end
                 Paragraph.ClipsDescendants = false
                 Paragraph.Parent = Options
                 Paragraph.LayoutOrder = LayoutOrderModule
+                Library:RegisterThemeTarget("Row", Paragraph)
 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 6)
                 UICorner.Parent = Paragraph
 
                 local UIStroke = Instance.new('UIStroke')
-                UIStroke.Color = Color3.fromRGB(100, 60, 170)
-                UIStroke.Transparency = 0.65
+                UIStroke.Color = pTheme.StrokeSoft
+                UIStroke.Transparency = 0.55
                 UIStroke.Thickness = 1
                 UIStroke.Parent = Paragraph
+                Library:RegisterThemeTarget("ButtonStroke", UIStroke)
 
                 local UIPadding = Instance.new('UIPadding')
                 UIPadding.PaddingTop = UDim.new(0, 8)
@@ -2613,7 +2654,7 @@ end
                 Title.Name = "Header"
                 Title.LayoutOrder = 1
                 Title.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Title.TextColor3 = Color3.fromRGB(230, 220, 255)
+                Title.TextColor3 = pTheme.Text
                 Title.Text = headerText
                 Title.Size = UDim2.new(1, 0, 0, 0)
                 Title.AutomaticSize = Enum.AutomaticSize.Y
@@ -2624,12 +2665,13 @@ end
                 Title.TextWrapped = true
                 Title.RichText = true
                 Title.Parent = Paragraph
+                Library:RegisterThemeTarget("Label", Title)
 
                 local Body = Instance.new('TextLabel')
                 Body.Name = "Body"
                 Body.LayoutOrder = 2
                 Body.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-                Body.TextColor3 = Color3.fromRGB(160, 145, 190)
+                Body.TextColor3 = pTheme.TextDim
                 Body.Text = bodyText
                 Body.Size = UDim2.new(1, 0, 0, 0)
                 Body.AutomaticSize = Enum.AutomaticSize.Y
@@ -2640,6 +2682,7 @@ end
                 Body.TextWrapped = true
                 Body.RichText = true
                 Body.Parent = Paragraph
+                Library:RegisterThemeTarget("LabelDim", Body)
 
                 function ParagraphManager:UpdateHeader(text)
                     Title.Text = tostring(text or "")
@@ -2675,16 +2718,18 @@ end
                     self._size = 11
                 end
             
-                self._size += settings.customScale or 56 
+                self._size += settings.customScale or 56
+                local tTheme = Library._theme or Themes.Purple
                 local TextFrame = Instance.new('Frame')
-                TextFrame.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
-                TextFrame.BackgroundTransparency = 0.3
+                TextFrame.BackgroundColor3 = tTheme.BackgroundTertiary
+                TextFrame.BackgroundTransparency = 0.25
                 TextFrame.Size = UDim2.new(0, 207, 0, settings.CustomYSize)
                 TextFrame.BorderSizePixel = 0
                 TextFrame.Name = "Text"
                 TextFrame.AutomaticSize = Enum.AutomaticSize.Y 
                 TextFrame.Parent = Options
                 TextFrame.LayoutOrder = LayoutOrderModule
+                Library:RegisterThemeTarget("Row", TextFrame)
             
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 4)
@@ -2693,7 +2738,7 @@ end
                 
                 local Body = Instance.new('TextLabel')
                 Body.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-                Body.TextColor3 = Color3.fromRGB(150, 90, 255)
+                Body.TextColor3 = tTheme.TextDim
             
                 if not settings.rich then
                     Body.Text = settings.text or "Skibidi" 
@@ -2701,6 +2746,7 @@ end
                     Body.RichText = true
                     Body.Text = settings.richtext or "<font color='rgb(255,0,0)'>Zex Hub</font> user" 
                 end
+                Library:RegisterThemeTarget("LabelDim", Body)
             
                 Body.Size = UDim2.new(1, -10, 1, 0)
                 Body.Position = UDim2.new(0, 5, 0, 5)
@@ -3834,24 +3880,27 @@ if not settings or settings and not settings.disableline then
                 local SearchFrame = nil
 
                 if settings.searchable then
+                    local sTheme = Library._theme or Themes.Purple
                     SearchFrame = Instance.new('Frame')
                     SearchFrame.Name = 'SearchFrame'
                     SearchFrame.Size = UDim2.new(1, -4, 0, 26)
-                    SearchFrame.BackgroundColor3 = Color3.fromRGB(30, 24, 42)
+                    SearchFrame.BackgroundColor3 = sTheme.BackgroundInput
                     SearchFrame.BackgroundTransparency = 0.15
                     SearchFrame.BorderSizePixel = 0
                     SearchFrame.LayoutOrder = 0
                     SearchFrame.Parent = Options
+                    Library:RegisterThemeTarget("Textbox", SearchFrame)
 
                     local SearchCorner = Instance.new('UICorner')
                     SearchCorner.CornerRadius = UDim.new(0, 6)
                     SearchCorner.Parent = SearchFrame
 
                     local SearchStroke = Instance.new('UIStroke')
-                    SearchStroke.Color = Color3.fromRGB(110, 70, 180)
-                    SearchStroke.Transparency = 0.5
+                    SearchStroke.Color = sTheme.Stroke
+                    SearchStroke.Transparency = 0.45
                     SearchStroke.Thickness = 1
                     SearchStroke.Parent = SearchFrame
+                    Library:RegisterThemeTarget("DropdownStroke", SearchStroke)
 
                     SearchBox = Instance.new('TextBox')
                     SearchBox.Name = 'SearchBox'
@@ -3860,13 +3909,14 @@ if not settings or settings and not settings.disableline then
                     SearchBox.BackgroundTransparency = 1
                     SearchBox.Text = ""
                     SearchBox.PlaceholderText = "Search..."
-                    SearchBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 160)
-                    SearchBox.TextColor3 = Color3.fromRGB(240, 235, 255)
+                    SearchBox.PlaceholderColor3 = sTheme.TextMuted
+                    SearchBox.TextColor3 = sTheme.Text
                     SearchBox.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Medium, Enum.FontStyle.Normal)
                     SearchBox.TextSize = 12
                     SearchBox.TextXAlignment = Enum.TextXAlignment.Left
                     SearchBox.ClearTextOnFocus = false
                     SearchBox.Parent = SearchFrame
+                    Library:RegisterThemeTarget("Label", SearchBox)
 
                     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
                         local query = string.lower(SearchBox.Text or "")
