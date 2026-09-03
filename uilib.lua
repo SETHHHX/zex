@@ -1495,12 +1495,12 @@ function Library:create_ui()
     TopBar.Active = true
     TopBar.Parent = Container
 
-    -- Window control cluster (minimize + close) — premium themed
+    -- Window controls: small, subtle, no border
     local Controls = Instance.new('Frame')
     Controls.Name = 'WindowControls'
     Controls.BackgroundTransparency = 1
-    Controls.Size = UDim2.fromOffset(78, 30)
-    Controls.Position = UDim2.new(1, -12, 0.5, 0)
+    Controls.Size = UDim2.fromOffset(48, 22)
+    Controls.Position = UDim2.new(1, -10, 0.5, 0)
     Controls.AnchorPoint = Vector2.new(1, 0.5)
     Controls.ZIndex = 50
     Controls.Parent = TopBar
@@ -1509,61 +1509,29 @@ function Library:create_ui()
     ControlsLayout.FillDirection = Enum.FillDirection.Horizontal
     ControlsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     ControlsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    ControlsLayout.Padding = UDim.new(0, 10)
+    ControlsLayout.Padding = UDim.new(0, 6)
     ControlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     ControlsLayout.Parent = Controls
 
-    local function applyControlIdle(btn, stroke, iconParts)
-        local th = self._theme or Themes.Purple
-        btn.BackgroundColor3 = th.BackgroundInput
-        btn.BackgroundTransparency = 0.1
-        stroke.Color = th.Stroke
-        stroke.Transparency = 0.4
-        for _, part in ipairs(iconParts) do
-            part.BackgroundColor3 = th.TextDim
-        end
-    end
-
-    -- Minimize button (hides UI completely)
+    -- Minimize (–)
     local MinBtn = Instance.new('TextButton')
     MinBtn.Name = 'MinimizeBtn'
     MinBtn.Text = ''
     MinBtn.AutoButtonColor = false
-    MinBtn.BackgroundColor3 = theme.BackgroundInput
-    MinBtn.BackgroundTransparency = 0.1
+    MinBtn.BackgroundTransparency = 1
     MinBtn.BorderSizePixel = 0
-    MinBtn.Size = UDim2.fromOffset(30, 30)
+    MinBtn.Size = UDim2.fromOffset(18, 18)
     MinBtn.LayoutOrder = 1
     MinBtn.ZIndex = 51
     MinBtn.Parent = Controls
-    self:RegisterThemeTarget("ControlBtn", MinBtn)
-
-    local MinCorner = Instance.new('UICorner')
-    MinCorner.CornerRadius = UDim.new(1, 0)
-    MinCorner.Parent = MinBtn
-
-    local MinStroke = Instance.new('UIStroke')
-    MinStroke.Color = theme.Stroke
-    MinStroke.Transparency = 0.4
-    MinStroke.Thickness = 1.4
-    MinStroke.Parent = MinBtn
-    self:RegisterThemeTarget("ControlStroke", MinStroke)
-
-    -- Soft inner highlight ring
-    local MinGlow = Instance.new('UIStroke')
-    MinGlow.Name = 'InnerGlow'
-    MinGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    MinGlow.Color = theme.Accent
-    MinGlow.Transparency = 0.85
-    MinGlow.Thickness = 0 -- idle hidden; grows on hover via transparency
-    MinGlow.Parent = MinBtn
 
     local MinIcon = Instance.new('Frame')
     MinIcon.Name = 'Dash'
     MinIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     MinIcon.Position = UDim2.fromScale(0.5, 0.5)
-    MinIcon.Size = UDim2.fromOffset(11, 2.5)
-    MinIcon.BackgroundColor3 = theme.TextDim
+    MinIcon.Size = UDim2.fromOffset(9, 1.5)
+    MinIcon.BackgroundColor3 = theme.TextMuted
+    MinIcon.BackgroundTransparency = 0.15
     MinIcon.BorderSizePixel = 0
     MinIcon.ZIndex = 52
     MinIcon.Parent = MinBtn
@@ -1574,70 +1542,40 @@ function Library:create_ui()
 
     MinBtn.MouseEnter:Connect(function()
         local th = self._theme or Themes.Purple
-        TweenService:Create(MinBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = th.AccentDark,
-            BackgroundTransparency = 0,
-            Size = UDim2.fromOffset(32, 32)
-        }):Play()
-        TweenService:Create(MinStroke, TweenInfo.new(0.18), {
-            Color = th.Accent,
-            Transparency = 0.05,
-            Thickness = 1.8
-        }):Play()
-        TweenService:Create(MinIcon, TweenInfo.new(0.18), {
+        TweenService:Create(MinIcon, TweenInfo.new(0.15), {
             BackgroundColor3 = th.Text,
-            Size = UDim2.fromOffset(13, 2.5)
+            BackgroundTransparency = 0,
+            Size = UDim2.fromOffset(10, 1.5)
         }):Play()
     end)
     MinBtn.MouseLeave:Connect(function()
         local th = self._theme or Themes.Purple
-        TweenService:Create(MinBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = th.BackgroundInput,
-            BackgroundTransparency = 0.1,
-            Size = UDim2.fromOffset(30, 30)
-        }):Play()
-        TweenService:Create(MinStroke, TweenInfo.new(0.2), {
-            Color = th.Stroke,
-            Transparency = 0.4,
-            Thickness = 1.4
-        }):Play()
-        TweenService:Create(MinIcon, TweenInfo.new(0.2), {
-            BackgroundColor3 = th.TextDim,
-            Size = UDim2.fromOffset(11, 2.5)
+        TweenService:Create(MinIcon, TweenInfo.new(0.15), {
+            BackgroundColor3 = th.TextMuted,
+            BackgroundTransparency = 0.15,
+            Size = UDim2.fromOffset(9, 1.5)
         }):Play()
     end)
 
-    -- Close button (X)
+    -- Close (×)
     local CloseBtn = Instance.new('TextButton')
     CloseBtn.Name = 'Close'
     CloseBtn.Text = ''
     CloseBtn.AutoButtonColor = false
-    CloseBtn.BackgroundColor3 = theme.BackgroundInput
-    CloseBtn.BackgroundTransparency = 0.1
+    CloseBtn.BackgroundTransparency = 1
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Size = UDim2.fromOffset(30, 30)
+    CloseBtn.Size = UDim2.fromOffset(18, 18)
     CloseBtn.LayoutOrder = 2
     CloseBtn.ZIndex = 51
     CloseBtn.Parent = Controls
-    self:RegisterThemeTarget("ControlBtn", CloseBtn)
-
-    local CloseCorner = Instance.new('UICorner')
-    CloseCorner.CornerRadius = UDim.new(1, 0)
-    CloseCorner.Parent = CloseBtn
-
-    local CloseStroke = Instance.new('UIStroke')
-    CloseStroke.Color = theme.Stroke
-    CloseStroke.Transparency = 0.4
-    CloseStroke.Thickness = 1.4
-    CloseStroke.Parent = CloseBtn
-    self:RegisterThemeTarget("ControlStroke", CloseStroke)
 
     local function makeXBar(rotation)
         local bar = Instance.new('Frame')
         bar.AnchorPoint = Vector2.new(0.5, 0.5)
         bar.Position = UDim2.fromScale(0.5, 0.5)
-        bar.Size = UDim2.fromOffset(11, 2.5)
-        bar.BackgroundColor3 = theme.TextDim
+        bar.Size = UDim2.fromOffset(9, 1.5)
+        bar.BackgroundColor3 = theme.TextMuted
+        bar.BackgroundTransparency = 0.15
         bar.BorderSizePixel = 0
         bar.Rotation = rotation
         bar.ZIndex = 52
@@ -1652,47 +1590,30 @@ function Library:create_ui()
     local CloseBar2 = makeXBar(-45)
 
     CloseBtn.MouseEnter:Connect(function()
-        local th = self._theme or Themes.Purple
-        local danger = th.Danger or Color3.fromRGB(200, 60, 90)
-        TweenService:Create(CloseBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+        local danger = (self._theme and self._theme.Danger) or Color3.fromRGB(220, 80, 100)
+        TweenService:Create(CloseBar1, TweenInfo.new(0.15), {
             BackgroundColor3 = danger,
             BackgroundTransparency = 0,
-            Size = UDim2.fromOffset(32, 32)
+            Size = UDim2.fromOffset(10, 1.5)
         }):Play()
-        TweenService:Create(CloseStroke, TweenInfo.new(0.18), {
-            Color = Color3.fromRGB(255, 140, 160),
-            Transparency = 0.05,
-            Thickness = 1.8
-        }):Play()
-        TweenService:Create(CloseBar1, TweenInfo.new(0.18), {
-            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-            Size = UDim2.fromOffset(13, 2.5)
-        }):Play()
-        TweenService:Create(CloseBar2, TweenInfo.new(0.18), {
-            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-            Size = UDim2.fromOffset(13, 2.5)
+        TweenService:Create(CloseBar2, TweenInfo.new(0.15), {
+            BackgroundColor3 = danger,
+            BackgroundTransparency = 0,
+            Size = UDim2.fromOffset(10, 1.5)
         }):Play()
     end)
 
     CloseBtn.MouseLeave:Connect(function()
         local th = self._theme or Themes.Purple
-        TweenService:Create(CloseBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = th.BackgroundInput,
-            BackgroundTransparency = 0.1,
-            Size = UDim2.fromOffset(30, 30)
+        TweenService:Create(CloseBar1, TweenInfo.new(0.15), {
+            BackgroundColor3 = th.TextMuted,
+            BackgroundTransparency = 0.15,
+            Size = UDim2.fromOffset(9, 1.5)
         }):Play()
-        TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
-            Color = th.Stroke,
-            Transparency = 0.4,
-            Thickness = 1.4
-        }):Play()
-        TweenService:Create(CloseBar1, TweenInfo.new(0.2), {
-            BackgroundColor3 = th.TextDim,
-            Size = UDim2.fromOffset(11, 2.5)
-        }):Play()
-        TweenService:Create(CloseBar2, TweenInfo.new(0.2), {
-            BackgroundColor3 = th.TextDim,
-            Size = UDim2.fromOffset(11, 2.5)
+        TweenService:Create(CloseBar2, TweenInfo.new(0.15), {
+            BackgroundColor3 = th.TextMuted,
+            BackgroundTransparency = 0.15,
+            Size = UDim2.fromOffset(9, 1.5)
         }):Play()
     end)
     
