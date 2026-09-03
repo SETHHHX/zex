@@ -654,6 +654,27 @@ local Themes = {
         ToggleOff = Color3.fromRGB(40, 40, 48),
         ToggleKnob = Color3.fromRGB(200, 200, 210),
     },
+    Black = {
+        Name = "Black",
+        Background = Color3.fromRGB(6, 6, 8),
+        BackgroundSecondary = Color3.fromRGB(14, 14, 16),
+        BackgroundTertiary = Color3.fromRGB(22, 22, 26),
+        BackgroundInput = Color3.fromRGB(28, 28, 32),
+        Stroke = Color3.fromRGB(70, 70, 78),
+        StrokeSoft = Color3.fromRGB(50, 50, 58),
+        Accent = Color3.fromRGB(230, 230, 240),
+        AccentHover = Color3.fromRGB(255, 255, 255),
+        AccentDark = Color3.fromRGB(140, 140, 150),
+        Text = Color3.fromRGB(245, 245, 250),
+        TextDim = Color3.fromRGB(180, 180, 190),
+        TextMuted = Color3.fromRGB(120, 120, 130),
+        Success = Color3.fromRGB(80, 200, 120),
+        Danger = Color3.fromRGB(220, 70, 90),
+        Tab = Color3.fromRGB(20, 20, 24),
+        Divider = Color3.fromRGB(45, 45, 52),
+        ToggleOff = Color3.fromRGB(28, 28, 32),
+        ToggleKnob = Color3.fromRGB(200, 200, 210),
+    },
 }
 
 Library._themes = Themes
@@ -757,12 +778,33 @@ function Library:SetTheme(name: string)
                 elseif kind == "Input" then
                     obj.BackgroundColor3 = theme.BackgroundInput
                 elseif kind == "ToggleTrackOff" then
-                    -- only update if currently "off" is hard; store state on object if possible
                     if obj:GetAttribute("ToggleOn") ~= true then
                         obj.BackgroundColor3 = theme.ToggleOff
                     else
                         obj.BackgroundColor3 = theme.Accent
                     end
+                elseif kind == "SliderFill" then
+                    obj.BackgroundColor3 = theme.Accent
+                elseif kind == "SliderTrack" then
+                    obj.BackgroundColor3 = theme.BackgroundTertiary
+                elseif kind == "SliderKnob" then
+                    obj.BackgroundColor3 = theme.AccentHover
+                elseif kind == "Button" then
+                    obj.BackgroundColor3 = theme.BackgroundTertiary
+                elseif kind == "ButtonStroke" then
+                    obj.Color = theme.StrokeSoft
+                elseif kind == "Textbox" then
+                    obj.BackgroundColor3 = theme.BackgroundInput
+                elseif kind == "DropdownBox" then
+                    obj.BackgroundColor3 = theme.BackgroundTertiary
+                elseif kind == "DropdownStroke" then
+                    obj.Color = theme.StrokeSoft
+                elseif kind == "Label" then
+                    obj.TextColor3 = theme.Text
+                elseif kind == "LabelDim" then
+                    obj.TextColor3 = theme.TextDim
+                elseif kind == "ParticleLayer" then
+                    -- no color change needed
                 elseif kind == "Custom" and type(entry.apply) == "function" then
                     entry.apply(theme)
                 end
@@ -939,6 +981,8 @@ function Library.new(settings)
             ToggleIconImage = settings.ToggleIconImage or settings.Icon or "rbxassetid://130655920174103",
             ToggleIconSize = settings.ToggleIconSize or 60,
             Theme = settings.Theme or "Purple",
+            Particles = settings.Particles ~= false, -- snow/dust falling in background
+            ParticleCount = settings.ParticleCount or 28,
         },
     }, Library)
 
@@ -1618,6 +1662,124 @@ function Library:create_ui()
     UIScale.Parent = Container    
     
     self._ui = click
+
+    -- ============================================
+    --  Animated particle background (snow / dust)
+    -- ============================================
+    local ParticleLayer = Instance.new('Frame')
+    ParticleLayer.Name = 'ParticleLayer'
+    ParticleLayer.BackgroundTransparency = 1
+    ParticleLayer.BorderSizePixel = 0
+    ParticleLayer.Size = UDim2.fromScale(1, 1)
+    ParticleLayer.Position = UDim2.fromScale(0, 0)
+    ParticleLayer.ZIndex = 0
+    ParticleLayer.ClipsDescendants = true
+    ParticleLayer.Parent = Container
+    self._particleLayer = ParticleLayer
+
+    -- Keep Handler above particles
+    Handler.ZIndex = 1
+
+    local particlesEnabled = self._settings.Particles ~= false
+    local particleCount = tonumber(self._settings.ParticleCount) or 28
+    local particleObjs = {}
+    local particleConn = nil
+
+    local function clearParticles()
+        for _, p in ipairs(particleObjs) do
+            if p.frame then p.frame:Destroy() end
+        end
+        table.clear(particleObjs)
+        if particleConn then
+            particleConn:Disconnect()
+            particleConn = nil
+        end
+    end
+
+    local function spawnParticle()
+        local th = self._theme or Themes.Purple
+        local size = math.random(2, 5)
+        local f = Instance.new('Frame')
+        f.BackgroundColor3 = th.Accent
+        f.BackgroundTransparency = math.random(35, 70) / 100
+        f.BorderSizePixel = 0
+        f.Size = UDim2.fromOffset(size, size)
+        f.Position = UDim2.new(math.random(), 0, -0.05, 0)
+        f.ZIndex = 0
+        f.Parent = ParticleLayer
+        local c = Instance.new('UICorner')
+        c.CornerRadius = UDim.new(1, 0)
+        c.Parent = f
+        return {
+            frame = f,
+            speed = math.random(18, 45) / 100, -- fall speed
+            drift = (math.random() - 0.5) * 0.12,
+            rot = math.random(-30, 30),
+            y = -math.random() * 0.2,
+            x = math.random(),
+        }
+    end
+
+    local function startParticles()
+        clearParticles()
+        if not particlesEnabled then return end
+        for _ = 1, particleCount do
+            local p = spawnParticle()
+            p.y = math.random()
+            p.x = math.random()
+            p.frame.Position = UDim2.new(p.x, 0, p.y, 0)
+            table.insert(particleObjs, p)
+        end
+        particleConn = RunService.RenderStepped:Connect(function(dt)
+            if not ParticleLayer or not ParticleLayer.Parent then
+                return
+            end
+            local th = self._theme or Themes.Purple
+            for _, p in ipairs(particleObjs) do
+                p.y += p.speed * dt * 0.35
+                p.x += p.drift * dt
+                if p.x < -0.05 then p.x = 1.05 end
+                if p.x > 1.05 then p.x = -0.05 end
+                if p.y > 1.08 then
+                    p.y = -0.05
+                    p.x = math.random()
+                    p.speed = math.random(18, 45) / 100
+                    p.frame.BackgroundColor3 = th.Accent
+                    p.frame.BackgroundTransparency = math.random(35, 70) / 100
+                end
+                p.frame.Position = UDim2.new(p.x, 0, p.y, 0)
+                p.frame.Rotation = (p.frame.Rotation + p.rot * dt * 0.5) % 360
+            end
+        end)
+        Connections['particles'] = particleConn
+    end
+
+    function self:SetParticles(enabled: boolean)
+        particlesEnabled = enabled and true or false
+        if self._config and self._config._library then
+            self._config._library.Particles = particlesEnabled
+        end
+        if particlesEnabled then
+            startParticles()
+        else
+            clearParticles()
+        end
+    end
+
+    function self:GetParticles()
+        return particlesEnabled
+    end
+
+    -- Start after UI opens
+    task.defer(function()
+        if particlesEnabled then
+            startParticles()
+        end
+    end)
+
+    self:removed(function()
+        clearParticles()
+    end)
 
     local function on_drag(input: InputObject, process: boolean)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
@@ -2601,6 +2763,7 @@ end
                 Row.Parent = Options
                 Row.LayoutOrder = LayoutOrderModule
 
+                local tbTheme = Library._theme or Themes.Purple
                 local Label = Instance.new("TextLabel")
                 Label.Name = "Title"
                 Label.BackgroundTransparency = 1
@@ -2608,32 +2771,34 @@ end
                 Label.Position = UDim2.new(0, 0, 0, 0)
                 Label.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                 Label.TextSize = 12
-                Label.TextColor3 = Color3.fromRGB(235, 230, 245)
+                Label.TextColor3 = tbTheme.Text
                 Label.TextTransparency = 0.05
                 Label.TextXAlignment = Enum.TextXAlignment.Left
                 Label.TextYAlignment = Enum.TextYAlignment.Center
                 Label.Text = settings.title
                 Label.Parent = Row
+                Library:RegisterThemeTarget("Label", Label)
 
                 local Textbox = Instance.new("TextBox")
                 Textbox.Name = "Textbox"
                 Textbox.Size = UDim2.new(0, 100, 0, 24)
                 Textbox.Position = UDim2.new(1, 0, 0.5, 0)
                 Textbox.AnchorPoint = Vector2.new(1, 0.5)
-                Textbox.BackgroundColor3 = Color3.fromRGB(32, 28, 42)
+                Textbox.BackgroundColor3 = tbTheme.BackgroundInput
                 Textbox.BackgroundTransparency = 0.15
                 Textbox.BorderSizePixel = 0
                 Textbox.ClipsDescendants = true
                 Textbox.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
                 Textbox.TextSize = 12
-                Textbox.TextColor3 = Color3.fromRGB(230, 225, 240)
-                Textbox.PlaceholderColor3 = Color3.fromRGB(120, 110, 140)
+                Textbox.TextColor3 = tbTheme.Text
+                Textbox.PlaceholderColor3 = tbTheme.TextMuted
                 Textbox.PlaceholderText = settings.placeholder
                 Textbox.Text = value_to_display(Library._config._flags[settings.flag])
                 Textbox.ClearTextOnFocus = false
                 Textbox.TextXAlignment = Enum.TextXAlignment.Left
                 Textbox.TextTruncate = Enum.TextTruncate.AtEnd
                 Textbox.Parent = Row
+                Library:RegisterThemeTarget("Textbox", Textbox)
 
                 -- Padding inside the textbox so text doesn't touch edges
                 local TextPadding = Instance.new("UIPadding")
@@ -3301,18 +3466,19 @@ if not settings or settings and not settings.disableline then
                 end
 
                 self._size += 34
+                local sTheme = Library._theme or Themes.Purple
                 local Slider = Instance.new('TextButton')
                 Slider.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal);
                 Slider.TextSize = 14;
-                Slider.TextColor3 = Color3.fromRGB(90, 50, 140)
-                Slider.BorderColor3 = Color3.fromRGB(90, 50, 140)
+                Slider.TextColor3 = sTheme.Stroke
+                Slider.BorderColor3 = sTheme.Stroke
                 Slider.Text = ''
                 Slider.AutoButtonColor = false
                 Slider.BackgroundTransparency = 1
                 Slider.Name = 'Slider'
                 Slider.Size = UDim2.new(0, 207, 0, 24)
                 Slider.BorderSizePixel = 0
-                Slider.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
+                Slider.BackgroundColor3 = sTheme.Stroke
                 Slider.Parent = Options
                 Slider.LayoutOrder = LayoutOrderModule
                 
@@ -3324,7 +3490,7 @@ if not settings or settings and not settings.disableline then
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                     TextLabel.TextSize = 12;
                 end;
-                TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                TextLabel.TextColor3 = sTheme.Text
                 TextLabel.TextTransparency = 0.20000000298023224
                 TextLabel.Text = settings.title
                 TextLabel.Size = UDim2.new(0, 153, 0, 13)
@@ -3332,35 +3498,38 @@ if not settings or settings and not settings.disableline then
                 TextLabel.BackgroundTransparency = 1
                 TextLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TextLabel.BorderSizePixel = 0
-                TextLabel.BorderColor3 = Color3.fromRGB(90, 50, 140)
+                TextLabel.BorderColor3 = sTheme.Stroke
                 TextLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.Parent = Slider
+                Library:RegisterThemeTarget("Label", TextLabel)
                 
                 local Drag = Instance.new('Frame')
-                Drag.BorderColor3 = Color3.fromRGB(90, 50, 140)
+                Drag.BorderColor3 = sTheme.Stroke
                 Drag.AnchorPoint = Vector2.new(0.5, 1)
-                Drag.BackgroundTransparency = 0.8999999761581421
+                Drag.BackgroundTransparency = 0.75
                 Drag.Position = UDim2.new(0.5, 0, 0.949999988079071, 0)
                 Drag.Name = 'Drag'
                 Drag.Size = UDim2.new(0, 207, 0, 4)
                 Drag.BorderSizePixel = 0
-                Drag.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                Drag.BackgroundColor3 = sTheme.BackgroundTertiary
                 Drag.Parent = Slider
+                Library:RegisterThemeTarget("SliderTrack", Drag)
                 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(1, 0)
                 UICorner.Parent = Drag
                 
                 local Fill = Instance.new('Frame')
-                Fill.BorderColor3 = Color3.fromRGB(90, 50, 140)
+                Fill.BorderColor3 = sTheme.Stroke
                 Fill.AnchorPoint = Vector2.new(0, 0.5)
-                Fill.BackgroundTransparency = 0.5
+                Fill.BackgroundTransparency = 0.15
                 Fill.Position = UDim2.new(0, 0, 0.5, 0)
                 Fill.Name = 'Fill'
                 Fill.Size = UDim2.new(0, 103, 0, 4)
                 Fill.BorderSizePixel = 0
-                Fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                Fill.BackgroundColor3 = sTheme.Accent
                 Fill.Parent = Drag
+                Library:RegisterThemeTarget("SliderFill", Fill)
                 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 3)
@@ -3369,7 +3538,7 @@ if not settings or settings and not settings.disableline then
                 local UIGradient = Instance.new('UIGradient')
                 UIGradient.Color = ColorSequence.new{
                     ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 180))
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 200))
                 }
                 UIGradient.Parent = Fill
                 
@@ -3377,11 +3546,12 @@ if not settings or settings and not settings.disableline then
                 Circle.AnchorPoint = Vector2.new(1, 0.5)
                 Circle.Name = 'Circle'
                 Circle.Position = UDim2.new(1, 0, 0.5, 0)
-                Circle.BorderColor3 = Color3.fromRGB(90, 50, 140)
-                Circle.Size = UDim2.new(0, 6, 0, 6)
+                Circle.BorderColor3 = sTheme.Stroke
+                Circle.Size = UDim2.new(0, 8, 0, 8)
                 Circle.BorderSizePixel = 0
-                Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                Circle.BackgroundColor3 = sTheme.AccentHover
                 Circle.Parent = Fill
+                Library:RegisterThemeTarget("SliderKnob", Circle)
                 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(1, 0)
@@ -3389,7 +3559,7 @@ if not settings or settings and not settings.disableline then
                 
                 local Value = Instance.new('TextLabel')
                 Value.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-                Value.TextColor3 = Color3.fromRGB(255, 255, 255)
+                Value.TextColor3 = sTheme.TextDim
                 Value.TextTransparency = 0.20000000298023224
                 Value.Text = '50'
                 Value.Name = 'Value'
@@ -3399,10 +3569,11 @@ if not settings or settings and not settings.disableline then
                 Value.BackgroundTransparency = 1
                 Value.TextXAlignment = Enum.TextXAlignment.Right
                 Value.BorderSizePixel = 0
-                Value.BorderColor3 = Color3.fromRGB(90, 50, 140)
+                Value.BorderColor3 = sTheme.Stroke
                 Value.TextSize = 12
                 Value.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Value.Parent = Slider
+                Library:RegisterThemeTarget("LabelDim", Value)
 
                 function SliderManager:set_percentage(percentage: number, silent: boolean?)
                     local rounded_number = 0
@@ -3514,9 +3685,10 @@ if not settings or settings and not settings.disableline then
                     self._size += 50
                 end
 
+                local dTheme = Library._theme or Themes.Purple
                 local Dropdown = Instance.new('TextButton')
                 Dropdown.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-                Dropdown.TextColor3 = Color3.fromRGB(200, 200, 200)
+                Dropdown.TextColor3 = dTheme.TextDim
                 Dropdown.BorderColor3 = Color3.fromRGB(40, 40, 40)
                 Dropdown.Text = ''
                 Dropdown.AutoButtonColor = false
@@ -3525,7 +3697,7 @@ if not settings or settings and not settings.disableline then
                 Dropdown.Size = UDim2.new(0, 207, 0, 40)
                 Dropdown.BorderSizePixel = 0
                 Dropdown.TextSize = 14
-                Dropdown.BackgroundColor3 = Color3.fromRGB(90, 50, 140)
+                Dropdown.BackgroundColor3 = dTheme.Stroke
                 Dropdown.Parent = Options
 
                 if not settings.Order then
@@ -3546,7 +3718,7 @@ if not settings or settings and not settings.disableline then
                     TextLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                     TextLabel.TextSize = 12
                 end
-                TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                TextLabel.TextColor3 = dTheme.Text
                 TextLabel.TextTransparency = 0.2
                 TextLabel.Text = settings.title
                 TextLabel.Size = UDim2.new(0, 207, 0, 13)
@@ -3554,22 +3726,31 @@ if not settings or settings and not settings.disableline then
                 TextLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TextLabel.BorderSizePixel = 0
                 TextLabel.Parent = Dropdown
+                Library:RegisterThemeTarget("Label", TextLabel)
 
                 local Box = Instance.new('Frame')
                 Box.ClipsDescendants = true
                 Box.BorderColor3 = Color3.fromRGB(60, 60, 60)
                 Box.AnchorPoint = Vector2.new(0.5, 0)
-                Box.BackgroundTransparency = 0.9
+                Box.BackgroundTransparency = 0.35
                 Box.Position = UDim2.new(0.5, 0, 1.2, 0)
                 Box.Name = 'Box'
                 Box.Size = UDim2.new(0, 207, 0, 22)
                 Box.BorderSizePixel = 0
-                Box.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+                Box.BackgroundColor3 = dTheme.BackgroundTertiary
                 Box.Parent = TextLabel
+                Library:RegisterThemeTarget("DropdownBox", Box)
 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 4)
                 UICorner.Parent = Box
+
+                local BoxStroke = Instance.new('UIStroke')
+                BoxStroke.Color = dTheme.StrokeSoft
+                BoxStroke.Transparency = 0.5
+                BoxStroke.Thickness = 1
+                BoxStroke.Parent = Box
+                Library:RegisterThemeTarget("DropdownStroke", BoxStroke)
 
                 local Header = Instance.new('Frame')
                 Header.BorderColor3 = Color3.fromRGB(90, 50, 140)
@@ -3985,27 +4166,30 @@ if not settings or settings and not settings.disableline then
                     self._size = 11
                 end
                 self._size += 32
+                local bTheme = Library._theme or Themes.Purple
                 -- Row-style button (title left + chevron right)
                 local Button = Instance.new("TextButton")
                 Button.Name = "Button"
                 Button.Size = UDim2.new(0, 207, 0, 30)
-                Button.BackgroundColor3 = Color3.fromRGB(28, 24, 36)
+                Button.BackgroundColor3 = bTheme.BackgroundTertiary
                 Button.BackgroundTransparency = 0.25
                 Button.BorderSizePixel = 0
                 Button.AutoButtonColor = false
                 Button.Text = ""
                 Button.Parent = Options
                 Button.LayoutOrder = LayoutOrderModule
+                Library:RegisterThemeTarget("Button", Button)
 
                 local Corner = Instance.new("UICorner")
                 Corner.CornerRadius = UDim.new(0, 8)
                 Corner.Parent = Button
 
                 local Stroke = Instance.new("UIStroke")
-                Stroke.Color = Color3.fromRGB(70, 55, 95)
+                Stroke.Color = bTheme.StrokeSoft
                 Stroke.Transparency = 0.55
                 Stroke.Thickness = 1
                 Stroke.Parent = Button
+                Library:RegisterThemeTarget("ButtonStroke", Stroke)
 
                 local TitleLabel = Instance.new("TextLabel")
                 TitleLabel.Name = "Title"
@@ -4014,12 +4198,13 @@ if not settings or settings and not settings.disableline then
                 TitleLabel.Position = UDim2.new(0, 12, 0, 0)
                 TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
                 TitleLabel.TextSize = 13
-                TitleLabel.TextColor3 = Color3.fromRGB(235, 230, 245)
+                TitleLabel.TextColor3 = bTheme.Text
                 TitleLabel.TextTransparency = 0.05
                 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
                 TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
                 TitleLabel.Text = settings.title
                 TitleLabel.Parent = Button
+                Library:RegisterThemeTarget("Label", TitleLabel)
 
                 local Chevron = Instance.new("TextLabel")
                 Chevron.Name = "Chevron"
@@ -4028,46 +4213,49 @@ if not settings or settings and not settings.disableline then
                 Chevron.Position = UDim2.new(1, -24, 0, 0)
                 Chevron.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
                 Chevron.TextSize = 16
-                Chevron.TextColor3 = Color3.fromRGB(160, 150, 180)
+                Chevron.TextColor3 = bTheme.TextMuted
                 Chevron.TextTransparency = 0.15
                 Chevron.Text = "›"
                 Chevron.TextXAlignment = Enum.TextXAlignment.Center
                 Chevron.TextYAlignment = Enum.TextYAlignment.Center
                 Chevron.Parent = Button
+                Library:RegisterThemeTarget("LabelDim", Chevron)
 
                 Button.MouseEnter:Connect(function()
+                    local th = Library._theme or Themes.Purple
                     TweenService:Create(Button, TweenInfo.new(0.18), {
-                        BackgroundColor3 = Color3.fromRGB(42, 34, 58),
+                        BackgroundColor3 = th.BackgroundInput,
                         BackgroundTransparency = 0.05
                     }):Play()
                     TweenService:Create(Stroke, TweenInfo.new(0.18), {
-                        Color = Color3.fromRGB(130, 90, 200),
+                        Color = th.Accent,
                         Transparency = 0.3
                     }):Play()
                     TweenService:Create(Chevron, TweenInfo.new(0.18), {
-                        TextColor3 = Color3.fromRGB(210, 190, 255),
+                        TextColor3 = th.AccentHover,
                         TextTransparency = 0
                     }):Play()
                     TweenService:Create(TitleLabel, TweenInfo.new(0.18), {
-                        TextColor3 = Color3.fromRGB(255, 255, 255)
+                        TextColor3 = th.Text
                     }):Play()
                 end)
 
                 Button.MouseLeave:Connect(function()
+                    local th = Library._theme or Themes.Purple
                     TweenService:Create(Button, TweenInfo.new(0.18), {
-                        BackgroundColor3 = Color3.fromRGB(28, 24, 36),
+                        BackgroundColor3 = th.BackgroundTertiary,
                         BackgroundTransparency = 0.25
                     }):Play()
                     TweenService:Create(Stroke, TweenInfo.new(0.18), {
-                        Color = Color3.fromRGB(70, 55, 95),
+                        Color = th.StrokeSoft,
                         Transparency = 0.55
                     }):Play()
                     TweenService:Create(Chevron, TweenInfo.new(0.18), {
-                        TextColor3 = Color3.fromRGB(160, 150, 180),
+                        TextColor3 = th.TextMuted,
                         TextTransparency = 0.15
                     }):Play()
                     TweenService:Create(TitleLabel, TweenInfo.new(0.18), {
-                        TextColor3 = Color3.fromRGB(235, 230, 245)
+                        TextColor3 = th.Text
                     }):Play()
                 end)
 
