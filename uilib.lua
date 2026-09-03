@@ -480,6 +480,309 @@ local Library = {
 }
 Library.__index = Library
 
+-- ============================================
+--  Theme system (backgrounds + accents)
+--  Change live with Window:SetTheme("Ocean")
+--  List names with Library:GetThemeNames() / Window:GetThemeNames()
+-- ============================================
+local Themes = {
+    Purple = {
+        Name = "Purple",
+        Background = Color3.fromRGB(12, 10, 18),
+        BackgroundSecondary = Color3.fromRGB(20, 16, 28),
+        BackgroundTertiary = Color3.fromRGB(28, 22, 40),
+        BackgroundInput = Color3.fromRGB(32, 26, 48),
+        Stroke = Color3.fromRGB(120, 60, 200),
+        StrokeSoft = Color3.fromRGB(90, 70, 130),
+        Accent = Color3.fromRGB(150, 80, 255),
+        AccentHover = Color3.fromRGB(175, 110, 255),
+        AccentDark = Color3.fromRGB(90, 50, 160),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextDim = Color3.fromRGB(180, 170, 210),
+        TextMuted = Color3.fromRGB(140, 130, 165),
+        Success = Color3.fromRGB(80, 200, 120),
+        Danger = Color3.fromRGB(200, 60, 90),
+        Tab = Color3.fromRGB(35, 25, 50),
+        Divider = Color3.fromRGB(60, 40, 90),
+        ToggleOff = Color3.fromRGB(35, 28, 50),
+        ToggleKnob = Color3.fromRGB(180, 170, 200),
+    },
+    Midnight = {
+        Name = "Midnight",
+        Background = Color3.fromRGB(8, 10, 16),
+        BackgroundSecondary = Color3.fromRGB(14, 18, 28),
+        BackgroundTertiary = Color3.fromRGB(22, 28, 42),
+        BackgroundInput = Color3.fromRGB(26, 32, 48),
+        Stroke = Color3.fromRGB(70, 110, 200),
+        StrokeSoft = Color3.fromRGB(55, 80, 140),
+        Accent = Color3.fromRGB(90, 150, 255),
+        AccentHover = Color3.fromRGB(120, 175, 255),
+        AccentDark = Color3.fromRGB(50, 90, 170),
+        Text = Color3.fromRGB(240, 245, 255),
+        TextDim = Color3.fromRGB(160, 175, 210),
+        TextMuted = Color3.fromRGB(110, 125, 160),
+        Success = Color3.fromRGB(70, 190, 140),
+        Danger = Color3.fromRGB(210, 70, 90),
+        Tab = Color3.fromRGB(22, 30, 48),
+        Divider = Color3.fromRGB(40, 55, 90),
+        ToggleOff = Color3.fromRGB(28, 34, 50),
+        ToggleKnob = Color3.fromRGB(170, 185, 220),
+    },
+    Ocean = {
+        Name = "Ocean",
+        Background = Color3.fromRGB(6, 14, 18),
+        BackgroundSecondary = Color3.fromRGB(12, 24, 30),
+        BackgroundTertiary = Color3.fromRGB(18, 34, 42),
+        BackgroundInput = Color3.fromRGB(22, 40, 50),
+        Stroke = Color3.fromRGB(40, 170, 180),
+        StrokeSoft = Color3.fromRGB(35, 120, 130),
+        Accent = Color3.fromRGB(50, 210, 200),
+        AccentHover = Color3.fromRGB(90, 235, 220),
+        AccentDark = Color3.fromRGB(30, 140, 135),
+        Text = Color3.fromRGB(235, 255, 252),
+        TextDim = Color3.fromRGB(150, 200, 195),
+        TextMuted = Color3.fromRGB(100, 145, 145),
+        Success = Color3.fromRGB(80, 210, 140),
+        Danger = Color3.fromRGB(220, 80, 100),
+        Tab = Color3.fromRGB(16, 36, 42),
+        Divider = Color3.fromRGB(30, 70, 75),
+        ToggleOff = Color3.fromRGB(22, 38, 44),
+        ToggleKnob = Color3.fromRGB(160, 210, 205),
+    },
+    Crimson = {
+        Name = "Crimson",
+        Background = Color3.fromRGB(16, 8, 10),
+        BackgroundSecondary = Color3.fromRGB(28, 14, 18),
+        BackgroundTertiary = Color3.fromRGB(40, 20, 26),
+        BackgroundInput = Color3.fromRGB(48, 24, 32),
+        Stroke = Color3.fromRGB(200, 60, 90),
+        StrokeSoft = Color3.fromRGB(140, 50, 70),
+        Accent = Color3.fromRGB(230, 70, 100),
+        AccentHover = Color3.fromRGB(255, 110, 140),
+        AccentDark = Color3.fromRGB(160, 40, 65),
+        Text = Color3.fromRGB(255, 240, 245),
+        TextDim = Color3.fromRGB(210, 170, 180),
+        TextMuted = Color3.fromRGB(160, 120, 130),
+        Success = Color3.fromRGB(90, 200, 120),
+        Danger = Color3.fromRGB(255, 80, 100),
+        Tab = Color3.fromRGB(42, 18, 24),
+        Divider = Color3.fromRGB(80, 35, 45),
+        ToggleOff = Color3.fromRGB(40, 22, 28),
+        ToggleKnob = Color3.fromRGB(220, 180, 190),
+    },
+    Emerald = {
+        Name = "Emerald",
+        Background = Color3.fromRGB(8, 14, 10),
+        BackgroundSecondary = Color3.fromRGB(14, 24, 18),
+        BackgroundTertiary = Color3.fromRGB(20, 34, 26),
+        BackgroundInput = Color3.fromRGB(24, 42, 32),
+        Stroke = Color3.fromRGB(50, 180, 110),
+        StrokeSoft = Color3.fromRGB(40, 120, 80),
+        Accent = Color3.fromRGB(60, 210, 130),
+        AccentHover = Color3.fromRGB(100, 240, 160),
+        AccentDark = Color3.fromRGB(35, 140, 90),
+        Text = Color3.fromRGB(235, 255, 245),
+        TextDim = Color3.fromRGB(160, 200, 175),
+        TextMuted = Color3.fromRGB(110, 150, 130),
+        Success = Color3.fromRGB(80, 220, 140),
+        Danger = Color3.fromRGB(210, 70, 90),
+        Tab = Color3.fromRGB(18, 36, 24),
+        Divider = Color3.fromRGB(35, 75, 50),
+        ToggleOff = Color3.fromRGB(22, 38, 28),
+        ToggleKnob = Color3.fromRGB(170, 210, 185),
+    },
+    Gold = {
+        Name = "Gold",
+        Background = Color3.fromRGB(14, 12, 8),
+        BackgroundSecondary = Color3.fromRGB(24, 20, 12),
+        BackgroundTertiary = Color3.fromRGB(36, 30, 18),
+        BackgroundInput = Color3.fromRGB(44, 36, 22),
+        Stroke = Color3.fromRGB(200, 160, 60),
+        StrokeSoft = Color3.fromRGB(140, 110, 50),
+        Accent = Color3.fromRGB(230, 185, 70),
+        AccentHover = Color3.fromRGB(255, 210, 100),
+        AccentDark = Color3.fromRGB(160, 120, 40),
+        Text = Color3.fromRGB(255, 250, 235),
+        TextDim = Color3.fromRGB(210, 190, 150),
+        TextMuted = Color3.fromRGB(160, 140, 100),
+        Success = Color3.fromRGB(100, 200, 120),
+        Danger = Color3.fromRGB(210, 70, 80),
+        Tab = Color3.fromRGB(34, 28, 16),
+        Divider = Color3.fromRGB(70, 55, 25),
+        ToggleOff = Color3.fromRGB(36, 30, 18),
+        ToggleKnob = Color3.fromRGB(220, 200, 160),
+    },
+    Rose = {
+        Name = "Rose",
+        Background = Color3.fromRGB(16, 10, 14),
+        BackgroundSecondary = Color3.fromRGB(28, 16, 24),
+        BackgroundTertiary = Color3.fromRGB(40, 24, 34),
+        BackgroundInput = Color3.fromRGB(48, 28, 40),
+        Stroke = Color3.fromRGB(210, 90, 160),
+        StrokeSoft = Color3.fromRGB(150, 70, 120),
+        Accent = Color3.fromRGB(240, 110, 180),
+        AccentHover = Color3.fromRGB(255, 150, 200),
+        AccentDark = Color3.fromRGB(170, 60, 120),
+        Text = Color3.fromRGB(255, 240, 250),
+        TextDim = Color3.fromRGB(210, 175, 195),
+        TextMuted = Color3.fromRGB(160, 125, 145),
+        Success = Color3.fromRGB(90, 200, 130),
+        Danger = Color3.fromRGB(220, 70, 100),
+        Tab = Color3.fromRGB(40, 22, 34),
+        Divider = Color3.fromRGB(80, 40, 65),
+        ToggleOff = Color3.fromRGB(38, 24, 34),
+        ToggleKnob = Color3.fromRGB(220, 185, 205),
+    },
+    Snow = {
+        Name = "Snow",
+        Background = Color3.fromRGB(18, 18, 22),
+        BackgroundSecondary = Color3.fromRGB(28, 28, 34),
+        BackgroundTertiary = Color3.fromRGB(40, 40, 48),
+        BackgroundInput = Color3.fromRGB(48, 48, 56),
+        Stroke = Color3.fromRGB(160, 165, 180),
+        StrokeSoft = Color3.fromRGB(110, 115, 130),
+        Accent = Color3.fromRGB(200, 205, 220),
+        AccentHover = Color3.fromRGB(230, 235, 245),
+        AccentDark = Color3.fromRGB(120, 125, 145),
+        Text = Color3.fromRGB(245, 245, 250),
+        TextDim = Color3.fromRGB(190, 190, 205),
+        TextMuted = Color3.fromRGB(140, 140, 155),
+        Success = Color3.fromRGB(90, 200, 130),
+        Danger = Color3.fromRGB(210, 80, 95),
+        Tab = Color3.fromRGB(36, 36, 44),
+        Divider = Color3.fromRGB(70, 70, 80),
+        ToggleOff = Color3.fromRGB(40, 40, 48),
+        ToggleKnob = Color3.fromRGB(200, 200, 210),
+    },
+}
+
+Library._themes = Themes
+Library._themeName = "Purple"
+Library._theme = Themes.Purple
+
+function Library:GetThemeNames()
+    local names = {}
+    for name in pairs(Themes) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    return names
+end
+
+function Library:GetTheme()
+    return self._themeName, self._theme
+end
+
+function Library:RegisterThemeTarget(kind: string, object: any, applyFn: any)
+    -- Prefer instance list, fall back to shared Library list (modules call Library:...)
+    local list = self._themeTargets
+    if not list then
+        if not Library._themeTargets then
+            Library._themeTargets = {}
+        end
+        list = Library._themeTargets
+        self._themeTargets = list
+    end
+    table.insert(list, { kind = kind, object = object, apply = applyFn })
+end
+
+function Library:SetTheme(name: string)
+    name = tostring(name or "Purple")
+    local theme = Themes[name]
+    if not theme then
+        -- case-insensitive match
+        for k, v in pairs(Themes) do
+            if string.lower(k) == string.lower(name) then
+                theme = v
+                name = k
+                break
+            end
+        end
+    end
+    if not theme then
+        return false, "Theme not found"
+    end
+
+    self._themeName = name
+    self._theme = theme
+    -- Keep shared Library mirror in sync (module creators read Library._theme)
+    Library._themeName = name
+    Library._theme = theme
+    if self._config and self._config._library then
+        self._config._library.Theme = name
+    end
+
+    -- Apply to registered targets (instance + shared)
+    local lists = {}
+    if self._themeTargets then table.insert(lists, self._themeTargets) end
+    if Library._themeTargets and Library._themeTargets ~= self._themeTargets then
+        table.insert(lists, Library._themeTargets)
+    end
+    for _, list in ipairs(lists) do
+        for _, entry in ipairs(list) do
+            local obj = entry.object
+            if not obj or (typeof(obj) == "Instance" and not obj.Parent) then
+                continue
+            end
+            local kind = entry.kind
+            pcall(function()
+                if kind == "Container" then
+                    obj.BackgroundColor3 = theme.Background
+                elseif kind == "ContainerStroke" then
+                    obj.Color = theme.Stroke
+                elseif kind == "Pin" then
+                    obj.BackgroundColor3 = theme.Accent
+                elseif kind == "SideDivider" then
+                    obj.BackgroundColor3 = theme.Divider
+                elseif kind == "Title" then
+                    obj.TextColor3 = theme.Text
+                elseif kind == "Subtitle" then
+                    obj.TextColor3 = theme.TextDim
+                elseif kind == "Icon" then
+                    obj.ImageColor3 = theme.TextDim
+                elseif kind == "Module" then
+                    obj.BackgroundColor3 = theme.BackgroundSecondary
+                elseif kind == "ModuleStroke" then
+                    obj.Color = theme.Stroke
+                elseif kind == "Tab" then
+                    obj.BackgroundColor3 = theme.Tab
+                elseif kind == "ControlBtn" then
+                    obj.BackgroundColor3 = theme.BackgroundInput
+                elseif kind == "ControlStroke" then
+                    obj.Color = theme.Stroke
+                elseif kind == "Accent" then
+                    obj.BackgroundColor3 = theme.Accent
+                elseif kind == "Row" then
+                    obj.BackgroundColor3 = theme.BackgroundTertiary
+                elseif kind == "Input" then
+                    obj.BackgroundColor3 = theme.BackgroundInput
+                elseif kind == "ToggleTrackOff" then
+                    -- only update if currently "off" is hard; store state on object if possible
+                    if obj:GetAttribute("ToggleOn") ~= true then
+                        obj.BackgroundColor3 = theme.ToggleOff
+                    else
+                        obj.BackgroundColor3 = theme.Accent
+                    end
+                elseif kind == "Custom" and type(entry.apply) == "function" then
+                    entry.apply(theme)
+                end
+            end)
+        end
+    end
+
+    -- Also walk known main UI refs
+    if self._ui and self._ui:FindFirstChild("Container") then
+        local c = self._ui.Container
+        pcall(function()
+            c.BackgroundColor3 = theme.Background
+            local stroke = c:FindFirstChildOfClass("UIStroke")
+            if stroke then stroke.Color = theme.Stroke end
+        end)
+    end
+
+    return true, name
+end
+
 function Library:RegisterElement(flag: string, elementType: string, setFn: any, getFn: any)
     if not flag or flag == "" then
         return
@@ -626,6 +929,7 @@ function Library.new(settings)
     local self = setmetatable({
         _loaded = false,
         _tab = 0,
+        _themeTargets = {},
         _settings = {
             Title = settings.Title or "Zex Hub",
             Subtitle = settings.Subtitle or "",
@@ -634,8 +938,24 @@ function Library.new(settings)
             ToggleIcon = settings.ToggleIcon == true,
             ToggleIconImage = settings.ToggleIconImage or settings.Icon or "rbxassetid://130655920174103",
             ToggleIconSize = settings.ToggleIconSize or 60,
+            Theme = settings.Theme or "Purple",
         },
     }, Library)
+
+    -- Resolve initial theme before building UI
+    local themeName = self._settings.Theme
+    local theme = Themes[themeName]
+    if not theme then
+        for k, v in pairs(Themes) do
+            if string.lower(k) == string.lower(tostring(themeName)) then
+                theme = v
+                themeName = k
+                break
+            end
+        end
+    end
+    self._themeName = theme and themeName or "Purple"
+    self._theme = theme or Themes.Purple
     
     self:create_ui()
 
@@ -885,27 +1205,31 @@ function Library:create_ui()
     click.Parent = CoreGui
     
     local Container = Instance.new('Frame')
+    local theme = self._theme or Themes.Purple
+
     Container.ClipsDescendants = true
     Container.BorderColor3 = Color3.fromRGB(35, 35, 35)
     Container.AnchorPoint = Vector2.new(0.5, 0.5)
     Container.Name = 'Container'
     Container.BackgroundTransparency = 0.05
-    Container.BackgroundColor3 = Color3.fromRGB(12, 10, 18)
+    Container.BackgroundColor3 = theme.Background
     Container.Position = UDim2.new(0.5, 0, 0.5, 0)
     Container.Size = UDim2.new(0, 0, 0, 0)
     Container.Active = true
     Container.BorderSizePixel = 0
     Container.Parent = click
+    self:RegisterThemeTarget("Container", Container)
     
     local UICorner = Instance.new('UICorner')
     UICorner.CornerRadius = UDim.new(0, 10)
     UICorner.Parent = Container
     
     local UIStroke = Instance.new('UIStroke')
-    UIStroke.Color = Color3.fromRGB(120, 60, 200)
+    UIStroke.Color = theme.Stroke
     UIStroke.Transparency = 0.45
     UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     UIStroke.Parent = Container
+    self:RegisterThemeTarget("ContainerStroke", UIStroke)
     
     local Handler = Instance.new('Frame')
     Handler.BackgroundTransparency = 1
@@ -940,7 +1264,7 @@ function Library:create_ui()
     -- Title (supports RichText)
     local ClientName = Instance.new('TextLabel')
     ClientName.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
-    ClientName.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ClientName.TextColor3 = theme.Text
     ClientName.TextTransparency = 0
     ClientName.Name = 'ClientName'
     ClientName.Size = UDim2.new(0, 400, 0, 18)
@@ -956,11 +1280,12 @@ function Library:create_ui()
     ClientName.Text = self._settings.Title or "Zex Hub"
     ClientName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     ClientName.Parent = Handler
+    self:RegisterThemeTarget("Title", ClientName)
 
     -- Subtitle (supports RichText) — game name / extra info
     local SubtitleLabel = Instance.new('TextLabel')
     SubtitleLabel.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Medium, Enum.FontStyle.Normal)
-    SubtitleLabel.TextColor3 = Color3.fromRGB(180, 170, 210)
+    SubtitleLabel.TextColor3 = theme.TextDim
     SubtitleLabel.TextTransparency = 0.15
     SubtitleLabel.Name = 'Subtitle'
     SubtitleLabel.Size = UDim2.new(0, 400, 0, 14)
@@ -975,6 +1300,7 @@ function Library:create_ui()
     SubtitleLabel.Text = self._settings.Subtitle or ""
     SubtitleLabel.Visible = (self._settings.Subtitle ~= nil and self._settings.Subtitle ~= "")
     SubtitleLabel.Parent = Handler
+    self:RegisterThemeTarget("Subtitle", SubtitleLabel)
 
     self._titleLabel = ClientName
     self._subtitleLabel = SubtitleLabel
@@ -1019,10 +1345,11 @@ function Library:create_ui()
     Pin.Name = 'Pin'
     Pin.Size = UDim2.new(0, 2, 0, 18)
     Pin.BorderSizePixel = 0
-    Pin.BackgroundColor3 = Color3.fromRGB(150, 80, 255)
+    Pin.BackgroundColor3 = theme.Accent
     Pin.ZIndex = 10
     Pin.Visible = false
     Pin.Parent = Handler  -- NOT inside Tabs (UIListLayout would break it)
+    self:RegisterThemeTarget("Pin", Pin)
 
     local PinCorner = Instance.new('UICorner')
     PinCorner.CornerRadius = UDim.new(1, 0)
@@ -1064,7 +1391,7 @@ function Library:create_ui()
     self._pin = Pin
     
     local Icon = Instance.new('ImageLabel')
-    Icon.ImageColor3 = Color3.fromRGB(230, 220, 255)
+    Icon.ImageColor3 = theme.TextDim
     Icon.ScaleType = Enum.ScaleType.Fit
     Icon.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Icon.AnchorPoint = Vector2.new(0, 0.5)
@@ -1079,6 +1406,7 @@ function Library:create_ui()
     Icon.ZIndex = 5
     Icon.Parent = Handler
     self._logoIcon = Icon
+    self:RegisterThemeTarget("Icon", Icon)
     
     local Divider = Instance.new('Frame')
     Divider.Name = 'Divider'
@@ -1087,8 +1415,9 @@ function Library:create_ui()
     Divider.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Divider.Size = UDim2.new(0, 1, 0, 437)
     Divider.BorderSizePixel = 0
-    Divider.BackgroundColor3 = Color3.fromRGB(60, 40, 90)
+    Divider.BackgroundColor3 = theme.Divider
     Divider.Parent = Handler
+    self:RegisterThemeTarget("SideDivider", Divider)
     
     local Sections = Instance.new('Folder')
     Sections.Name = 'Sections'
@@ -1685,13 +2014,14 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             Module.ClipsDescendants = false
             Module.Name = 'Module'
             Module.Parent = settings.section
-            Module.BackgroundColor3 = Color3.fromRGB(20, 16, 28)
+            Module.BackgroundColor3 = (Library._theme or Themes.Purple).BackgroundSecondary
             Module.BackgroundTransparency = 0.1
             Module.BorderColor3 = Color3.fromRGB(40, 40, 40)
             Module.BorderSizePixel = 0
             Module.Position = UDim2.new(0.004, 0, 0, 0)
             Module.Size = UDim2.new(0, 241, 0, 0) -- height driven by AutomaticSize
             Module.AutomaticSize = Enum.AutomaticSize.Y
+            Library:RegisterThemeTarget("Module", Module)
 
             local UIListLayout = Instance.new('UIListLayout')
             UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1703,12 +2033,13 @@ TweenService:Create(object.Icon, TweenInfo.new(3, Enum.EasingStyle.Quint, Enum.E
             
             -- Single clean border (visible on all sides including left)
             local UIStroke = Instance.new('UIStroke')
-            UIStroke.Color = Color3.fromRGB(110, 70, 180)
+            UIStroke.Color = (Library._theme or Themes.Purple).Stroke
             UIStroke.Transparency = 0.4
             UIStroke.Thickness = 1.2
             UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
             UIStroke.LineJoinMode = Enum.LineJoinMode.Round
             UIStroke.Parent = Module
+            Library:RegisterThemeTarget("ModuleStroke", UIStroke)
             
             local Header = Instance.new('TextButton')
             Header.FontFace = Font.new('rbxasset://fonts/families/SourceSansPro.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
@@ -2644,21 +2975,24 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 TitleLabel.Parent = Row
 
                 -- Switch track
+                local tTheme = Library._theme or Themes.Purple
                 local Track = Instance.new("Frame")
                 Track.Name = "Track"
                 Track.Size = UDim2.fromOffset(40, 20)
                 Track.Position = UDim2.new(1, 0, 0.5, 0)
                 Track.AnchorPoint = Vector2.new(1, 0.5)
-                Track.BackgroundColor3 = Color3.fromRGB(35, 28, 50)
+                Track.BackgroundColor3 = tTheme.ToggleOff
                 Track.BorderSizePixel = 0
                 Track.Parent = Row
+                Track:SetAttribute("ToggleOn", false)
+                Library:RegisterThemeTarget("ToggleTrackOff", Track)
 
                 local TrackCorner = Instance.new("UICorner")
                 TrackCorner.CornerRadius = UDim.new(1, 0)
                 TrackCorner.Parent = Track
 
                 local TrackStroke = Instance.new("UIStroke")
-                TrackStroke.Color = Color3.fromRGB(90, 55, 150)
+                TrackStroke.Color = tTheme.StrokeSoft
                 TrackStroke.Transparency = 0.55
                 TrackStroke.Thickness = 1
                 TrackStroke.Parent = Track
@@ -2669,7 +3003,7 @@ Checkbox.LayoutOrder = LayoutOrderModule
                 Knob.Size = UDim2.fromOffset(16, 16)
                 Knob.Position = UDim2.new(0, 2, 0.5, 0)
                 Knob.AnchorPoint = Vector2.new(0, 0.5)
-                Knob.BackgroundColor3 = Color3.fromRGB(180, 170, 200)
+                Knob.BackgroundColor3 = tTheme.ToggleKnob
                 Knob.BorderSizePixel = 0
                 Knob.Parent = Track
 
@@ -2679,28 +3013,30 @@ Checkbox.LayoutOrder = LayoutOrderModule
 
                 function ToggleManager:change_state(state: boolean, silent: boolean?)
                     self._state = state and true or false
+                    local th = Library._theme or Themes.Purple
+                    Track:SetAttribute("ToggleOn", self._state)
                     if self._state then
                         TweenService:Create(Track, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            BackgroundColor3 = Color3.fromRGB(130, 70, 220)
+                            BackgroundColor3 = th.Accent
                         }):Play()
                         TweenService:Create(Knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             Position = UDim2.new(1, -18, 0.5, 0),
                             BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                         }):Play()
                         TweenService:Create(TrackStroke, TweenInfo.new(0.25), {
-                            Color = Color3.fromRGB(160, 100, 255),
+                            Color = th.AccentHover,
                             Transparency = 0.25
                         }):Play()
                     else
                         TweenService:Create(Track, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            BackgroundColor3 = Color3.fromRGB(35, 28, 50)
+                            BackgroundColor3 = th.ToggleOff
                         }):Play()
                         TweenService:Create(Knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             Position = UDim2.new(0, 2, 0.5, 0),
-                            BackgroundColor3 = Color3.fromRGB(180, 170, 200)
+                            BackgroundColor3 = th.ToggleKnob
                         }):Play()
                         TweenService:Create(TrackStroke, TweenInfo.new(0.25), {
-                            Color = Color3.fromRGB(90, 55, 150),
+                            Color = th.StrokeSoft,
                             Transparency = 0.55
                         }):Play()
                     end
@@ -4475,21 +4811,37 @@ end
 --      local Window = Library.new({
 --          Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
 --          Subtitle = "<font color='#33ff00'><b>San Diego Border Roleplay</b></font>",
---          Icon = "rbxassetid://130655920174103",   -- logo de la UI
+--          Icon = "rbxassetid://130655920174103",
 --          Keybind = Enum.KeyCode.RightControl,
 --          ToggleIcon = true,
 --          ToggleIconImage = "rbxassetid://130655920174103",
 --          ToggleIconSize = 60,
+--          Theme = "Purple", -- Purple | Midnight | Ocean | Crimson | Emerald | Gold | Rose | Snow
 --      })
 --
 --      Window:load()
 --
---      -- Cambiar en runtime:
---      Window:SetTitle("ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>")
---      Window:SetSubtitle("<font color='#33ff00'><b>Mi Juego</b></font>")
---      Window:SetIcon("rbxassetid://123456789")
---      Window:SetState(true)   -- abrir
---      Window:SetState(false)  -- cerrar
+--      -- Temas en runtime (desde Settings dropdown):
+--      local themeNames = Window:GetThemeNames() -- {"Crimson","Emerald","Gold",...}
+--      Window:SetTheme("Ocean")
+--
+--      -- Ejemplo Settings tab:
+--      -- local settingsTab = Window:create_tab({ title = "Settings", icon = "..." })
+--      -- local appearance = settingsTab:create_module({ title = "Appearance" })
+--      -- appearance:create_dropdown({
+--      --     title = "Theme",
+--      --     flag = "UITheme",
+--      --     options = Window:GetThemeNames(),
+--      --     default = "Purple",
+--      --     callback = function(value)
+--      --         Window:SetTheme(value)
+--      --     end
+--      -- })
+--
+--      Window:SetTitle("...")
+--      Window:SetSubtitle("...")
+--      Window:SetIcon("rbxassetid://123")
+--      Window:SetState(true / false)
 -- ============================================
 
 return Library
