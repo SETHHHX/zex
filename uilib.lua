@@ -222,6 +222,9 @@ function AcrylicBlur:render(distance: number)
         bottom_right = Vector2.new(),
     }
 
+    self._enabled = true
+    self._min_size = 40 -- if UI AbsoluteSize is smaller than this, hide blur completely
+
     local function update_positions(size: any, position: any)
         positions.top_left = position
         positions.top_right = position + Vector2.new(size.X, 0)
@@ -229,6 +232,20 @@ function AcrylicBlur:render(distance: number)
     end
 
     local function update()
+        if not self._root then
+            return
+        end
+
+        -- Hide blur when disabled or UI is collapsed / too small (fixes leftover blur on minimize)
+        local absSize = self._frame and self._frame.AbsoluteSize or Vector2.zero
+        if not self._enabled or absSize.X < self._min_size or absSize.Y < self._min_size then
+            self._root.Transparency = 1
+            if self._root:FindFirstChildOfClass("SpecialMesh") then
+                self._root.Mesh.Scale = Vector3.new(0, 0, 0)
+            end
+            return
+        end
+
         local top_left = positions.top_left
         local top_right = positions.top_right
         local bottom_right = positions.bottom_right
@@ -240,18 +257,22 @@ function AcrylicBlur:render(distance: number)
         local width = (top_right3D - top_left3D).Magnitude
         local height = (top_right3D - bottom_right3D).Magnitude
 
-        if not self._root then
-            return
-        end
-
+        self._root.Transparency = 0.98
         self._root.CFrame = CFrame.fromMatrix((top_left3D + bottom_right3D) / 2, workspace.CurrentCamera.CFrame.XVector, workspace.CurrentCamera.CFrame.YVector, workspace.CurrentCamera.CFrame.ZVector)
         self._root.Mesh.Scale = Vector3.new(width, height, 0)
     end
 
     local function on_change()
+        if not self._frame then
+            return
+        end
         local offset = Util:get_offset()
         local size = self._frame.AbsoluteSize - Vector2.new(offset, offset)
         local position = self._frame.AbsolutePosition + Vector2.new(offset / 2, offset / 2)
+
+        -- Clamp negative sizes when UI is animating to 0
+        if size.X < 0 then size = Vector2.new(0, math.max(0, size.Y)) end
+        if size.Y < 0 then size = Vector2.new(math.max(0, size.X), 0) end
 
         update_positions(size, position)
         task.spawn(update)
@@ -286,7 +307,38 @@ end
 
 
 function AcrylicBlur:change_visiblity(state: boolean)
-    self._root.Transparency = state and 0.98 or 1
+    self._enabled = state and true or false
+    if not self._root then
+        return
+    end
+    if self._enabled then
+        local absSize = self._frame and self._frame.AbsoluteSize or Vector2.zero
+        if absSize.X >= (self._min_size or 40) and absSize.Y >= (self._min_size or 40) then
+            self._root.Transparency = 0.98
+        else
+            self._root.Transparency = 1
+            if self._root:FindFirstChildOfClass("SpecialMesh") then
+                self._root.Mesh.Scale = Vector3.new(0, 0, 0)
+            end
+        end
+    else
+        self._root.Transparency = 1
+        if self._root:FindFirstChildOfClass("SpecialMesh") then
+            self._root.Mesh.Scale = Vector3.new(0, 0, 0)
+        end
+    end
+end
+
+function AcrylicBlur:destroy()
+    self._enabled = false
+    if self._root then
+        pcall(function() self._root:Destroy() end)
+        self._root = nil
+    end
+    if self._folder then
+        pcall(function() self._folder:Destroy() end)
+        self._folder = nil
+    end
 end
 
 
@@ -891,9 +943,10 @@ function Library:create_ui()
     ClientName.TextColor3 = Color3.fromRGB(255, 255, 255)
     ClientName.TextTransparency = 0
     ClientName.Name = 'ClientName'
-    ClientName.Size = UDim2.new(0, 420, 0, 18)
+    ClientName.Size = UDim2.new(0, 400, 0, 18)
     ClientName.AnchorPoint = Vector2.new(0, 0)
-    ClientName.Position = UDim2.new(0.056, 0, 0.018, 0)
+    -- Start after icon (12 + 28 + 12 gap = 52px) so text never hugs the Z logo
+    ClientName.Position = UDim2.new(0, 52, 0, 8)
     ClientName.BackgroundTransparency = 1
     ClientName.TextXAlignment = Enum.TextXAlignment.Left
     ClientName.TextYAlignment = Enum.TextYAlignment.Center
@@ -910,9 +963,9 @@ function Library:create_ui()
     SubtitleLabel.TextColor3 = Color3.fromRGB(180, 170, 210)
     SubtitleLabel.TextTransparency = 0.15
     SubtitleLabel.Name = 'Subtitle'
-    SubtitleLabel.Size = UDim2.new(0, 420, 0, 14)
+    SubtitleLabel.Size = UDim2.new(0, 400, 0, 14)
     SubtitleLabel.AnchorPoint = Vector2.new(0, 0)
-    SubtitleLabel.Position = UDim2.new(0.056, 0, 0.055, 0)
+    SubtitleLabel.Position = UDim2.new(0, 52, 0, 26)
     SubtitleLabel.BackgroundTransparency = 1
     SubtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     SubtitleLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -1011,17 +1064,19 @@ function Library:create_ui()
     self._pin = Pin
     
     local Icon = Instance.new('ImageLabel')
-    Icon.ImageColor3 = Color3.fromRGB(220, 220, 220)
+    Icon.ImageColor3 = Color3.fromRGB(230, 220, 255)
     Icon.ScaleType = Enum.ScaleType.Fit
     Icon.BorderColor3 = Color3.fromRGB(90, 50, 140)
     Icon.AnchorPoint = Vector2.new(0, 0.5)
     Icon.Image = self._settings.Icon or 'rbxassetid://130655920174103'
     Icon.BackgroundTransparency = 1
-    Icon.Position = UDim2.new(0.021, 0,0.053, 0)
+    -- Fixed pixel position so it never collides with the title text
+    Icon.Position = UDim2.new(0, 12, 0, 21)
     Icon.Name = 'Icon'
-    Icon.Size = UDim2.new(0, 27,0, 26)
+    Icon.Size = UDim2.new(0, 28, 0, 28)
     Icon.BorderSizePixel = 0
     Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Icon.ZIndex = 5
     Icon.Parent = Handler
     self._logoIcon = Icon
     
@@ -1066,96 +1121,167 @@ function Library:create_ui()
     TopBar.Active = true
     TopBar.Parent = Container
 
+    -- Window control cluster (minimize + close) — premium look
+    local Controls = Instance.new('Frame')
+    Controls.Name = 'WindowControls'
+    Controls.BackgroundTransparency = 1
+    Controls.Size = UDim2.fromOffset(72, 28)
+    Controls.Position = UDim2.new(1, -14, 0.5, 0)
+    Controls.AnchorPoint = Vector2.new(1, 0.5)
+    Controls.ZIndex = 50
+    Controls.Parent = TopBar
+
+    local ControlsLayout = Instance.new('UIListLayout')
+    ControlsLayout.FillDirection = Enum.FillDirection.Horizontal
+    ControlsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    ControlsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    ControlsLayout.Padding = UDim.new(0, 8)
+    ControlsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ControlsLayout.Parent = Controls
+
     -- Minimize button (hides UI completely)
     local MinBtn = Instance.new('TextButton')
     MinBtn.Name = 'MinimizeBtn'
-    MinBtn.Text = '–'
-    MinBtn.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-    MinBtn.TextSize = 18
-    MinBtn.TextColor3 = Color3.fromRGB(200, 190, 220)
+    MinBtn.Text = ''
     MinBtn.AutoButtonColor = false
-    MinBtn.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
-    MinBtn.BackgroundTransparency = 0.15
+    MinBtn.BackgroundColor3 = Color3.fromRGB(32, 26, 48)
+    MinBtn.BackgroundTransparency = 0.05
     MinBtn.BorderSizePixel = 0
-    MinBtn.Size = UDim2.new(0, 28, 0, 28)
-    MinBtn.Position = UDim2.new(1, -48, 0.5, 0)
-    MinBtn.AnchorPoint = Vector2.new(1, 0.5)
-    MinBtn.ZIndex = 50
-    MinBtn.Parent = TopBar
+    MinBtn.Size = UDim2.fromOffset(28, 28)
+    MinBtn.LayoutOrder = 1
+    MinBtn.ZIndex = 51
+    MinBtn.Parent = Controls
 
     local MinCorner = Instance.new('UICorner')
-    MinCorner.CornerRadius = UDim.new(0, 7)
+    MinCorner.CornerRadius = UDim.new(1, 0) -- circular
     MinCorner.Parent = MinBtn
 
     local MinStroke = Instance.new('UIStroke')
-    MinStroke.Color = Color3.fromRGB(130, 80, 200)
-    MinStroke.Transparency = 0.55
-    MinStroke.Thickness = 1
+    MinStroke.Color = Color3.fromRGB(120, 85, 190)
+    MinStroke.Transparency = 0.45
+    MinStroke.Thickness = 1.2
     MinStroke.Parent = MinBtn
 
+    -- Horizontal dash icon for minimize
+    local MinIcon = Instance.new('Frame')
+    MinIcon.Name = 'Dash'
+    MinIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    MinIcon.Position = UDim2.fromScale(0.5, 0.5)
+    MinIcon.Size = UDim2.fromOffset(12, 2)
+    MinIcon.BackgroundColor3 = Color3.fromRGB(210, 200, 235)
+    MinIcon.BorderSizePixel = 0
+    MinIcon.ZIndex = 52
+    MinIcon.Parent = MinBtn
+    local MinIconCorner = Instance.new('UICorner')
+    MinIconCorner.CornerRadius = UDim.new(1, 0)
+    MinIconCorner.Parent = MinIcon
+
     MinBtn.MouseEnter:Connect(function()
-        TweenService:Create(MinBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(70, 55, 100),
-            TextColor3 = Color3.fromRGB(255, 255, 255),
+        TweenService:Create(MinBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(90, 70, 140),
             BackgroundTransparency = 0
+        }):Play()
+        TweenService:Create(MinStroke, TweenInfo.new(0.18), {
+            Color = Color3.fromRGB(180, 140, 255),
+            Transparency = 0.1
+        }):Play()
+        TweenService:Create(MinIcon, TweenInfo.new(0.18), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.fromOffset(14, 2.5)
         }):Play()
     end)
     MinBtn.MouseLeave:Connect(function()
-        TweenService:Create(MinBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(40, 30, 55),
-            TextColor3 = Color3.fromRGB(200, 190, 220),
-            BackgroundTransparency = 0.15
+        TweenService:Create(MinBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(32, 26, 48),
+            BackgroundTransparency = 0.05
+        }):Play()
+        TweenService:Create(MinStroke, TweenInfo.new(0.2), {
+            Color = Color3.fromRGB(120, 85, 190),
+            Transparency = 0.45
+        }):Play()
+        TweenService:Create(MinIcon, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
+            Size = UDim2.fromOffset(12, 2)
         }):Play()
     end)
 
-    -- Close button (X) inside top bar, far right
+    -- Close button (X)
     local CloseBtn = Instance.new('TextButton')
     CloseBtn.Name = 'Close'
-    CloseBtn.Text = '×'
-    CloseBtn.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold, Enum.FontStyle.Normal)
-    CloseBtn.TextSize = 18
-    CloseBtn.TextColor3 = Color3.fromRGB(200, 190, 220)
+    CloseBtn.Text = ''
     CloseBtn.AutoButtonColor = false
-    CloseBtn.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
-    CloseBtn.BackgroundTransparency = 0.15
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(32, 26, 48)
+    CloseBtn.BackgroundTransparency = 0.05
     CloseBtn.BorderSizePixel = 0
-    CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-    CloseBtn.Position = UDim2.new(1, -12, 0.5, 0)
-    CloseBtn.AnchorPoint = Vector2.new(1, 0.5)
-    CloseBtn.ZIndex = 50
-    CloseBtn.Parent = TopBar
+    CloseBtn.Size = UDim2.fromOffset(28, 28)
+    CloseBtn.LayoutOrder = 2
+    CloseBtn.ZIndex = 51
+    CloseBtn.Parent = Controls
 
     local CloseCorner = Instance.new('UICorner')
-    CloseCorner.CornerRadius = UDim.new(0, 7)
+    CloseCorner.CornerRadius = UDim.new(1, 0) -- circular
     CloseCorner.Parent = CloseBtn
 
     local CloseStroke = Instance.new('UIStroke')
-    CloseStroke.Color = Color3.fromRGB(130, 80, 200)
-    CloseStroke.Transparency = 0.55
-    CloseStroke.Thickness = 1
+    CloseStroke.Color = Color3.fromRGB(120, 85, 190)
+    CloseStroke.Transparency = 0.45
+    CloseStroke.Thickness = 1.2
     CloseStroke.Parent = CloseBtn
 
+    -- X made of two rotated bars for a cleaner look
+    local function makeXBar(rotation)
+        local bar = Instance.new('Frame')
+        bar.AnchorPoint = Vector2.new(0.5, 0.5)
+        bar.Position = UDim2.fromScale(0.5, 0.5)
+        bar.Size = UDim2.fromOffset(12, 2)
+        bar.BackgroundColor3 = Color3.fromRGB(210, 200, 235)
+        bar.BorderSizePixel = 0
+        bar.Rotation = rotation
+        bar.ZIndex = 52
+        bar.Parent = CloseBtn
+        local c = Instance.new('UICorner')
+        c.CornerRadius = UDim.new(1, 0)
+        c.Parent = bar
+        return bar
+    end
+    local CloseBar1 = makeXBar(45)
+    local CloseBar2 = makeXBar(-45)
+
     CloseBtn.MouseEnter:Connect(function()
-        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(160, 50, 80),
-            TextColor3 = Color3.fromRGB(255, 255, 255),
+        TweenService:Create(CloseBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(180, 45, 75),
             BackgroundTransparency = 0
         }):Play()
-        TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
-            Color = Color3.fromRGB(220, 80, 120),
-            Transparency = 0.15
+        TweenService:Create(CloseStroke, TweenInfo.new(0.18), {
+            Color = Color3.fromRGB(255, 100, 140),
+            Transparency = 0.05
+        }):Play()
+        TweenService:Create(CloseBar1, TweenInfo.new(0.18), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.fromOffset(13, 2.5)
+        }):Play()
+        TweenService:Create(CloseBar2, TweenInfo.new(0.18), {
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            Size = UDim2.fromOffset(13, 2.5)
         }):Play()
     end)
 
     CloseBtn.MouseLeave:Connect(function()
-        TweenService:Create(CloseBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(40, 30, 55),
-            TextColor3 = Color3.fromRGB(200, 190, 220),
-            BackgroundTransparency = 0.15
+        TweenService:Create(CloseBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(32, 26, 48),
+            BackgroundTransparency = 0.05
         }):Play()
         TweenService:Create(CloseStroke, TweenInfo.new(0.2), {
-            Color = Color3.fromRGB(130, 80, 200),
-            Transparency = 0.55
+            Color = Color3.fromRGB(120, 85, 190),
+            Transparency = 0.45
+        }):Play()
+        TweenService:Create(CloseBar1, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
+            Size = UDim2.fromOffset(12, 2)
+        }):Play()
+        TweenService:Create(CloseBar2, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(210, 200, 235),
+            Size = UDim2.fromOffset(12, 2)
         }):Play()
     end)
     
@@ -1229,11 +1355,19 @@ function Library:create_ui()
         if state then
             click.Enabled = true
             Container.Visible = true
+            -- Re-enable acrylic blur when showing
+            if self._acrylic then
+                pcall(function() self._acrylic:change_visiblity(true) end)
+            end
             TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                 Size = UDim2.fromOffset(698, 479),
                 BackgroundTransparency = 0.05
             }):Play()
         else
+            -- Hide acrylic blur immediately so it doesn't leave a residual blob
+            if self._acrylic then
+                pcall(function() self._acrylic:change_visiblity(false) end)
+            end
             TweenService:Create(Container, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
                 Size = UDim2.fromOffset(0, 0),
                 BackgroundTransparency = 1
@@ -1252,11 +1386,18 @@ function Library:create_ui()
         click.Enabled = true
         Container.Visible = true
         if state then
+            if self._acrylic then
+                pcall(function() self._acrylic:change_visiblity(true) end)
+            end
             TweenService:Create(Container, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                 Size = UDim2.fromOffset(698, 479),
                 BackgroundTransparency = 0.05
             }):Play()
         else
+            -- Compact size is still large enough for a small blur, but disable to avoid weird shapes
+            if self._acrylic then
+                pcall(function() self._acrylic:change_visiblity(false) end)
+            end
             TweenService:Create(Container, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                 Size = UDim2.fromOffset(158, 52),
                 BackgroundTransparency = 0.05
@@ -1284,10 +1425,13 @@ function Library:create_ui()
             Size = UDim2.fromOffset(698, 479)
         }):Play()
 
-        -- Acrylic blur deferred so UI shows instantly
+        -- Acrylic blur deferred so UI shows instantly; keep reference to toggle it
         task.defer(function()
             pcall(function()
-                AcrylicBlur.new(Container)
+                if self._acrylic and self._acrylic.destroy then
+                    self._acrylic:destroy()
+                end
+                self._acrylic = AcrylicBlur.new(Container)
             end)
         end)
 
@@ -2771,6 +2915,38 @@ if not settings or settings and not settings.disableline then
             
                 return true;
             end
+
+            -- Empty vertical space between elements (no line). Use instead of divider when you only want gap.
+            -- Example: module:create_spacer({ height = 16 })
+            function ModuleManager:create_spacer(settings: any)
+                settings = settings or {}
+                local height = tonumber(settings.height or settings.Size or settings.size) or 12
+                height = math.clamp(height, 2, 120)
+
+                LayoutOrderModule = LayoutOrderModule + 1
+                if self._size == 0 then
+                    self._size = 11
+                end
+                self._size += height
+
+                local Spacer = Instance.new('Frame')
+                Spacer.Name = 'Spacer'
+                Spacer.BackgroundTransparency = 1
+                Spacer.BorderSizePixel = 0
+                Spacer.Size = UDim2.new(0, 207, 0, height)
+                Spacer.LayoutOrder = LayoutOrderModule
+                Spacer.Parent = Options
+
+                return {
+                    Frame = Spacer,
+                    SetHeight = function(_, h)
+                        h = math.clamp(tonumber(h) or 12, 2, 120)
+                        local old = Spacer.Size.Y.Offset
+                        Spacer.Size = UDim2.new(0, 207, 0, h)
+                        self._size = math.max(11, self._size - old + h)
+                    end
+                }
+            end
             
             function ModuleManager:create_slider(settings: any)
                 -- Defaults
@@ -4109,11 +4285,18 @@ if not settings or settings and not settings.disableline then
     local closeBtn = self._ui.Container:FindFirstChild('Close', true)
     if closeBtn then
         closeBtn.MouseButton1Click:Connect(function()
+            if self._acrylic then
+                pcall(function() self._acrylic:change_visiblity(false) end)
+            end
             TweenService:Create(self._ui.Container, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
                 Size = UDim2.fromOffset(0, 0),
                 BackgroundTransparency = 1
             }):Play()
             task.delay(0.35, function()
+                if self._acrylic and self._acrylic.destroy then
+                    pcall(function() self._acrylic:destroy() end)
+                    self._acrylic = nil
+                end
                 if self._toggleGui then
                     self._toggleGui:Destroy()
                     self._toggleGui = nil
