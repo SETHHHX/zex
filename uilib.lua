@@ -60,6 +60,17 @@ if old_click then
     Debris:AddItem(old_click, 0)
 end
 
+-- Remove any leftover game blur from previous UI runs
+pcall(function()
+    local dof = Lighting:FindFirstChild('AcrylicBlur')
+    if dof then dof:Destroy() end
+    local cam = workspace.CurrentCamera
+    if cam then
+        local f = cam:FindFirstChild('AcrylicBlur')
+        if f then f:Destroy() end
+    end
+end)
+
 if not isfolder("ZexHub") then
     makefolder("ZexHub")
 end
@@ -141,28 +152,18 @@ end
 
 
 function AcrylicBlur:create_depth_of_fields()
-    local depth_of_fields = Lighting:FindFirstChild('AcrylicBlur') or Instance.new('DepthOfFieldEffect')
-    depth_of_fields.FarIntensity = 0
-    depth_of_fields.FocusDistance = 0.05
-    depth_of_fields.InFocusRadius = 0.1
-    depth_of_fields.NearIntensity = 1
-    depth_of_fields.Name = 'AcrylicBlur'
-    depth_of_fields.Parent = Lighting
-
-    for _, object in Lighting:GetChildren() do
-        if not object:IsA('DepthOfFieldEffect') then
-            continue
+    -- BLUR DISABLED: do not defocus the game
+    local old = Lighting:FindFirstChild('AcrylicBlur')
+    if old then
+        pcall(function() old:Destroy() end)
+    end
+    -- also clean any leftover glass folder
+    local cam = workspace.CurrentCamera
+    if cam then
+        local folder = cam:FindFirstChild('AcrylicBlur')
+        if folder then
+            pcall(function() folder:Destroy() end)
         end
-
-        if object == depth_of_fields then
-            continue
-        end
-
-        Connections[object] = object:GetPropertyChangedSignal('FarIntensity'):Connect(function()
-            object.FarIntensity = 0
-        end)
-
-        object.FarIntensity = 0
     end
 end
 
