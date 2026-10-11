@@ -18,7 +18,7 @@ local Games = {
     [9867926370] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/Sheep", -- sheep
     [9641502068] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/Knife%20Duels", -- knife duels
     [10563114921] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/Steal%20An%20Egg", -- steal an egg
-    [9271746647] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/ANML", -- Anime LEgacy
+    [10765902945] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/ANML", -- Anime LEgacy
     [9855761734] = "https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/San%20diego%20rp", -- san diego
 }
 
