@@ -1,7 +1,7 @@
 --[[
 ====================================================
-  ZexHub - Ride a Pet (Eggs)
-  Auto Collect + ESP + Player + Misc + Configs
+  ZexHub UI Library - COMPLETE EXAMPLE (Native API)
+  Includes: themes, spacer, configs, all elements
 ====================================================
 ]]
 
@@ -12,57 +12,64 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SETHH
 ----------------------------------------------------
 local Window = Library.new({
     Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
-    Subtitle = "<font color='#33ff00'><b>Ride a Pet</b></font>",
-    Icon = "rbxassetid://114753090358684",
+    Subtitle = "<font color='#33ff00'><b>Complete Example</b></font>",
+    Icon = "rbxassetid://130655920174103",
     Keybind = Enum.KeyCode.RightControl,
     ToggleIcon = true,
     ToggleIconImage = "rbxassetid://130655920174103",
     ToggleIconSize = 60,
-    Theme = "Black",
+    Theme = "Black", -- Purple | Midnight | Ocean | Crimson | Emerald | Gold | Rose | Snow | Black
     Particles = true,
-    ParticleCount = 20,
+    ParticleCount = 28,
 })
-
 
 ----------------------------------------------------
 -- TABS
 ----------------------------------------------------
 local MainTab     = Window:create_tab("Main", "rbxassetid://84685729027489")
-local PlayerTab   = Window:create_tab("Player", "rbxassetid://89270463071386")
-local MiscTab     = Window:create_tab("Misc", "rbxassetid://123881359502301")
+local CombatTab   = Window:create_tab("Combat", "rbxassetid://89270463071386")
+local VisualsTab  = Window:create_tab("Visuals", "rbxassetid://75584849710793")
 local SettingsTab = Window:create_tab("Settings", "rbxassetid://10734950309")
 
 ----------------------------------------------------
--- MODULES
+-- MODULES (secciones)
 ----------------------------------------------------
-local FarmModule = MainTab:create_module({
-    title = "Auto Farm",
-    flag = "FarmModule",
-    description = "Egg collector",
-    section = "left",
-    showToggle = false,
-})
-
-local ESPModule = MainTab:create_module({
-    title = "Egg ESP",
-    flag = "ESPModule",
-    description = "Visual ESP",
-    section = "right",
-    showToggle = false,
-})
-
-local PlayerModule = PlayerTab:create_module({
-    title = "Movement",
+local PlayerModule = MainTab:create_module({
+    title = "Player",
     flag = "PlayerModule",
     description = "Player options",
     section = "left",
     showToggle = false,
 })
 
-local MiscModule = MiscTab:create_module({
-    title = "Quick Actions",
-    flag = "MiscModule",
-    description = "Teleport & actions",
+local FarmModule = MainTab:create_module({
+    title = "Auto Farm",
+    flag = "FarmModule",
+    description = "Farm settings",
+    section = "right",
+    showToggle = false,
+})
+
+local CombatModule = CombatTab:create_module({
+    title = "Combat",
+    flag = "CombatModule",
+    description = "Combat options",
+    section = "left",
+    showToggle = false,
+})
+
+local AimbotModule = CombatTab:create_module({
+    title = "Aimbot",
+    flag = "AimbotModule",
+    description = "Aimbot settings",
+    section = "right",
+    showToggle = false,
+})
+
+local ESPModule = VisualsTab:create_module({
+    title = "ESP",
+    flag = "ESPModule",
+    description = "Visual ESP",
     section = "left",
     showToggle = false,
 })
@@ -84,557 +91,260 @@ local UISettings = SettingsTab:create_module({
 })
 
 ----------------------------------------------------
--- SERVICES & DATA
+-- MAIN → Player
 ----------------------------------------------------
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+PlayerModule:create_paragraph({
+    Header = "👋 Welcome",
+    Body = "This is a <font color='#b388ff'><b>complete example</b></font> of ZexHub UI Library.\nAll elements are shown here."
+})
 
-local EggsData = {}
-pcall(function()
-    EggsData = require(ReplicatedStorage.GameData.Eggs)
-end)
+PlayerModule:create_spacer({ height = 8 })
 
-local function getRarity(eggName)
-    if EggsData[eggName] and EggsData[eggName].Rarity then
-        return EggsData[eggName].Rarity
-    end
-    return "Common"
-end
-
-local RarityPriority = {
-    Common = 1, Rare = 2, Epic = 3, Legendary = 4,
-    Mythic = 5, Divine = 6, Ethereal = 7
-}
-
-local RarityColors = {
-    Common    = Color3.fromRGB(190, 190, 190),
-    Rare      = Color3.fromRGB(80, 150, 255),
-    Epic      = Color3.fromRGB(190, 80, 255),
-    Legendary = Color3.fromRGB(255, 210, 60),
-    Mythic    = Color3.fromRGB(255, 70, 70),
-    Divine    = Color3.fromRGB(255, 120, 255),
-    Ethereal  = Color3.fromRGB(0, 255, 210),
-}
-
-local AllEggNames = {
-    "White Egg", "Brown Egg", "Cracked Egg", "Easter Egg", "Stone Egg", "Leaf Egg",
-    "Mushroom Egg", "Flower Egg", "Slime Egg", "Ice Egg", "Glass Egg", "Golden Egg",
-    "Diamond Egg", "Crystal Egg", "Skull Egg", "Asteroid Egg", "Dominus Egg",
-    "Flaming Egg", "Sinister Egg", "Soul Egg", "Aurora Egg", "Galaxy Egg",
-    "Blackhole Egg", "Cherub Egg", "Dragon Egg", "Giant Egg"
-}
-
-----------------------------------------------------
--- HELPERS
-----------------------------------------------------
-local function getHRP()
-    local char = LocalPlayer.Character
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHumanoid()
-    local char = LocalPlayer.Character
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
-
-local function getMyBasePosition()
-    local plots = workspace:FindFirstChild("Plots")
-    if not plots then return nil end
-    local myId = LocalPlayer.UserId
-    for _, plot in ipairs(plots:GetChildren()) do
-        if plot:IsA("Model") then
-            local ownerId = plot:GetAttribute("NestsOwnerLoaded")
-            if ownerId and tonumber(ownerId) == myId then
-                local baseplate = plot:FindFirstChild("Baseplate")
-                if baseplate and baseplate:IsA("BasePart") then
-                    return baseplate.Position
-                end
-                return plot:GetPivot().Position
-            end
-        end
-    end
-    return nil
-end
-
--- Noclip
-local noclipConnection
-local function setNoclip(enabled)
-    if noclipConnection then
-        noclipConnection:Disconnect()
-        noclipConnection = nil
-    end
-    if not enabled then
-        local char = LocalPlayer.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                end
-            end
-        end
-        return
-    end
-    noclipConnection = RunService.Stepped:Connect(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end)
-end
-
-local function tweenTo(pos, speed)
-    local hrp = getHRP()
-    if not hrp then return end
-    speed = speed or 80
-    local distance = (hrp.Position - pos).Magnitude
-    local time = math.clamp(distance / speed, 0.25, 8)
-    local tween = TweenService:Create(hrp, TweenInfo.new(time, Enum.EasingStyle.Linear), {
-        CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
-    })
-    tween:Play()
-    tween.Completed:Wait()
-end
-
-----------------------------------------------------
--- AUTO COLLECT
-----------------------------------------------------
-local AutoSettings = {
-    Enabled = false,
-    TweenSpeed = 80,
-    CollectDelay = 0.45,
-    ReturnDelay = 0.4,
-    LoopDelay = 1.2,
-    MaxDistance = 3000,
-    AllowedRarities = {
-        Common = true, Rare = true, Epic = true, Legendary = true,
-        Mythic = true, Divine = true, Ethereal = true
-    },
-    AllowedEggs = {},
-}
-
-local function getPriority(eggName)
-    return RarityPriority[getRarity(eggName)] or 0
-end
-
-local function hasAnySpecificEggSelected()
-    for _, v in pairs(AutoSettings.AllowedEggs) do
-        if v then return true end
-    end
-    return false
-end
-
-local function findBestEgg()
-    local rendered = workspace:FindFirstChild("RenderedEggs")
-    if not rendered then return nil end
-    local bestEgg, bestPriority, bestDist = nil, -1, math.huge
-    local myPos = getHRP() and getHRP().Position or Vector3.zero
-    local useSpecific = hasAnySpecificEggSelected()
-
-    for _, egg in ipairs(rendered:GetChildren()) do
-        if egg:IsA("Model") then
-            local name = egg.Name
-            local rarity = getRarity(name)
-            if not AutoSettings.AllowedRarities[rarity] then continue end
-            if useSpecific and not AutoSettings.AllowedEggs[name] then continue end
-            local priority = getPriority(name)
-            local pos = egg:GetPivot().Position
-            local dist = (pos - myPos).Magnitude
-            if AutoSettings.MaxDistance > 0 and dist > AutoSettings.MaxDistance then continue end
-            if priority > bestPriority or (priority == bestPriority and dist < bestDist) then
-                bestPriority = priority
-                bestDist = dist
-                bestEgg = egg
-            end
-        end
-    end
-    return bestEgg
-end
-
-local function getPrompt(egg)
-    for _, desc in ipairs(egg:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then return desc end
-    end
-end
-
-local function firePrompt(prompt)
-    if not prompt then return end
-    pcall(function()
-        if fireproximityprompt then
-            fireproximityprompt(prompt)
-        else
-            prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration + 0.15)
-            prompt:InputHoldEnd()
-        end
-    end)
-end
-
-task.spawn(function()
-    while true do
-        if AutoSettings.Enabled then
-            local basePos = getMyBasePosition()
-            local egg = findBestEgg()
-            if egg and egg.Parent and basePos then
-                setNoclip(true)
-                tweenTo(egg:GetPivot().Position, AutoSettings.TweenSpeed)
-                task.wait(AutoSettings.CollectDelay)
-                if egg.Parent then firePrompt(getPrompt(egg)) end
-                task.wait(AutoSettings.ReturnDelay)
-                tweenTo(basePos, AutoSettings.TweenSpeed)
-                setNoclip(false)
-            end
-        else
-            setNoclip(false)
-        end
-        task.wait(AutoSettings.LoopDelay)
-    end
-end)
-
-----------------------------------------------------
--- EGG ESP
-----------------------------------------------------
-local ESPSettings = {
-    Enabled = false,
-    MaxDistance = 0,
-    ShowDistance = true,
-    ShowName = true,
-    ShowRarity = true,
-    TextSize = 15,
-    OnlyRare = false,
-}
-
-local drawings = {}
-
-local function createEsp(model)
-    if drawings[model] then return end
-    local box = Drawing.new("Square")
-    box.Thickness = 1.8
-    box.Filled = false
-    box.Visible = false
-    local text = Drawing.new("Text")
-    text.Size = ESPSettings.TextSize
-    text.Center = true
-    text.Outline = true
-    text.OutlineColor = Color3.new(0, 0, 0)
-    text.Visible = false
-    drawings[model] = { box = box, text = text, rarity = getRarity(model.Name) }
-end
-
-local function removeEsp(model)
-    local data = drawings[model]
-    if not data then return end
-    data.box:Remove()
-    data.text:Remove()
-    drawings[model] = nil
-end
-
-local function isRareEnough(rarity)
-    if not ESPSettings.OnlyRare then return true end
-    return rarity == "Epic" or rarity == "Legendary" or rarity == "Mythic" or rarity == "Divine" or rarity == "Ethereal"
-end
-
-RunService.RenderStepped:Connect(function()
-    if not ESPSettings.Enabled then
-        for _, data in pairs(drawings) do
-            data.box.Visible = false
-            data.text.Visible = false
-        end
-        return
-    end
-    local root = getHRP()
-    local myPos = root and root.Position or Camera.CFrame.Position
-    local rendered = workspace:FindFirstChild("RenderedEggs")
-    if not rendered then return end
-    for _, egg in ipairs(rendered:GetChildren()) do
-        if egg:IsA("Model") then createEsp(egg) end
-    end
-    for model, data in pairs(drawings) do
-        if not model.Parent or model.Parent ~= rendered then
-            removeEsp(model)
-            continue
-        end
-        local rarity = data.rarity
-        if not isRareEnough(rarity) then
-            data.box.Visible = false
-            data.text.Visible = false
-            continue
-        end
-        local pos = model:GetPivot().Position
-        local distance = (pos - myPos).Magnitude
-        if ESPSettings.MaxDistance > 0 and distance > ESPSettings.MaxDistance then
-            data.box.Visible = false
-            data.text.Visible = false
-            continue
-        end
-        local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
-        if not onScreen or screenPos.Z < 0 then
-            data.box.Visible = false
-            data.text.Visible = false
-            continue
-        end
-        local color = RarityColors[rarity] or Color3.fromRGB(255, 255, 255)
-        local size = math.clamp(2200 / distance, 10, 38)
-        data.box.Size = Vector2.new(size, size)
-        data.box.Position = Vector2.new(screenPos.X - size/2, screenPos.Y - size/2)
-        data.box.Color = color
-        data.box.Visible = true
-        local lines = {}
-        if ESPSettings.ShowName then table.insert(lines, model.Name) end
-        if ESPSettings.ShowRarity then table.insert(lines, rarity) end
-        if ESPSettings.ShowDistance then table.insert(lines, math.floor(distance) .. "m") end
-        data.text.Text = table.concat(lines, "\n")
-        data.text.Size = ESPSettings.TextSize
-        data.text.Position = Vector2.new(screenPos.X, screenPos.Y + size/2 + 4)
-        data.text.Color = color
-        data.text.Visible = true
-    end
-end)
-
-if workspace:FindFirstChild("RenderedEggs") then
-    workspace.RenderedEggs.ChildRemoved:Connect(removeEsp)
-end
-
-----------------------------------------------------
--- PLAYER
-----------------------------------------------------
-local PlayerSettings = {
-    WalkSpeedEnabled = false,
-    WalkSpeed = 30,
-    FlyEnabled = false,
-    FlySpeed = 50,
-}
-
-local DEFAULT_WALKSPEED = 16
-local lastWalkSpeedState = false
-
-task.spawn(function()
-    while true do
-        local hum = getHumanoid()
-        if hum then
-            if PlayerSettings.WalkSpeedEnabled then
-                hum.WalkSpeed = PlayerSettings.WalkSpeed
-            elseif lastWalkSpeedState == true then
-                hum.WalkSpeed = DEFAULT_WALKSPEED
-            end
-            lastWalkSpeedState = PlayerSettings.WalkSpeedEnabled
-        end
-        task.wait(0.2)
-    end
-end)
-
-local flyBV, flyBG
-local function startFly()
-    local hrp = getHRP()
-    if not hrp then return end
-    flyBV = Instance.new("BodyVelocity")
-    flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    flyBV.Velocity = Vector3.zero
-    flyBV.Parent = hrp
-    flyBG = Instance.new("BodyGyro")
-    flyBG.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-    flyBG.P = 1e4
-    flyBG.Parent = hrp
-end
-
-local function stopFly()
-    if flyBV then flyBV:Destroy() flyBV = nil end
-    if flyBG then flyBG:Destroy() flyBG = nil end
-end
-
-RunService.RenderStepped:Connect(function()
-    if not PlayerSettings.FlyEnabled then return end
-    local hrp = getHRP()
-    if not hrp or not flyBV or not flyBG then return end
-    local cam = Camera.CFrame
-    local dir = Vector3.zero
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += cam.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= cam.LookVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= cam.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += cam.RightVector end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.yAxis end
-    if dir.Magnitude > 0 then dir = dir.Unit * PlayerSettings.FlySpeed end
-    flyBV.Velocity = dir
-    flyBG.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.LookVector)
-end)
-
-----------------------------------------------------
--- UI - AUTO FARM
-----------------------------------------------------
-FarmModule:create_toggle({
-    title = "Auto Collect Eggs",
-    flag = "AutoCollectEggs",
+PlayerModule:create_toggle({
+    title = "Speed Hack",
+    flag = "SpeedHack",
     default = false,
     callback = function(state)
-        AutoSettings.Enabled = state
-        if not state then setNoclip(false) end
-        Library.SendNotification({title = "Auto Collect", text = state and "Enabled" or "Disabled", duration = 2})
+        print("Speed Hack:", state)
+        Library.SendNotification({
+            title = "Speed Hack",
+            text = state and "Enabled" or "Disabled",
+            duration = 2
+        })
     end
 })
 
-FarmModule:create_slider({
-    title = "Tween Speed",
-    flag = "TweenSpeed",
-    minimum_value = 30,
-    maximum_value = 150,
-    value = 80,
+PlayerModule:create_slider({
+    title = "Walk Speed",
+    flag = "WalkSpeed",
+    minimum_value = 16,
+    maximum_value = 200,
+    value = 16,
     round_number = true,
-    callback = function(v) AutoSettings.TweenSpeed = v end
+    callback = function(value)
+        print("Walk Speed:", value)
+    end
 })
 
+PlayerModule:create_slider({
+    title = "Jump Power",
+    flag = "JumpPower",
+    minimum_value = 50,
+    maximum_value = 300,
+    value = 50,
+    round_number = true,
+    callback = function(value)
+        print("Jump Power:", value)
+    end
+})
+
+PlayerModule:create_divider({ showtopic = true, title = "Character" })
+
+PlayerModule:create_button({
+    title = "Reset Character",
+    callback = function()
+        local char = game.Players.LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then hum.Health = 0 end
+        end
+        Library.SendNotification({
+            title = "Character",
+            text = "Reset",
+            duration = 2
+        })
+    end
+})
+
+PlayerModule:create_textbox({
+    title = "Custom Text",
+    flag = "CustomText",
+    placeholder = "Type something...",
+    callback = function(text)
+        print("Textbox:", text)
+    end
+})
+
+----------------------------------------------------
+-- MAIN → Auto Farm
+----------------------------------------------------
+FarmModule:create_toggle({
+    title = "Enable Auto Farm",
+    flag = "AutoFarm",
+    default = false,
+    callback = function(state)
+        print("Auto Farm:", state)
+    end
+})
+
+FarmModule:create_spacer({ height = 6 })
+
 FarmModule:create_dropdown({
-    title = "Rarities to Collect",
-    flag = "EggRarities",
-    options = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Divine", "Ethereal"},
-    multi_dropdown = true,
+    title = "Farm Mode",
+    flag = "FarmMode",
+    options = {"Safe", "Normal", "Aggressive"},
+    multi_dropdown = false,
     searchable = true,
-    default = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Divine", "Ethereal"},
+    default = "Normal",
     callback = function(selected)
-        for k in pairs(AutoSettings.AllowedRarities) do AutoSettings.AllowedRarities[k] = false end
-        if selected then for _, r in ipairs(selected) do AutoSettings.AllowedRarities[r] = true end end
+        print("Farm Mode:", selected)
     end
 })
 
 FarmModule:create_dropdown({
-    title = "Specific Eggs (optional)",
-    flag = "SpecificEggs",
-    options = AllEggNames,
+    title = "Targets",
+    flag = "FarmTargets",
+    options = {"Mobs", "Bosses", "NPCs", "Players", "Crates"},
     multi_dropdown = true,
     searchable = true,
     default = {},
     callback = function(selected)
-        AutoSettings.AllowedEggs = {}
-        if selected then for _, name in ipairs(selected) do AutoSettings.AllowedEggs[name] = true end end
+        print("Targets:", table.concat(selected or {}, ", "))
+    end
+})
+
+FarmModule:create_slider({
+    title = "Farm Delay",
+    flag = "FarmDelay",
+    minimum_value = 0.1,
+    maximum_value = 5,
+    value = 0.5,
+    round_number = false,
+    callback = function(value)
+        print("Farm Delay:", value)
     end
 })
 
 ----------------------------------------------------
--- UI - ESP
+-- COMBAT → Combat
+----------------------------------------------------
+CombatModule:create_toggle({
+    title = "Kill Aura",
+    flag = "KillAura",
+    default = false,
+    callback = function(state)
+        print("Kill Aura:", state)
+    end
+})
+
+CombatModule:create_slider({
+    title = "Aura Range",
+    flag = "AuraRange",
+    minimum_value = 5,
+    maximum_value = 50,
+    value = 15,
+    round_number = true,
+    callback = function(value)
+        print("Aura Range:", value)
+    end
+})
+
+CombatModule:create_colorpicker({
+    title = "Hit Color",
+    flag = "HitColor",
+    default = Color3.fromRGB(255, 50, 50),
+    callback = function(color)
+        print("Hit Color:", color)
+    end
+})
+
+----------------------------------------------------
+-- COMBAT → Aimbot
+----------------------------------------------------
+AimbotModule:create_toggle({
+    title = "Enable Aimbot",
+    flag = "Aimbot",
+    default = false,
+    callback = function(state)
+        print("Aimbot:", state)
+    end
+})
+
+AimbotModule:create_slider({
+    title = "FOV",
+    flag = "AimbotFOV",
+    minimum_value = 10,
+    maximum_value = 500,
+    value = 120,
+    round_number = true,
+    callback = function(value)
+        print("FOV:", value)
+    end
+})
+
+AimbotModule:create_dropdown({
+    title = "Aim Part",
+    flag = "AimPart",
+    options = {"Head", "Torso", "HumanoidRootPart", "Closest"},
+    multi_dropdown = false,
+    searchable = true,
+    default = "Head",
+    callback = function(selected)
+        print("Aim Part:", selected)
+    end
+})
+
+AimbotModule:create_divider({ showtopic = true, title = "Silent Aim" })
+
+AimbotModule:create_toggle({
+    title = "Silent Aim",
+    flag = "SilentAim",
+    default = false,
+    callback = function(state)
+        print("Silent Aim:", state)
+    end
+})
+
+----------------------------------------------------
+-- VISUALS → ESP
 ----------------------------------------------------
 ESPModule:create_toggle({
-    title = "Enable Egg ESP",
-    flag = "EggESP",
+    title = "Player ESP",
+    flag = "PlayerESP",
     default = false,
-    callback = function(state) ESPSettings.Enabled = state end
+    callback = function(state)
+        print("Player ESP:", state)
+    end
 })
 
 ESPModule:create_toggle({
-    title = "Only Rare+",
-    flag = "ESPOnlyRare",
+    title = "Box ESP",
+    flag = "BoxESP",
     default = false,
-    callback = function(state) ESPSettings.OnlyRare = state end
+    callback = function(state)
+        print("Box ESP:", state)
+    end
 })
 
 ESPModule:create_toggle({
-    title = "Show Distance",
-    flag = "ESPShowDist",
-    default = true,
-    callback = function(state) ESPSettings.ShowDistance = state end
+    title = "Name ESP",
+    flag = "NameESP",
+    default = false,
+    callback = function(state)
+        print("Name ESP:", state)
+    end
 })
 
-ESPModule:create_toggle({
-    title = "Show Name",
-    flag = "ESPShowName",
-    default = true,
-    callback = function(state) ESPSettings.ShowName = state end
+ESPModule:create_spacer({ height = 10 })
+
+ESPModule:create_colorpicker({
+    title = "ESP Color",
+    flag = "ESPColor",
+    default = Color3.fromRGB(150, 80, 255),
+    callback = function(color)
+        print("ESP Color:", color)
+    end
 })
 
 ESPModule:create_slider({
-    title = "Max Distance (0 = infinite)",
-    flag = "ESPMaxDist",
-    minimum_value = 0,
-    maximum_value = 10000,
-    value = 0,
+    title = "ESP Distance",
+    flag = "ESPDistance",
+    minimum_value = 100,
+    maximum_value = 5000,
+    value = 1000,
     round_number = true,
-    callback = function(v) ESPSettings.MaxDistance = v end
-})
-
-----------------------------------------------------
--- UI - PLAYER
-----------------------------------------------------
-PlayerModule:create_toggle({
-    title = "WalkSpeed",
-    flag = "WalkSpeedToggle",
-    default = false,
-    callback = function(state)
-        PlayerSettings.WalkSpeedEnabled = state
-        if not state then
-            local hum = getHumanoid()
-            if hum then hum.WalkSpeed = DEFAULT_WALKSPEED end
-        end
-    end
-})
-
-PlayerModule:create_slider({
-    title = "WalkSpeed Value",
-    flag = "WalkSpeedValue",
-    minimum_value = 16,
-    maximum_value = 500,
-    value = 30,
-    round_number = true,
-    callback = function(v) PlayerSettings.WalkSpeed = v end
-})
-
-PlayerModule:create_spacer({ height = 6 })
-
-PlayerModule:create_toggle({
-    title = "Fly",
-    flag = "FlyToggle",
-    default = false,
-    callback = function(state)
-        PlayerSettings.FlyEnabled = state
-        if state then startFly() else stopFly() end
-    end
-})
-
-PlayerModule:create_slider({
-    title = "Fly Speed",
-    flag = "FlySpeed",
-    minimum_value = 20,
-    maximum_value = 200,
-    value = 50,
-    round_number = true,
-    callback = function(v) PlayerSettings.FlySpeed = v end
-})
-
-----------------------------------------------------
--- UI - MISC
-----------------------------------------------------
-MiscModule:create_button({
-    title = "Go to Best Egg",
-    callback = function()
-        local egg = findBestEgg()
-        if egg then
-            setNoclip(true)
-            tweenTo(egg:GetPivot().Position, 100)
-            setNoclip(false)
-            Library.SendNotification({title = "Misc", text = "Going to: " .. egg.Name, duration = 2})
-        else
-            Library.SendNotification({title = "Misc", text = "No eggs found", duration = 2})
-        end
-    end
-})
-
-MiscModule:create_button({
-    title = "Go to Base",
-    callback = function()
-        local base = getMyBasePosition()
-        if base then
-            setNoclip(true)
-            tweenTo(base, 100)
-            setNoclip(false)
-            Library.SendNotification({title = "Misc", text = "Going to base", duration = 2})
-        else
-            Library.SendNotification({title = "Misc", text = "Base not found", duration = 2})
-        end
+    callback = function(value)
+        print("ESP Distance:", value)
     end
 })
 
@@ -775,24 +485,28 @@ ConfigsModule:create_button({
 })
 
 ----------------------------------------------------
--- SETTINGS → UI Settings
+-- SETTINGS → UI Settings (Themes + misc)
 ----------------------------------------------------
 UISettings:create_paragraph({
     Header = "Appearance",
-    Body = "Change the UI theme live."
+    Body = "Change the UI theme live. Themes update background, accents, modules and toggles."
 })
 
 UISettings:create_dropdown({
     title = "Theme",
     flag = "UITheme",
-    options = Window:GetThemeNames(),
+    options = Window:GetThemeNames(), -- includes Black
     multi_dropdown = false,
     searchable = true,
     default = "Black",
     callback = function(value)
         local ok, name = Window:SetTheme(value)
         if ok then
-            Library.SendNotification({ title = "Theme", text = "Applied: " .. tostring(name), duration = 2 })
+            Library.SendNotification({
+                title = "Theme",
+                text = "Applied: " .. tostring(name),
+                duration = 2
+            })
         end
     end
 })
@@ -806,11 +520,60 @@ UISettings:create_toggle({
     end
 })
 
-UISettings:create_spacer({ height = 8 })
+UISettings:create_spacer({ height = 10 })
+
+UISettings:create_divider({ showtopic = true, title = "UI Info" })
 
 UISettings:create_paragraph({
     Header = "Controls",
-    Body = "Keybind: <font color='#FFD700'><b>RightControl</b></font>"
+    Body = "Keybind: <font color='#FFD700'><b>RightControl</b></font>\nToggle icon is enabled.\nClick the logo to shrink to bar."
+})
+
+UISettings:create_button({
+    title = "Test Notification",
+    callback = function()
+        Library.SendNotification({
+            title = "Zex Hub",
+            text = "This is a test notification!",
+            duration = 3
+        })
+    end
+})
+
+UISettings:create_button({
+    title = "Print Hello",
+    callback = function()
+        print("Hello from ZexHub!")
+        Library.SendNotification({
+            title = "Console",
+            text = "Printed Hello",
+            duration = 2
+        })
+    end
+})
+
+UISettings:create_spacer({ height = 8 })
+
+UISettings:create_button({
+    title = "Cycle Theme (demo)",
+    callback = function()
+        local names = Window:GetThemeNames()
+        local current = select(1, Window:GetTheme()) or "Purple"
+        local idx = 1
+        for i, n in ipairs(names) do
+            if n == current then
+                idx = i
+                break
+            end
+        end
+        local nextName = names[(idx % #names) + 1]
+        Window:SetTheme(nextName)
+        Library.SendNotification({
+            title = "Theme",
+            text = "Now: " .. tostring(nextName),
+            duration = 2
+        })
+    end
 })
 
 ----------------------------------------------------
@@ -829,8 +592,10 @@ task.defer(function()
     end
 end)
 
-Library.SendNotification({
-    title = "Zex Hub",
-    text = "Ride a Pet listo",
-    duration = 3
-})
+task.delay(0.4, function()
+    Library.SendNotification({
+        title = "Zex Hub",
+        text = "Example loaded successfully!",
+        duration = 4
+    })
+end)
