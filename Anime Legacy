@@ -1,3 +1,4 @@
+
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SETHHHX/zex/refs/heads/main/uilib.lua"))()
 
 local Players           = game:GetService("Players")
@@ -84,13 +85,12 @@ local UISettings = SettingsTab:create_module({
 ----------------------------------------------------
 -- DATA
 ----------------------------------------------------
-local MAP_LIST = {"Heaven Island", "Slayers Village", "Cursed Academy", "Sins Kingdom"}
+local MAP_LIST = {"Heaven Island", "Slayers Village", "Cursed Academy"}
 
 local MAP_ENEMIES = {
     ["Heaven Island"]   = {"Kume","Robin Lucco","Buggo","Kuzon","Hawk Eyes","Anel"},
     ["Slayers Village"] = {"Kaigako","Gyotaro","Hantengue","Akeza","Doume","Kukushibe"},
     ["Cursed Academy"]  = {"Jogu","Toje","Mahita","Lyu","Kashimu","Sokona"},
-    ["Sins Kingdom"]    = {"Melascule","Monspit","Derriere","Gloxine","Malel","Chaos Arthur"},
 }
 
 local DIFFICULTIES = {"Easy","Medium","Hard","Insane"}
@@ -127,91 +127,134 @@ local Settings = {
     FeedFighterID = nil,
     FeedDelay     = 2,
     FeedMaxPerFood = 100,
-
-    IsJoining = false,
 }
 
 --[[
 ====================================================
   RAINBOW NAME CHANGER
+  Cambia el texto + efecto rainbow en loop
+  Ruta: workspace.<jugador>.Head.Player.Main.UserName
 ====================================================
 ]]
-local startTime = tick()
-local NEW_NAME      = "@ZEX HUB"
-local RAINBOW_SPEED = 1.0
 
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ============ CONFIGURACIÓN ============
+local NEW_NAME      = "@ZEX HUB"   -- ← texto a mostrar
+local RAINBOW_SPEED = 1.0               -- ← velocidad (1 = normal, 0.5 = lento, 2 = rápido)
+-- ========================================
+
+local startTime = tick()
+
+-- Función que encuentra el TextLabel del UserName
 local function getUserNameLabel()
     local char = LocalPlayer.Character
     if not char then return nil end
+
     local head = char:FindFirstChild("Head")
     if not head then return nil end
+
     local playerFolder = head:FindFirstChild("Player")
     if not playerFolder then return nil end
+
     local main = playerFolder:FindFirstChild("Main")
     if not main then return nil end
+
     local userName = main:FindFirstChild("UserName")
     if not userName then return nil end
 
+    -- El UserName puede ser un TextLabel o un Frame con TextLabel dentro
     if userName:IsA("TextLabel") then
         return userName
     elseif userName:IsA("GuiObject") then
         local label = userName:FindFirstChildWhichIsA("TextLabel")
         if label then return label end
     end
+
     return nil
 end
 
-RunService.RenderStepped:Connect(function()
+-- Loop principal
+local connection = RunService.RenderStepped:Connect(function()
     local label = getUserNameLabel()
     if not label then return end
+
+    -- 1. Asegurar el texto
     if label.Text ~= NEW_NAME then
         label.Text = NEW_NAME
     end
+
+    -- 2. Aplicar color rainbow
     local elapsed = (tick() - startTime) * RAINBOW_SPEED
-    local hue = (elapsed % 5) / 5
+    local hue = (elapsed % 5) / 5  -- cicla cada 5 segundos (0.2 Hz)
     label.TextColor3 = Color3.fromHSV(hue, 1, 1)
+
+    -- Opcional: quitar el UIGradient si el juego lo está sobrescribiendo
     local gradient = label:FindFirstChildOfClass("UIGradient")
     if gradient and gradient.Enabled then
         gradient.Enabled = false
     end
 end)
 
+
 --[[
 ====================================================
-  ANTI-AFK v2
+  ANTI-AFK v2 - Simula movimiento del mouse
+  Reset del timer de AFK de Roblox.
 ====================================================
 ]]
-local VirtualUser = game:GetService("VirtualUser")
-local INTERVAL = 10 * 60
+
+local Players           = game:GetService("Players")
+local VirtualUser       = game:GetService("VirtualUser")
+local UserInputService  = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local INTERVAL = 10 * 60  -- 10 minutos
 
 local function simulateActivity()
+    -- Método 1: VirtualUser (el más potente, disponible en casi todos los executors)
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new(0, 0))
     end)
+
+    -- Método 2: Simular tecla Shift (que no afecta el movimiento del personaje)
     pcall(function()
-        local VIM = game:GetService("VirtualInputManager")
-        VIM:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
         task.wait(0.05)
-        VIM:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
     end)
+
+    -- Método 3: Simular movimiento del mouse via InputObject
     pcall(function()
         local mouse = LocalPlayer:GetMouse()
         if mouse then
-            mouse.X = math.random(0, 100)
-            mouse.Y = math.random(0, 100)
+            local randomX = math.random(0, 100)
+            local randomY = math.random(0, 100)
+            mouse.X = randomX
+            mouse.Y = randomY
         end
     end)
 end
 
+-- Actividad inmediata
 task.wait(2)
 simulateActivity()
+
+-- Loop cada INTERVAL
 task.spawn(function()
     while true do
         task.wait(INTERVAL)
         simulateActivity()
     end
 end)
+
+
 
 ----------------------------------------------------
 -- STATE
@@ -265,7 +308,7 @@ local isEnemyAlive
 local teleportTo
 
 ----------------------------------------------------
--- HELPERS
+-- HELPERS (getCurrentMap ANTES de isInGamemode)
 ----------------------------------------------------
 local function getHRP()
     local char = LocalPlayer.Character
@@ -310,8 +353,9 @@ local function isInGamemode()
 end
 
 local function isLoadingGamemode()
-    if Settings.IsJoining then return true end
-    if tick() < gamemodeJoinBlockUntil then return true end
+    if tick() < gamemodeJoinBlockUntil then
+        return true
+    end
     local Omni = getOmni()
     if Omni and Omni.Frame and Omni.Frame.IsFrameOpened then
         local ok, opened = pcall(function()
@@ -397,8 +441,12 @@ local function fireMapsTeleport(mapName)
     end)
 end
 
+-- FIX: Join con FireServer + hash de Maps (por si acaso el hash de Gamemodes.Join es el mismo)
 local function joinGamemode(name)
+    -- Probar con FireServer + hash de n.U (que es el que usábamos antes)
     fireBridge({"General","Gamemodes","Join", name, n=4})
+
+    -- En paralelo, también intentar con el hash de Maps por si acaso
     task.spawn(function()
         pcall(function()
             local args = {
@@ -423,8 +471,9 @@ local function joinGamemode(name)
                 :FireServer(unpack(args))
         end)
     end)
+
     gamemodeJoinBlockUntil = tick() + 5
-    return true
+    return true  -- asumir éxito (FireServer no retorna valor)
 end
 
 local function leaveGamemode()
@@ -432,17 +481,20 @@ local function leaveGamemode()
 end
 
 ----------------------------------------------------
--- DETECCIÓN DE NOTIFICACIÓN
+-- DETECCIÓN DE NOTIFICACIÓN (PlayerGui.Notifications.List)
 ----------------------------------------------------
 local function findGamemodeNotification(namePrefix, diff)
     local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
     if not PlayerGui then return nil end
+
     local notifGui = PlayerGui:FindFirstChild("Notifications")
     if not notifGui then return nil end
+
     local list = notifGui:FindFirstChild("List")
     if not list then return nil end
 
     local prefix = "GamemodeNotification_" .. namePrefix
+
     for _, child in ipairs(list:GetChildren()) do
         if child:IsA("Frame") and string.find(child.Name, prefix, 1, true) then
             if string.find(child.Name, diff, 1, true) then
@@ -450,6 +502,7 @@ local function findGamemodeNotification(namePrefix, diff)
             end
         end
     end
+
     return nil
 end
 
@@ -464,11 +517,10 @@ local function isGamemodeNotificationVisible()
 end
 
 ----------------------------------------------------
--- AUTO TELEPORT
+-- AUTO TELEPORT (sin UI) - FIX: prioridad Lobby sin cooldown
 ----------------------------------------------------
 local function autoTeleportToMap()
-    if Settings.IsJoining then return end
-
+    -- Prioridad MÁXIMA: si hay notificación visible, ir a Lobby SIN cooldown
     local wantLobby = isGamemodeNotificationVisible()
     if wantLobby then
         local currentMap = getCurrentMap()
@@ -481,6 +533,7 @@ local function autoTeleportToMap()
         return
     end
 
+    -- Cooldown normal para el resto
     if tick() - lastTeleport < Settings.TeleportCooldown then return end
     if isLoadingGamemode() then return end
 
@@ -530,7 +583,7 @@ local function getSessionProgress()
 end
 
 ----------------------------------------------------
--- AUTO DUNGEON (FIX: solo rota la cámara, NO el personaje)
+-- AUTO DUNGEON
 ----------------------------------------------------
 local function getDungeonMapFolder()
     local Omni = getOmni()
@@ -551,7 +604,7 @@ local function findAnyDoorPrompt(mapFolder)
         if doors then
             for _, door in ipairs(doors:GetChildren()) do
                 local openDoor = door:FindFirstChild("OpenDoor")
-                if openDoor and openDoor:IsA("ProximityPrompt") then
+                if openDoor and openDoor:IsA("ProximityPrompt") and openDoor.Enabled then
                     return openDoor, door
                 end
             end
@@ -580,29 +633,6 @@ local function isOnGround()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
     return hum.FloorMaterial ~= Enum.Material.Air
-end
-
--- FIX: Solo rota la CÁMARA hacia la puerta (NO toca el CFrame del personaje)
-local function lookAtDoorSmooth(doorPos)
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-
-    local cameraPos = camera.CFrame.Position
-    local direction = (doorPos - cameraPos).Unit
-    local targetCF = CFrame.lookAt(cameraPos, cameraPos + direction)
-
-    local startCF = camera.CFrame
-    local alpha = 0
-    local duration = 0.15
-    local startTime = tick()
-
-    while alpha < 1 do
-        alpha = math.min(1, (tick() - startTime) / duration)
-        camera.CFrame = startCF:Lerp(targetCF, alpha)
-        task.wait()
-    end
-
-    task.wait(0.15)
 end
 
 local function firePromptProperly(pp)
@@ -639,8 +669,6 @@ local function tryOpenDungeonDoor()
         task.wait(0.6)
     end
 
-    lookAtDoorSmooth(doorPos)
-
     local waited = 0
     while not isOnGround() and waited < 2 do
         task.wait(0.1)
@@ -668,11 +696,8 @@ local function tryOpenDungeonDoor()
         if ppDist > maxDist then
             hrp.CFrame = CFrame.new(ppPos + Vector3.new(0, 3, 2))
             task.wait(0.6)
-            lookAtDoorSmooth(ppPos)
         end
     end
-
-    lookAtDoorSmooth(doorPos)
 
     lastDoorOpen = tick()
     firePromptProperly(pp2)
@@ -907,7 +932,6 @@ end
 local function starsStandaloneLoop()
     if not Settings.StarsEnabled then return end
     if Settings.Enabled then return end
-    if Settings.IsJoining then return end
     if isLoadingGamemode() then return end
 
     updateStarsCooldown()
@@ -945,7 +969,6 @@ end
 local function tryStarsInterleaved()
     if not Settings.StarsEnabled then return false end
     if starsOnCooldown then return false end
-    if Settings.IsJoining then return false end
     if isLoadingGamemode() then return false end
 
     local hrp = getHRP()
@@ -975,7 +998,6 @@ end
 ----------------------------------------------------
 local function worldFarmLoop()
     if not Settings.Enabled then return end
-    if Settings.IsJoining then return end
     if isLoadingGamemode() then return end
 
     local currentMap = getCurrentMap()
@@ -1025,7 +1047,6 @@ end
 ----------------------------------------------------
 local function gmKillLoop()
     if not Settings.GMKill then return end
-    if Settings.IsJoining then return end
     if isLoadingGamemode() then return end
 
     local hrp = getHRP()
@@ -1123,7 +1144,6 @@ end
 -- MASTER KILL LOOP
 ----------------------------------------------------
 local function killLoop()
-    if Settings.IsJoining then return end
     local inGM = isInGamemode()
     if inGM then gmKillLoop()
     else worldFarmLoop() end
@@ -1191,7 +1211,7 @@ local function feedFighter(fighterId)
 
     local fighterData = Omni.Data.Fighters.List[fighterId]
     if not fighterData then
-        return false, "Fighter not found"
+        return false, "Fighter not found (ID "..tostring(fighterId)..")"
     end
 
     local remaining = FighterFeed.GetRemainingExp(fighterData, Omni.Data)
@@ -1201,7 +1221,7 @@ local function feedFighter(fighterId)
 
     local consumed = FighterFeed.AddAll(fighterData, Omni.Data, {})
     if not consumed or next(consumed) == nil then
-        return false, "No food available"
+        return false, "No food available (AddAll empty)"
     end
 
     consumed = limitConsumed(consumed, Settings.FeedMaxPerFood)
@@ -1289,11 +1309,10 @@ local function stopRoll()
 end
 
 ----------------------------------------------------
--- AUTO JOIN
+-- AUTO JOIN (con TP forzado a Lobby)
 ----------------------------------------------------
 local function tryAutoJoinTrial()
     if not Settings.TrialJoin then return end
-    if Settings.IsJoining then return end
 
     local inGM = isInGamemode()
     if inGM then return end
@@ -1302,35 +1321,29 @@ local function tryAutoJoinTrial()
     if not notif then return end
 
     local now = tick()
-    if now - lastTrialJoin < 15 then return end
+    if now - lastTrialJoin < 10 then return end
     lastTrialJoin = now
 
-    Settings.IsJoining = true
-    notify("Trial", "Preparing join...", 2)
-
-    task.spawn(function()
-        local currentMap = getCurrentMap()
-        if currentMap ~= "Lobby" then
-            lastTeleport = 0
-            fireMapsTeleport("Lobby")
-            notify("Trial", "Going to Lobby...", 2)
-            task.wait(2)
-        end
-
-        local fullName = "Trial " .. Settings.TrialDiff
-        joinGamemode(fullName)
-        notify("Trial", "Joining "..fullName, 3)
-
+    -- FIX: si NO estamos en Lobby, TP primero + esperar
+    local currentMap = getCurrentMap()
+    if currentMap ~= "Lobby" then
+        lastTeleport = 0
+        fireMapsTeleport("Lobby")
+        notify("Trial", "Going to Lobby first...", 2)
         task.wait(2)
-        task.wait(3)
+    end
 
-        Settings.IsJoining = false
-    end)
+    local fullName = "Trial " .. Settings.TrialDiff
+    local success = joinGamemode(fullName)
+    if success then
+        notify("Trial", "Joining "..fullName, 3)
+    else
+        notify("Trial", "Failed join", 3)
+    end
 end
 
 local function tryAutoJoinDungeon()
     if not Settings.DungeonJoin then return end
-    if Settings.IsJoining then return end
 
     local inGM = isInGamemode()
     if inGM then return end
@@ -1339,30 +1352,24 @@ local function tryAutoJoinDungeon()
     if not notif then return end
 
     local now = tick()
-    if now - lastDungeonJoin < 15 then return end
+    if now - lastDungeonJoin < 10 then return end
     lastDungeonJoin = now
 
-    Settings.IsJoining = true
-    notify("Dungeon", "Preparing join...", 2)
-
-    task.spawn(function()
-        local currentMap = getCurrentMap()
-        if currentMap ~= "Lobby" then
-            lastTeleport = 0
-            fireMapsTeleport("Lobby")
-            notify("Dungeon", "Going to Lobby...", 2)
-            task.wait(2)
-        end
-
-        local fullName = "Dungeon " .. Settings.DungeonDiff
-        joinGamemode(fullName)
-        notify("Dungeon", "Joining "..fullName, 3)
-
+    local currentMap = getCurrentMap()
+    if currentMap ~= "Lobby" then
+        lastTeleport = 0
+        fireMapsTeleport("Lobby")
+        notify("Dungeon", "Going to Lobby first...", 2)
         task.wait(2)
-        task.wait(3)
+    end
 
-        Settings.IsJoining = false
-    end)
+    local fullName = "Dungeon " .. Settings.DungeonDiff
+    local success = joinGamemode(fullName)
+    if success then
+        notify("Dungeon", "Joining "..fullName, 3)
+    else
+        notify("Dungeon", "Failed join", 3)
+    end
 end
 
 ----------------------------------------------------
@@ -1370,9 +1377,6 @@ end
 ----------------------------------------------------
 local function gamemodeLoop()
     tryCloseResults()
-
-    if Settings.IsJoining then return end
-
     local inGM, gmName = isInGamemode()
     local progress = getSessionProgress()
 
@@ -1413,7 +1417,7 @@ local function stopGamemodeLoop()
 end
 
 ----------------------------------------------------
--- UI
+-- UI (mismo que antes)
 ----------------------------------------------------
 FarmModule:create_toggle({
     title = "Enable Auto Farm", flag = "AutoFarmEnabled", default = false,
@@ -1726,5 +1730,5 @@ startGamemodeLoop()
 Window:load()
 
 task.delay(0.4, function()
-    notify("Zex Hub", "v7 - Sins Kingdom added!", 3)
+    notify("Zex Hub", "v7 - Lobby TP before join!", 3)
 end)
