@@ -1733,25 +1733,64 @@ function Library:create_ui()
         return particlesEnabled
     end
 
-    -- UI size scale (slider from Settings). 1 = default (698x479), 0.7 smaller, 1.3 larger
-    function self:SetScale(scale)
+    -- UI size scale (slider). Tween suave, sin spam de saves ni jumps.
+    self._scaleTween = nil
+    self._scaleSaveToken = 0
+
+    function self:SetScale(scale, instant)
         local s = tonumber(scale)
         if not s then return false end
         s = math.clamp(s, 0.5, 1.5)
         self._manualScale = s
         self._ui_scale = s
+
         local obj = self._uiScaleObject
-        if obj then
-            obj.Scale = s
+        if not obj then
+            return false
         end
-        if self._config and self._config._library then
-            self._config._library.UIScale = s
-            pcall(function()
-                if Config and Config.save then
-                    Config:save(game.GameId, self._config)
+
+        -- Cancel previous scale tween (slider fires every frame while dragging)
+        if self._scaleTween then
+            pcall(function() self._scaleTween:Cancel() end)
+            self._scaleTween = nil
+        end
+
+        if instant or math.abs(obj.Scale - s) < 0.001 then
+            obj.Scale = s
+        else
+            -- Short smooth tween — no lag, no hard snap
+            local tw = TweenService:Create(
+                obj,
+                TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { Scale = s }
+            )
+            self._scaleTween = tw
+            tw:Play()
+            tw.Completed:Connect(function()
+                if self._scaleTween == tw then
+                    self._scaleTween = nil
                 end
             end)
         end
+
+        -- Debounce config save (only after user stops dragging ~0.4s)
+        self._scaleSaveToken = (self._scaleSaveToken or 0) + 1
+        local token = self._scaleSaveToken
+        task.delay(0.4, function()
+            if token ~= self._scaleSaveToken then return end
+            if self._config then
+                if not self._config._library then
+                    self._config._library = {}
+                end
+                self._config._library.UIScale = s
+                pcall(function()
+                    if Config and Config.save then
+                        Config:save(game.GameId, self._config)
+                    end
+                end)
+            end
+        end)
+
         return true, s
     end
 
@@ -5007,49 +5046,4 @@ if not settings or settings and not settings.disableline then
 
     return self
 end
-
-
--- ============================================
---  ZexHub UI Library (Clean Version)
---  Solo la librería, sin scripts de juego.
---
---  Uso:
---      local Library = loadstring(game:HttpGet("RAW_GITHUB_URL"))()
---
---      local Window = Library.new({
---          Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
---          Subtitle = "<font color='#33ff00'><b>San Diego Border Roleplay</b></font>",
---          Icon = "rbxassetid://130655920174103",
---          Keybind = Enum.KeyCode.RightControl,
---          ToggleIcon = true,
---          ToggleIconImage = "rbxassetid://130655920174103",
---          ToggleIconSize = 60,
---          Theme = "Purple", -- Purple | Midnight | Ocean | Crimson | Emerald | Gold | Rose | Snow
---      })
---
---      Window:load()
---
---      -- Temas en runtime (desde Settings dropdown):
---      local themeNames = Window:GetThemeNames() -- {"Crimson","Emerald","Gold",...}
---      Window:SetTheme("Ocean")
---
---      -- Ejemplo Settings tab:
---      -- local settingsTab = Window:create_tab({ title = "Settings", icon = "..." })
---      -- local appearance = settingsTab:create_module({ title = "Appearance" })
---      -- appearance:create_dropdown({
---      --     title = "Theme",
---      --     flag = "UITheme",
---      --     options = Window:GetThemeNames(),
---      --     default = "Purple",
---      --     callback = function(value)
---      --         Window:SetTheme(value)
---      --     end
---      -- })
---
---      Window:SetTitle("...")
---      Window:SetSubtitle("...")
---      Window:SetIcon("rbxassetid://123")
---      Window:SetState(true / false)
--- ============================================
-
 return Library
