@@ -1389,7 +1389,8 @@ function Library:create_ui()
     
     local Pin = Instance.new('Frame')
     Pin.Name = 'Pin'
-    Pin.Size = UDim2.new(0, 2, 0, 18)
+    -- Base size in local (unscaled) units; we compensate UIScale so visual stays ~2x18
+    Pin.Size = UDim2.fromOffset(2, 18)
     Pin.BorderSizePixel = 0
     Pin.BackgroundColor3 = theme.Accent
     Pin.ZIndex = 10
@@ -1401,8 +1402,22 @@ function Library:create_ui()
     PinCorner.CornerRadius = UDim.new(1, 0)
     PinCorner.Parent = Pin
 
+    -- Keep pin thickness constant on screen regardless of UIScale
+    local function applyPinScaleCompensation()
+        local s = 1
+        if self._uiScaleObject then
+            s = math.max(self._uiScaleObject.Scale, 0.01)
+        elseif self._ui_scale then
+            s = math.max(self._ui_scale, 0.01)
+        end
+        -- inverse scale: visual size stays ~2px x 18px on screen
+        local w = math.max(2 / s, 1)
+        local h = math.max(18 / s, 8)
+        Pin.Size = UDim2.fromOffset(math.ceil(w), math.ceil(h))
+    end
+
     local function refreshPinPosition(targetTab)
-        local tab = targetTab
+        local tab = targetTab or self._activeTab
         if not tab then
             for _, obj in ipairs(Tabs:GetChildren()) do
                 if obj.Name == "Tab" and obj.BackgroundTransparency < 0.75 then
@@ -1416,15 +1431,24 @@ function Library:create_ui()
             return
         end
 
-        -- Convert tab AbsolutePosition -> position relative to Handler
+        self._activeTab = tab
+        applyPinScaleCompensation()
+
+        -- Use AbsolutePosition (already includes UIScale) relative to Handler
         local handlerAbs = Handler.AbsolutePosition
         local tabAbs = tab.AbsolutePosition
         local tabSize = tab.AbsoluteSize
 
-        local x = 8  -- small left margin
-        local y = (tabAbs.Y - handlerAbs.Y) + (tabSize.Y * 0.5) - (Pin.AbsoluteSize.Y * 0.5)
+        -- Convert screen delta back to local Handler coords (divide by scale)
+        local s = 1
+        if self._uiScaleObject then
+            s = math.max(self._uiScaleObject.Scale, 0.01)
+        end
+        local x = 8 / s
+        local pinH = Pin.AbsoluteSize.Y
+        local y = ((tabAbs.Y - handlerAbs.Y) + (tabSize.Y * 0.5) - (pinH * 0.5)) / s
 
-        Pin.Position = UDim2.fromOffset(x, y)
+        Pin.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
         Pin.Visible = true
     end
 
@@ -1432,9 +1456,17 @@ function Library:create_ui()
         refreshPinPosition()
     end)
 
-    -- expose for update_tabs
+    -- Re-sync pin when AbsoluteSize of Tabs changes (scale / layout)
+    Tabs:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        task.defer(function()
+            refreshPinPosition()
+        end)
+    end)
+
+    -- expose for update_tabs + SetScale
     self._refreshPin = refreshPinPosition
     self._pin = Pin
+    self._applyPinScaleCompensation = applyPinScaleCompensation
     
     local Icon = Instance.new('ImageLabel')
     Icon.ImageColor3 = theme.TextDim
@@ -1755,8 +1787,21 @@ function Library:create_ui()
             self._scaleTween = nil
         end
 
+        local function afterScale()
+            -- Pin debe re-sincronizarse tras el scale
+            if self._applyPinScaleCompensation then
+                pcall(self._applyPinScaleCompensation)
+            end
+            if self._refreshPin then
+                task.defer(function()
+                    pcall(self._refreshPin)
+                end)
+            end
+        end
+
         if instant or math.abs(obj.Scale - s) < 0.001 then
             obj.Scale = s
+            afterScale()
         else
             -- Short smooth tween — no lag, no hard snap
             local tw = TweenService:Create(
@@ -1766,10 +1811,17 @@ function Library:create_ui()
             )
             self._scaleTween = tw
             tw:Play()
+            -- Mid-tween + end: keep pin aligned
+            task.delay(0.06, function()
+                if self._scaleTween == tw and self._refreshPin then
+                    pcall(self._refreshPin)
+                end
+            end)
             tw.Completed:Connect(function()
                 if self._scaleTween == tw then
                     self._scaleTween = nil
                 end
+                afterScale()
             end)
         end
 
@@ -1985,6 +2037,7 @@ function Library:create_ui()
             if object == tab then
                 if object.BackgroundTransparency ~= 0.5 then
                     -- Sync pin exactly to this tab
+                    self._activeTab = object
                     task.defer(function()
                         if self._refreshPin then
                             self._refreshPin(object)
@@ -5046,4 +5099,5 @@ if not settings or settings and not settings.disableline then
 
     return self
 end
+
 return Library
