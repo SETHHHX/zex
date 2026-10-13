@@ -1619,8 +1619,11 @@ function Library:create_ui()
     end)
     
     local UIScale = Instance.new('UIScale')
-    UIScale.Parent = Container    
-    
+    UIScale.Scale = 1
+    UIScale.Parent = Container
+    self._uiScaleObject = UIScale
+    self._manualScale = nil  -- if set by user slider, overrides mobile auto-scale
+
     self._ui = click
 
     -- ============================================
@@ -1729,6 +1732,37 @@ function Library:create_ui()
     function self:GetParticles()
         return particlesEnabled
     end
+
+    -- UI size scale (slider from Settings). 1 = default (698x479), 0.7 smaller, 1.3 larger
+    function self:SetScale(scale)
+        local s = tonumber(scale)
+        if not s then return false end
+        s = math.clamp(s, 0.5, 1.5)
+        self._manualScale = s
+        self._ui_scale = s
+        local obj = self._uiScaleObject
+        if obj then
+            obj.Scale = s
+        end
+        if self._config and self._config._library then
+            self._config._library.UIScale = s
+            pcall(function()
+                if Config and Config.save then
+                    Config:save(game.GameId, self._config)
+                end
+            end)
+        end
+        return true, s
+    end
+
+    function self:GetScale()
+        local obj = self._uiScaleObject
+        if obj then
+            return obj.Scale
+        end
+        return self._ui_scale or 1
+    end
+
 
     -- Start after UI opens
     task.defer(function()
@@ -1861,11 +1895,25 @@ function Library:create_ui()
         -- Fast open: no blocking PreloadAsync
         self:get_device()
 
-        if self._device == 'Mobile' or self._device == 'Unknown' then
+        -- Restore saved manual scale if any
+        if self._config and self._config._library and type(self._config._library.UIScale) == "number" then
+            self._manualScale = math.clamp(self._config._library.UIScale, 0.5, 1.5)
+            self._ui_scale = self._manualScale
+            UIScale.Scale = self._manualScale
+        end
+
+        if self._manualScale then
+            UIScale.Scale = self._manualScale
+            self._ui_scale = self._manualScale
+        elseif self._device == 'Mobile' or self._device == 'Unknown' then
             self:get_screen_scale()
             UIScale.Scale = self._ui_scale
     
             Connections['ui_scale'] = workspace.CurrentCamera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+                if self._manualScale then
+                    UIScale.Scale = self._manualScale
+                    return
+                end
                 self:get_screen_scale()
                 UIScale.Scale = self._ui_scale
             end)
