@@ -4231,6 +4231,57 @@ if not settings or settings and not settings.disableline then
                     return value_to_display(v)
                 end
 
+                -- Rebuild option list at runtime (Refresh Fighters / etc.)
+                function DropdownManager:SetOptions(newOptions, keepSelection)
+                    if type(newOptions) ~= "table" then return false end
+                    local currentFlag = Library._config._flags[settings.flag]
+                    local keep = keepSelection and currentFlag or nil
+
+                    -- Full recreate via New (reliable)
+                    local payload = {}
+                    for k, v in pairs(settings) do
+                        payload[k] = v
+                    end
+                    payload.options = newOptions
+                    if keep ~= nil then
+                        payload.default = keep
+                    elseif not settings.multi_dropdown then
+                        payload.default = newOptions[1]
+                    else
+                        payload.default = {}
+                    end
+
+                    local newMgr = DropdownManager:New(payload)
+                    -- Copy methods reference for external holders - they need to update pointer
+                    -- Store on Library registry by flag
+                    if settings.flag then
+                        Library._elements[settings.flag] = Library._elements[settings.flag] or {}
+                        if Library._elements[settings.flag].set then
+                            -- RegisterElement already points to Set/Get of OLD manager - re-register
+                            Library:RegisterElement(settings.flag, "dropdown", function(v)
+                                newMgr:Set(v)
+                            end, function()
+                                return newMgr:Get()
+                            end)
+                        end
+                    end
+                    -- Expose latest manager globally by flag for script refresh
+                    Library._dropdownManagers = Library._dropdownManagers or {}
+                    if settings.flag then
+                        Library._dropdownManagers[settings.flag] = newMgr
+                    end
+                    return true, newMgr
+                end
+
+                function DropdownManager:Refresh(newOptions)
+                    return DropdownManager:SetOptions(newOptions, true)
+                end
+
+                Library._dropdownManagers = Library._dropdownManagers or {}
+                if settings.flag then
+                    Library._dropdownManagers[settings.flag] = DropdownManager
+                end
+
                 Library:RegisterElement(settings.flag, "dropdown", function(v)
                     DropdownManager:Set(v)
                 end, function()
@@ -5099,5 +5150,49 @@ if not settings or settings and not settings.disableline then
 
     return self
 end
+
+
+-- ============================================
+--  ZexHub UI Library (Clean Version)
+--  Solo la librería, sin scripts de juego.
+--
+--  Uso:
+--      local Library = loadstring(game:HttpGet("RAW_GITHUB_URL"))()
+--
+--      local Window = Library.new({
+--          Title = "ZEX HUB <font color='#FFD700'><b>PREMIUM</b></font>",
+--          Subtitle = "<font color='#33ff00'><b>San Diego Border Roleplay</b></font>",
+--          Icon = "rbxassetid://130655920174103",
+--          Keybind = Enum.KeyCode.RightControl,
+--          ToggleIcon = true,
+--          ToggleIconImage = "rbxassetid://130655920174103",
+--          ToggleIconSize = 60,
+--          Theme = "Purple", -- Purple | Midnight | Ocean | Crimson | Emerald | Gold | Rose | Snow
+--      })
+--
+--      Window:load()
+--
+--      -- Temas en runtime (desde Settings dropdown):
+--      local themeNames = Window:GetThemeNames() -- {"Crimson","Emerald","Gold",...}
+--      Window:SetTheme("Ocean")
+--
+--      -- Ejemplo Settings tab:
+--      -- local settingsTab = Window:create_tab({ title = "Settings", icon = "..." })
+--      -- local appearance = settingsTab:create_module({ title = "Appearance" })
+--      -- appearance:create_dropdown({
+--      --     title = "Theme",
+--      --     flag = "UITheme",
+--      --     options = Window:GetThemeNames(),
+--      --     default = "Purple",
+--      --     callback = function(value)
+--      --         Window:SetTheme(value)
+--      --     end
+--      -- })
+--
+--      Window:SetTitle("...")
+--      Window:SetSubtitle("...")
+--      Window:SetIcon("rbxassetid://123")
+--      Window:SetState(true / false)
+-- ============================================
 
 return Library
